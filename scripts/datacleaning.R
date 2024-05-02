@@ -68,14 +68,16 @@ df_new <- df %>%
                   # Fecal sample 
                   SampleAB_BA=H1_Feces_q2, SampleDiarrhoea_BA=H1_Feces_q3,
                   GeneticData = GeneticsGSA_QC
-    ) %>% 
+    )
+df_new2 <- df_new %>% 
     mutate(across(where(is.character), ~na_if(., c("Missing", "Missing: n.v.t.", "niet ingevuld","nvt", 
-                                                   "No lab result", "Missing: not applicable",
-                                                   "Missing: not measured", "missing",
-                                                   "See comments lab results", "Low (<1 mmol/L)",
-                                                   "Low (<0,08 mmol/L)", "Low (<0,10 mmol/L)",
-                                                   "Smoking status unknown", "Number or duration unknown"))),
-           across(c("Sex", "Ethnicity", "Smoking_BA", "SmokingComb", "EthnicityTot",
+                                       "No lab result", "Missing: not applicable",
+                                       "Missing: not measured", "missing",
+                                       "See comments lab results", "Low (<1 mmol/L)",
+                                       "Low (<0,08 mmol/L)", "Low (<0,10 mmol/L)",
+                                       "Smoking status unknown", "Number or duration unknown"))),
+           ID = str_c("S",as.character(ID)),
+           across(c("Sex","Ethnicity", "Smoking_BA", "SmokingComb", "EthnicityTot",
                     "MigrGen", "Edu", "AlcCons_FU", "AlcCons_BA", "PsychoMed_BA",
                     "AB_FU", "AB_BA", "PPI_BA","PPI_FU", "Metformin_BA",
                     "Metformin_FU", "Statins_BA", "MetSyn_BA", "DM_BA", "DM_FU",
@@ -85,22 +87,21 @@ df_new <- df %>%
            across(c("PsychoMed_BA", "Metformin_BA", "Metformin_FU",
                     "MetSyn_BA","DM_BA", "DM_FU",
                     "DiscrBin_BA", "Alcohol_FU", "Alcohol_BA"), yesnocaps),
-           across(c("ExerciseNorm_BA", "Statins_BA", "AB_BA", "AB_FU"), yesnosmall)
+           across(c("ExerciseNorm_BA", "Statins_BA", "AB_BA", "AB_FU"), yesnosmall),
+           Sex = fct_recode(Sex, "Male" = "1", "Female" = "2"),
+           across(c("SampleAB_BA", "SampleDiarrhoea_BA"), zero_one),
+           EthnicityTot = forcats::fct_recode(EthnicityTot,
+                                              "Other"="Other/unkown",
+                                              "Other"="Other/unknown Surinamese"),
     ) %>%
     droplevels(.) %>% 
-    mutate(ID = str_c("S",as.character(ID)),
-            Sex = factor(Sex, levels = c("man","vrouw"),
-                        labels = c('Male', 'Female')),
-           EthnicityTot = forcats::fct_recode(EthnicityTot,
-                                           "Other"="Other/unkown",
-                                           "Other"="Other/unknown Surinamese"),
-           across(c("SampleAB_BA", "SampleDiarrhoea_BA"), zero_one),
+    mutate(
            across(where(is.numeric), as.numeric), # all other vars to numeric, do this last,
            #ID = str_c("S", ID)
     ) %>%
     # remove unused levels
     droplevels(.)
-dim(df_new)
+dim(df_new2)
 
 # Clean phyloseq object
 heliusmb <- readRDS("data/16s/phyloseq/rarefied/phyloseq_rarefied.RDS")
@@ -135,11 +136,12 @@ missingba[which(missingba %in% heliusfu@sam_data$ID)] # 1 subject S207389
 any(str_detect(missingfu, "S207389")) # TRUE so the subject is already in the follow-up missing list
 
 # Select samples that are in dataset
-heliusmb2 <- prune_samples(heliusmb@sam_data$ID %in% df_new$ID, heliusmb)
+heliusmb2 <- prune_samples(heliusmb@sam_data$ID %in% df_new2$ID, heliusmb)
 heliusmb2
-df_new2 <- df_new %>% filter(ID %in% heliusmb2@sam_data$ID)
-all(df_new2$ID %in% heliusmb2@sam_data$ID) # TRUE
-all(heliusmb2@sam_data$ID %in% df_new2$ID) # TRUE
+df_new3 <- df_new2 %>% filter(ID %in% heliusmb2@sam_data$ID)
+write.csv2(df_new3$ID, 'data/16s/ids_16s_paired.csv')
+all(df_new3$ID %in% heliusmb2@sam_data$ID) # TRUE
+all(heliusmb2@sam_data$ID %in% df_new3$ID) # TRUE
 
 # Pivot longer clinical data
 names(df_new2)
@@ -171,7 +173,27 @@ df_new_long2 <- df_new_long2 %>% filter(ID %in% dffu$ID)
 heliusmb2 <- phyloseq(heliusmb2@otu_table, heliusmb2@tax_table, heliusmb2@refseq, heliusmb2@phy_tree, 
                       sample_data(df_new_long2))
 
+## Get delta variables
+df_wide <- pivot_wider(df_new_long, id_cols = c(1:9), names_from = "timepoint",
+                       values_from = c(11:52))
+df_wide <- df_wide[,colSums(is.na(df_wide))<nrow(df_wide)]
+df_wide_delta <- df_wide %>% 
+    mutate(
+        Age_delta = `Age_follow-up` - Age_baseline,
+        SBP_delta = `SBP_follow-up` - SBP_baseline,
+        DBP_delta = `DBP_follow-up` - DBP_baseline,
+        BMI_delta = `BMI_follow-up` - BMI_baseline,
+        TC_delta = `TC_follow-up` - TC_baseline,
+        HDL_delta = `HDL_follow-up` - HDL_baseline,
+        HbA1c_delta = `HbA1c_follow-up` - HbA1c_baseline,
+        Trig_delta = `Trig_follow-up` - Trig_baseline,
+        LDL_delta = `LDL_follow-up` - LDL_baseline
+    ) %>% select(1:9, contains("delta"))
+
+
 ## Save files
 saveRDS(df_new2, file = "data/clinicaldata.RDS")
+saveRDS(df_wide, file = "data/clinicaldata_wide.RDS")
+saveRDS(df_wide_delta, file = "data/clinicaldata_delta.RDS")
 saveRDS(df_new_long, file = "data/clinicaldata_long.RDS")
 saveRDS(heliusmb2, file = "data/phyloseq_sampledata.RDS")
