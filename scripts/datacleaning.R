@@ -188,7 +188,8 @@ df_wide_delta <- df_wide %>%
         HbA1c_delta = `HbA1c_follow-up` - HbA1c_baseline,
         Trig_delta = `Trig_follow-up` - Trig_baseline,
         LDL_delta = `LDL_follow-up` - LDL_baseline
-    ) %>% select(1:9, contains("delta"))
+    ) 
+df_deltas <- df_wide_delta %>% select(1:9, contains("delta"))
 
 
 ## Save files
