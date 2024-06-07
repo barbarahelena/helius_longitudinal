@@ -11,9 +11,12 @@ library(stringr)
 
 ## Open HELIUS clinical data
 df <- haven::read_sav("data/210517_HELIUS data Ulrika Boulund_2.sav") # more subjects than other set
-# df2 <- haven::read_sav("data/210517_HELIUS data Ulrika Boulund.sav")
-df2 <- rio::import("data/clinical_data_long_03_07_2023_N3443.csv") %>% 
-    mutate(ID = str_c("S",as.character(Heliusnr)))
+df2 <- haven::read_sav("data/240411_HELIUS data Barbara Verhaar.sav")
+names(df2)[which(!names(df2) %in% names(df))]
+df <- df %>% dplyr::select("Heliusnr", !names(df)[which(names(df) %in% names(df2))])
+dftot <- full_join(df2, df, by = "Heliusnr")
+df2$Heliusnr[which(!df2$Heliusnr %in% df$Heliusnr)]
+df$Heliusnr[which(!df$Heliusnr %in% df2$Heliusnr)]
 
 # Change type of variable 
 yesnosmall <- function(x) fct_recode(x, "No"="nee", "Yes"="ja")
@@ -21,87 +24,179 @@ yesnocaps <- function(x) fct_recode(x, "No"="Nee", "Yes"="Ja")
 zero_one <- function(x) fct_recode(x, "No"="0", "Yes"="1")
 
 ## Clean HELIUS dataframe
-df_new <- df %>% 
+df_new <- dftot %>% 
     dplyr::select(# Demographics
-                  ID=Heliusnr, Age_BA=H1_lft, Age_FU = H2_lft,
-                  Sex=H1_geslacht, EthnicityTot=H1_EtnTotaal, 
-                  Ethnicity = H1_etniciteit,
-                  MigrGen = H1_MigrGeneratie, FUtime=H2_fu_time,
-                  Edu = H1_Opleid, 
+                  ID=Heliusnr, FUtime=H2_fu_time,
+                  Age_BA=H1_lft, Age_FU = H2_lft,
+                  Sex=H1_geslacht,  Edu = H1_Opleid, EthnicityTot=H1_EtnTotaal, 
+                  Ethnicity = H1_etniciteit, MigrGen = H1_MigrGeneratie, 
                   # Discrimination - not available at H2
                   DiscrSum_BA = H1_Discr_sumscore, DiscrMean_BA = H1_Discr_meanscore,
                   DiscrBin_BA = H1_AnyDiscrim, ResDuration_BA = H1_ResidenceDuration,
                   # Movement, smoking, alcohol - exercise not available at H2
                   ExerciseMinweek_BA = H1_Squash_totmwk,
                   ExerciseNorm_BA = H1_Squash_rlbew, ExerciseScore_BA = H1_Squash_totscor,
-                  Smoking_BA = H1_Roken, PackYears_BA = H1_PackYears,
-                  SmokingComb = H2_Roken_H1combined, Alcohol_BA = H1_AlcoholJN, Alcohol_FU = H2_AlcoholJN, 
-                  AlcCons_FU=H2_AlcoholConsumption, AlcCons_BA = H1_AlcoholConsumption,
+                  # Intox
+                  Smoking_BA = H1_Roken, PackYears_BA = H1_PackYears, Smoking_FU = H2_Roken_H1combined, 
+                  Alcohol_BA = H1_AlcoholJN, Alcohol_FU = H2_AlcoholJN, 
+                  AlcCons_BA = H1_AlcoholConsumption, AlcCons_FU=H2_AlcoholConsumption, 
                   # CVR scores - not available of H2
-                  SCORECVDmort_BA = H1_SCORE_CVDmort, SCORECVDmortNL_BA = H1_SCORE_CVDmort_NL,
-                  SCORECVDtotNL_BA = H1_SCORE_CVDtot_NL,
-                  Fram_BA = H1_FramScore, FramCVD_BA = H1_Fram_CVD,
+                  SCORECVDmort_BA = H1_SCORE_CVDmort, SCORECVDmort_FU = H2_SCORE1_RM_CVDmort,
+                  SCORECVDmortNL_BA = H1_SCORE_CVDmort_NL, SCORECVDmortNL_FU = H2_SCORE1_RM_CVDmort_NL,
+                  SCORECVDtotNL_BA = H1_SCORE_CVDtot_NL, SCORECVDtotNL_FU = H2_SCORE1_RM_CVDtot_NL,
+                  Fram_BA = H1_FramScore, Fram_FU = H2_FramScore,
+                  FramCVD_BA = H1_Fram_CVD, FramCVD_FU = H2_Fram_CVD,
                   # Physical exam
-                  # Physical_FU=H2_LichamelijkOnderzoekJN,
-                  Fatperc_BA = H1_BIA_FatPercent, WHR_BA = H1_LO_WHR, # not available of FU
-                  BMI_FU=H2_LO_BMI, SBP_FU=H2_LO_GemBPSysZit, 
-                  DBP_FU=H2_LO_GemBPDiaZit, HR_FU=H2_LO_GemBPHRZit,
-                  BMI_BA = H1_LO_BMI, SBP_BA = H1_LO_GemBPSysZit,
-                  DBP_BA = H1_LO_GemBPDiaZit, 
-                  # Diagnoses
-                  MetSyn_BA = H1_MetSyn_MetabolicSyndrome, 
+                  Physical_BA = H1_LichamelijkOnderzoekJN, Physical_FU=H2_LichamelijkOnderzoekJN,
+                  Fatperc_BA = H1_BIA_FatPercent, 
+                  WHR_BA = H1_LO_WHR, WHR_FU = H2_LO_WHR,
+                  BMI_BA = H1_LO_BMI, BMI_FU=H2_LO_BMI, 
+                  SBP_BA = H1_LO_GemBPSysZit, SBP_FU=H2_LO_GemBPSysZit, 
+                  DBP_BA = H1_LO_GemBPDiaZit, DBP_FU=H2_LO_GemBPDiaZit, 
+                  HR_BA = H2_LO_GemBPHRZit, HR_FU=H2_LO_GemBPHRZit, 
+                  # Hypertension
+                  HT_Self_BA = H1_HT_Self, HT_Self_FU = H2_HT_Self_H1combined,
+                  HT_BP_BA = H1_HT_BP, HT_BP_FU = H2_HT_BP,
+                  HT_SelfBP_BA = H1_HT_SelfBP, HT_SelfBP_FU = H2_HT_Self_H1combined,
+                  HT_SelfBPMed_BA = H1_HT_SelfBPMed, HT_SelfBPMed_FU = H2_HT_SelfBPMed_H1combined,
+                  HT_BPMed_BA = H1_HT_BPMed, HT_BPMed_FU = H2_HT_BPMed,
+                  AntiHT_BA = H1_Antihypertensiva, AntiHT_FU = H2_Antihypertensiva,
+                  # Cardiovascular complications
+                  Claud_BA = H1_CI_Rose_corrected, Inf_BA = H1_possINF_Rose, 
+                  AngPec_BA = H1_AP_Rose_corrected, CVD_BA = H1_CVD_Rose_corrected, ## all missing for FU
+                  StrokeLoss_BA = H1_UitvalBer, StrokeLoss_FU = H2_UitvalBer_H1combined,
+                  Stroke_Self_BA = H1_CVA_Self, # missing FU
+                  IschStroke_BA = H1_Infarct, IschStroke_FU = H2_Infarct_H1combined,
+                  CardInt_BA = H1_OperDotByp, CardInt_FU = H2_OperDotByp_H1combined,
+                  MI_BA = H1_MI_Self, # missing FU
+                  # Metabolic diagnoses
+                  MetSyn_BA = H1_MetSyn_MetabolicSyndrome, MetSyn_FU = H2_MetSyn_MetabolicSyndrome,
+                  MetSyn_Obesity_BA = H1_MetSyn_CentralObesity, MetSyn_Obesity_FU = H2_MetSyn_CentralObesity, 
+                  MetSyn_HighTG_BA = H1_MetSyn_HighTriglyceride, MetSyn_HighTG_FU = H2_MetSyn_HighTriglyceride, 
+                  MetSyn_LowHDL_BA =H1_MetSyn_LowHDL, MetSyn_LowHDL_FU =H2_MetSyn_LowHDL,
+                  MetSyn_HighBP_BA = H1_MetSyn_HighBP, MetSyn_HighBP_FU = H2_MetSyn_HighBP, 
+                  MetSyn_HighGluc_BA = H1_MetSyn_HighGluc, MetSyn_HighGluc_FU = H2_MetSyn_HighGluc,
                   DM_BA = H1_Diabetes_GlucMed, DM_FU = H2_DM_GlucMed,
+                  Alb_FU = H2_Microalbuminurie, Albstage_FU = H2_ACR_KDIGO,
                   # Cardiometabolic drugs
+                  AntiHTTot_BA = H1_AntihypertensivaC02, AntiHTTot_FU = H2_AntihypertensivaC02, 
+                  Diuretics_BA = H1_AntihypertensivaC03, Diuretics_FU = H2_AntihypertensivaC03,
+                  CalciumAnt_BA = H1_AntihypertensivaC08, CalciumAnt_FU = H2_AntihypertensivaC08, 
+                  BetaBlocker_BA = H1_AntihypertensivaC07, BetaBlocker_FU = H2_AntihypertensivaC07,
+                  RAASi_BA = H1_AntihypertensivaC09, RAASi_FU = H2_AntihypertensivaC09,
+                  LLD_BA = H1_Antilipaemica, LLD_FU = H2_Antilipaemica,
                   PPI_BA=H1_ProtPumpInh_Moritz, PPI_FU=H2_ProtPumpInh_Ulrika,
                   Metformin_BA = H1_Metformin_Moritz, Metformin_FU = H2_Metformin_Ulrika,
-                  Statins_BA = H1_Statines,
+                  GlucLowDrugs_BA = H1_Diabetesmiddelen, GlucLowDrugs_FU = H2_Diabetesmiddelen,
+                  Statins_BA = H1_Statines, # missing FU
                   # Other drugs
                   PsychoMed_BA = H1_Psychotroop, 
-                  AB_FU = H2_Antibiotica, AB_BA = H1_Antibiotica,
+                  AB_BA = H1_Antibiotica, AB_FU = H2_Antibiotica, 
+                  Cortico_BA = H1_Corticosteroiden, Cortico_FU = H2_Corticosteroiden,
                   # Lab
-                  Trig_BA = H1_Lab_UitslagTRIG, TC_BA = H1_Lab_UitslagCHOL, HDL_BA=H1_Lab_UitslagHDLS,
-                  LDL_BA = H1_Lab_uitslagRLDL, HbA1c_BA = H1_Lab_UitslagIH1C,
-                  TC_FU = H2_Lab_UitslagCHOL, LDL_FU=H2_Lab_UitslagRLDL, HDL_FU=H2_Lab_UitslagHDLS, 
-                  Trig_FU=H2_Lab_UitslagTRIG, HbA1c_FU=H2_Lab_UitslagIH1C, Glucose_FU = H2_Lab_UitslagGLUC,
-                  ASAT_FU = H2_Lab_UitslagROT, ALAT_FU = H2_Lab_UitslagRPT, Trombo_FU = H2_Lab_UitslagHTRO,
-                  GGT_FU = H2_Lab_UitslagRGGT,
+                  Trig_BA = H1_Lab_UitslagTRIG, Trig_FU=H2_Lab_UitslagTRIG, 
+                  TC_BA = H1_Lab_UitslagCHOL, TC_FU = H2_Lab_UitslagCHOL, 
+                  HDL_BA=H1_Lab_UitslagHDLS, HDL_FU=H2_Lab_UitslagHDLS, 
+                  LDL_BA = H1_Lab_uitslagRLDL, LDL_FU=H2_Lab_UitslagRLDL, 
+                  HbA1c_BA = H1_Lab_UitslagIH1C, HbA1c_FU=H2_Lab_UitslagIH1C, 
+                  Glucose_FU = H2_Lab_UitslagGLUC, # missing BA
+                  ASAT_FU = H2_Lab_UitslagROT, ALAT_FU = H2_Lab_UitslagRPT, # missing BA
+                  GGT_FU = H2_Lab_UitslagRGGT, Trombo_FU = H2_Lab_UitslagHTRO, # missing BA
+                  Microalb_BA = H1_Lab_UitslagMIAL, Microalb_FU = H2_Lab_UitslagMIAL,
+                  UACR_BA = H1_Lab_uitslagMIKR, UACR_FU = H2_Lab_UitslagMIKR,
+                  Kreat_BA = H1_Lab_UitslagKREA_HP, Kreat_FU = H2_Lab_UitslagKREA_HP,
+                  UKreat_BA = H1_Lab_UitslagKREA_UP, UKreat_FU = H1_Lab_UitslagKREA_UP,
+                  #eGFR_CKDEPI_BA = H1_CKDEPI_eGFR, eGFR_MDRD_BA = H1_MDRD_eGFR, missing BA 
+                  eGFR_CKDEPI_FU = H2_CKDEPI_eGFR, eGFR_MDRD_FU = H2_MDRD_eGFR,
+                  # Diet at baseline
+                  TotalCalories_BA = ENKcal_Sum, Protein_BA = Prot_Sum, 
+                  FattyAcids_BA = FattyAcidsTot_Sum, Fiber_BA = Fibre_Sum, 
+                  Carbohydrates_BA = Carbo_Sum, Protein_animal_BA = Prot_ani_Sum, 
+                  Sodium_g_BA = Natrium_intake_totaal_gram, Sodium_mmol_BA = Natrium_intake_totaal_mmol, 
                   # Fecal sample 
                   SampleAB_BA=H1_Feces_q2, SampleDiarrhoea_BA=H1_Feces_q3,
                   GeneticData = GeneticsGSA_QC
     )
+
 df_new2 <- df_new %>% 
     mutate(across(where(is.character), ~na_if(., c("Missing", "Missing: n.v.t.", "niet ingevuld","nvt", 
-                                       "No lab result", "Missing: not applicable",
+                                       "No lab result", "Missing: not applicable", "missing",
                                        "Missing: not measured", "missing",
                                        "See comments lab results", "Low (<1 mmol/L)",
                                        "Low (<0,08 mmol/L)", "Low (<0,10 mmol/L)",
-                                       "Smoking status unknown", "Number or duration unknown"))),
+                                       "Smoking status unknown", "Number or duration unknown",
+                                       "Rookstatus onbekend", "Rookduur en/of aantal onbekend"))),
            ID = str_c("S",as.character(ID)),
-           across(c("Sex","Ethnicity", "Smoking_BA", "SmokingComb", "EthnicityTot",
-                    "MigrGen", "Edu", "AlcCons_FU", "AlcCons_BA", "PsychoMed_BA",
-                    "AB_FU", "AB_BA", "PPI_BA","PPI_FU", "Metformin_BA",
-                    "Metformin_FU", "Statins_BA", "MetSyn_BA", "DM_BA", "DM_FU",
-                    "Alcohol_BA", "Alcohol_FU", "ExerciseNorm_BA","DiscrBin_BA",
-                    "SampleAB_BA", "SampleDiarrhoea_BA"
-                    ), as_factor),
-           across(c("PsychoMed_BA", "Metformin_BA", "Metformin_FU",
-                    "MetSyn_BA","DM_BA", "DM_FU",
-                    "DiscrBin_BA", "Alcohol_FU", "Alcohol_BA"), yesnocaps),
-           across(c("ExerciseNorm_BA", "Statins_BA", "AB_BA", "AB_FU"), yesnosmall),
-           Sex = fct_recode(Sex, "Male" = "1", "Female" = "2"),
-           across(c("SampleAB_BA", "SampleDiarrhoea_BA"), zero_one),
+           across(c("FUtime", "Age_BA", "Age_FU", "DiscrSum_BA", "DiscrMean_BA",
+                    "ExerciseScore_BA", "ExerciseMinweek_BA", "ResDuration_BA",
+                    "SCORECVDmort_BA", "SCORECVDmort_FU",
+                    "SCORECVDmortNL_BA", "SCORECVDmortNL_FU", "SCORECVDtotNL_BA", "SCORECVDtotNL_FU",
+                    "Fram_BA", "Fram_FU", "FramCVD_BA", "FramCVD_FU", "Fatperc_BA", "WHR_BA",
+                    "WHR_FU", "BMI_BA", "BMI_FU", "SBP_BA", "SBP_FU", "DBP_BA", "DBP_FU", 
+                    "HR_BA", "HR_FU", "Trig_BA", "Trig_FU", "TC_BA", "TC_FU", "HDL_BA", "HDL_FU",
+                    "LDL_BA", "LDL_FU", "HbA1c_BA", "HbA1c_FU", "Glucose_FU", "ASAT_FU", "ALAT_FU",
+                    "GGT_FU", "Trombo_FU", "Microalb_BA", "Microalb_FU", "UACR_BA", "UACR_FU",
+                    "Kreat_BA", "Kreat_FU", "UKreat_BA", "UKreat_FU", "eGFR_CKDEPI_FU", "eGFR_MDRD_FU",
+                    "TotalCalories_BA", "Protein_BA", "FattyAcids_BA", "Fiber_BA", "Carbohydrates_BA",
+                    "Protein_animal_BA", "Sodium_g_BA", "Sodium_mmol_BA"), as.numeric), 
+           across(where(haven::is.labelled), ~haven::as_factor(.x, levels = "labels")),
+           across(c("HT_BP_BA", "HT_BPMed_BA", "HT_SelfBP_BA", "HT_SelfBPMed_BA", "HT_Self_BA",
+                    "Alcohol_FU", "LLD_BA", "LLD_FU", "AB_BA", "AB_FU",
+                    "RAASi_BA", "RAASi_FU", "BetaBlocker_BA", "BetaBlocker_FU",
+                    "CalciumAnt_BA", "CalciumAnt_FU", "Diuretics_BA", "Diuretics_FU",
+                    "AntiHT_BA", "AntiHT_FU", "AntiHTTot_BA", "AntiHTTot_FU", "Alb_FU",
+                    "DM_BA", "MI_BA", "CardInt_BA", "CardInt_FU",
+                    "IschStroke_BA", "IschStroke_FU","StrokeLoss_BA", "StrokeLoss_FU",
+                    "Stroke_Self_BA","CVD_BA", "AngPec_BA", "Inf_BA", "Claud_BA"), yesnocaps),
+           across(c("Alcohol_BA", "MetSyn_BA", "MetSyn_Obesity_BA",
+                    "MetSyn_HighTG_BA", "MetSyn_LowHDL_BA", "MetSyn_HighGluc_BA",
+                    "MetSyn_HighGluc_BA", "MetSyn_HighBP_BA"), yesnosmall),
+           across(c("ExerciseNorm_BA", "Statins_BA"), ~fct_recode(.x, "No"="no", "Yes"="yes")),
+           Sex = fct_recode(Sex, "Male" = "man", "Female" = "vrouw"),
            EthnicityTot = forcats::fct_recode(EthnicityTot,
-                                              "Other"="Other/unkown",
-                                              "Other"="Other/unknown Surinamese"),
+                                              "Other"="Anders/onbekend",
+                                              "Other"="Sur anders/onbekend"),
+           across(c("Smoking_BA", "Smoking_FU"), ~fct_recode(.x, "Yes" = "Ja", 
+                                                             "Former smoking" = "Nee, maar vroeger wel",
+                                                             "Never" = "Nee, ik heb nooit gerookt",
+                                                             "Never" = "Nee, nooit gerookt")),
+         AlcCons_FU = fct_recode(AlcCons_FU,"low (men 0-4 gl/w, women 0-2 gl/w)" = "Low (men 0-4 gl/w, women 0-2 gl/w)",
+                                "moderate (men 5-14 gl/w, women 3-7 gl/w)"="Moderate (men 5-14 gl/w, women 3-7 gl/w)",
+                                "high (men >14 gl/w, women >7 gl/wk)" = "High (men >14 gl/w, women >7 gl/wk)"),
+         Ethnicity = fct_recode(Ethnicity, "Dutch" = "Nederlands", "Surinamese" = "Surinaams",
+                                "Turkish" = "Turks", "Moroccan" = "Marokkaans", "Ghanaian" = "Ghanees",
+                                "Unknown" = "Onbekend", "Other" = "Anders"),
+         FUtime = as.numeric(dmonths(FUtime), "years")
     ) %>%
-    droplevels(.) %>% 
-    mutate(
-           across(where(is.numeric), as.numeric), # all other vars to numeric, do this last,
-           #ID = str_c("S", ID)
-    ) %>%
-    # remove unused levels
     droplevels(.)
 dim(df_new2)
+
+# Pivot longer clinical data
+names(df_new2)
+coldouble <- colnames(df_new2)[which(str_detect(colnames(df_new2), "_FU") | str_detect(colnames(df_new2), "_BA"))]
+df_new_long <- df_new2 %>% pivot_longer(., cols = all_of(coldouble), names_to = c(".value", "timepoint"),
+                                        names_pattern = "(.*)_([A-Z]+)$")
+df_new_long <- df_new_long %>% 
+    mutate(timepoint = case_when(
+        timepoint == "BA" ~ "baseline",
+        timepoint == "FU" ~"follow-up"
+    ),
+    timepoint = as.factor(timepoint),
+    sampleID = str_remove(ID, "S"),
+    sampleID = case_when(
+        timepoint == "baseline" ~ str_c("HELIBA_", sampleID),
+        timepoint == "follow-up" ~ str_c("HELIFU_", sampleID)
+    )
+    )
+
+# Overlap GWAS and 16s/shotgun
+gwas <- rio::import("data/GWAS_ids.txt")
+gwas$ID <- str_c("S", gwas$IID)
+summary(df_new2$ID %in% gwas$ID)
+heliussg <- rio::import("data/shotgun/combined_table.tsv")
+sgids <- colnames(heliussg)[which(str_detect(colnames(heliussg), "HELIBA"))]
+sgids <- str_c("S", str_remove_all(sgids, "HELIBA_"))
+summary(sgids %in% gwas$ID)
 
 # Clean phyloseq object
 heliusmb <- readRDS("data/16s/phyloseq/rarefied/phyloseq_rarefied.RDS")
@@ -114,13 +209,8 @@ timepoint <- case_when(
     str_detect(sample_names(heliusmb), "HELIBA") ~ "baseline",
     str_detect(sample_names(heliusmb), "HELIFU") ~ "follow-up"
 ) %>% as.factor(.)
-missingdata <- case_when(
-    (sample_names(heliusmb) %in% df_new$ID) == TRUE~ "available",
-    (sample_names(heliusmb) %in% df_new$ID) == FALSE ~ "missing"
-)
 df <- data.frame(row.names = sample_names(heliusmb), 
                  timepoint,
-                 missingdata,
                  ID = str_c("S",str_remove(str_remove(sample_names(heliusmb), "HELIFU_"), "HELIBA_")))
 heliusmb <- phyloseq(heliusmb@otu_table, heliusmb@tax_table, heliusmb@refseq, heliusmb@phy_tree, sample_data(df))
 
@@ -131,7 +221,7 @@ missingfu <- heliusfu@sam_data$ID[which(!heliusfu@sam_data$ID %in% df_new$ID)]
 
 heliusba <- prune_samples(heliusmb@sam_data$timepoint == "baseline", heliusmb)
 summary(heliusba@sam_data$ID %in% df_new$ID)
-missingba <- heliusba@sam_data$ID[which(!heliusba@sam_data$ID %in% df_new$ID)]
+missingba <- heliusba@sam_data$ID[which(!heliusba@sam_data$ID %in% df_new2$ID)]
 missingba[which(missingba %in% heliusfu@sam_data$ID)] # 1 subject S207389
 any(str_detect(missingfu, "S207389")) # TRUE so the subject is already in the follow-up missing list
 
@@ -143,24 +233,7 @@ write.csv2(df_new3$ID, 'data/16s/ids_16s_paired.csv')
 all(df_new3$ID %in% heliusmb2@sam_data$ID) # TRUE
 all(heliusmb2@sam_data$ID %in% df_new3$ID) # TRUE
 
-# Pivot longer clinical data
-names(df_new2)
-coldouble <- colnames(df_new2)[which(str_detect(colnames(df_new2), "_FU") | str_detect(colnames(df_new2), "_BA"))]
-df_new_long <- df_new2 %>% pivot_longer(., cols = coldouble, names_to = c(".value", "timepoint"),
-                                        names_sep = "_")
-df_new_long <- df_new_long %>% 
-    mutate(timepoint = case_when(
-        timepoint == "BA" ~ "baseline",
-        timepoint == "FU" ~"follow-up"
-    ),
-            timepoint = as.factor(timepoint),
-    sampleID = str_remove(ID, "S"),
-    sampleID = case_when(
-        timepoint == "baseline" ~ str_c("HELIBA_", sampleID),
-        timepoint == "follow-up" ~ str_c("HELIFU_", sampleID)
-    )
-    )
-
+# Merge clinical data (long) with phyloseq clinical data
 samdata <- as(heliusmb2@sam_data, "data.frame")
 samdata$sampleID <- rownames(samdata)
 df_new_long2 <- left_join(samdata, df_new_long, by = c("sampleID", "timepoint", "ID"))
@@ -170,31 +243,56 @@ dffu <- df_new_long2 %>% filter(timepoint == "follow-up") %>%
     filter(ID %in% dfba$ID)
 df_new_long2 <- df_new_long2 %>% filter(ID %in% dffu$ID)
 
-heliusmb2 <- phyloseq(heliusmb2@otu_table, heliusmb2@tax_table, heliusmb2@refseq, heliusmb2@phy_tree, 
-                      sample_data(df_new_long2))
-
-## Get delta variables
-df_wide <- pivot_wider(df_new_long, id_cols = c(1:9), names_from = "timepoint",
-                       values_from = c(11:52))
+# Get delta variables
+df_wide <- pivot_wider(df_new_long, id_cols = c(1:8), names_from = "timepoint",
+                       values_from = c(10:ncol(df_new_long)))
 df_wide <- df_wide[,colSums(is.na(df_wide))<nrow(df_wide)]
+
+deltafactor <- function(x,y){
+    case_when(x == "No" & y == "No" ~ "No",
+              x == "No" & y == "Yes" ~ "Yes",
+              .default = NA)
+}
 df_wide_delta <- df_wide %>% 
     mutate(
         Age_delta = `Age_follow-up` - Age_baseline,
         SBP_delta = `SBP_follow-up` - SBP_baseline,
         DBP_delta = `DBP_follow-up` - DBP_baseline,
         BMI_delta = `BMI_follow-up` - BMI_baseline,
+        WHR_delta = `WHR_follow-up` - WHR_baseline,
         TC_delta = `TC_follow-up` - TC_baseline,
         HDL_delta = `HDL_follow-up` - HDL_baseline,
         HbA1c_delta = `HbA1c_follow-up` - HbA1c_baseline,
         Trig_delta = `Trig_follow-up` - Trig_baseline,
-        LDL_delta = `LDL_follow-up` - LDL_baseline
-    ) 
-df_deltas <- df_wide_delta %>% select(1:9, contains("delta"))
+        LDL_delta = `LDL_follow-up` - LDL_baseline,
+        Fram_delta = `Fram_follow-up` - Fram_baseline,
+        FramCVD_delta = `FramCVD_follow-up` - FramCVD_baseline,
+        SCORECVDmort_delta = `SCORECVDmort_follow-up` - SCORECVDmort_baseline,
+        SCORECVDtotNL_delta = `SCORECVDtotNL_follow-up` - SCORECVDtotNL_baseline,
+        SCORECVDmortNL_delta = `SCORECVDmortNL_follow-up` - SCORECVDmortNL_baseline
+    ) %>% 
+    mutate(
+        DM_new = deltafactor(DM_baseline, `DM_follow-up`),
+        HT_new = deltafactor(HT_BPMed_baseline, `HT_BPMed_follow-up`),
+        StrokeLoss_new = deltafactor(StrokeLoss_baseline, `StrokeLoss_follow-up`),
+        IschStroke_new = deltafactor(IschStroke_baseline, `IschStroke_follow-up`),
+        MetSyn_new = deltafactor(MetSyn_baseline, `MetSyn_follow-up`),
+        CardInt_new = deltafactor(CardInt_baseline, `CardInt_follow-up`),
+        LLD_new = deltafactor(LLD_baseline, `LLD_follow-up`)
+        )
+df_deltas <- df_wide_delta %>% dplyr::select(1:9, contains("delta"), contains("new"))
+df_new_long3 <- df_new_long2 %>% left_join(., df_deltas %>% dplyr::select(-c(2:9)), by = "ID")
+rownames(df_new_long3) <- df_new_long3$sampleID
 
+## Merge with phyloseq
+heliusmb2 <- phyloseq(heliusmb2@otu_table, heliusmb2@tax_table, heliusmb2@refseq, heliusmb2@phy_tree, 
+                      sample_data(df_new_long3))
 
 ## Save files
 saveRDS(df_new2, file = "data/clinicaldata.RDS")
 saveRDS(df_wide, file = "data/clinicaldata_wide.RDS")
 saveRDS(df_wide_delta, file = "data/clinicaldata_delta.RDS")
-saveRDS(df_new_long, file = "data/clinicaldata_long.RDS")
+saveRDS(df_new_long3, file = "data/clinicaldata_long.RDS")
 saveRDS(heliusmb2, file = "data/phyloseq_sampledata.RDS")
+saveRDS(heliusba, file = "data/phyloseq_baseline.RDS")
+
