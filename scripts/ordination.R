@@ -8,7 +8,7 @@ library(ggplot2)
 library(ggpubr)
 library(ggsci)
 library(doParallel)
-registerDoParallel(6)
+#registerDoParallel(6)
 
 theme_Publication <- function(base_size=14, base_family="sans") {
     library(grid)
@@ -45,53 +45,92 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 #### Load data ####
-df <- readRDS("data/16s/clin_betadiversity.RDS")
+df <- readRDS("data/16s/clin_betadiversity.RDS") %>% dplyr::select(1:5)
+helius <- readRDS("data/clinicaldata_delta.RDS")
+df <- left_join(df, helius, by = "ID")
+ev_bray <- read.csv("results/ordination/expl_var_bray.csv", header = FALSE)
+ev_unifrac <- read.csv("results/ordination/expl_var_unifrac.csv", header = FALSE)
+wunifrac <- readRDS("results/ordination/wunifrac.RDS")
+bray <- readRDS("results/ordination/bray.RDS")
 
 #### Output folder ####
 resultsfolder <- "results/ordination"
 dir.create(resultsfolder, showWarnings = FALSE)
 
-#### Bray-Curtis distance: male-female ####
-braycurt <- dbray %>% 
-    ggplot(aes(PC1_BC, PC2_BC)) +
-    geom_point(aes(color = Sex), size = 1, alpha = 0.7) +
+#### Bray-Curtis distance ####
+print('PERMANOVA..')
+set.seed(1234)
+# distance matrix and metadata must have the same sample order
+dfanova <- df %>% slice(match(attributes(bray)[["Labels"]], ID)) 
+all(dfanova$ID == attributes(bray)[["Labels"]]) # TRUE
+dim(dfanova)
+res1 <- adonis2(bray ~ timepoint, data = dfanova) # PERMANOVA
+print(res1)
+
+(braycurt <- df %>% 
+    ggplot(aes(BrayPCo1, BrayPCo2)) +
+    stat_ellipse(geom = "polygon", aes(color = timepoint, fill = timepoint), type = "norm",
+                 alpha = 0.1) +
+    geom_point(aes(color = timepoint), size = 1, alpha = 0.5) +
     ggtitle("PCoA Bray-Curtis distance") +
-    xlab(paste0('PCo1 (', round(expl_variance[1], digits = 1),'%)')) +
-    ylab(paste0('PCo2 (', round(expl_variance[2], digits = 1),'%)')) +
-    scale_color_manual(values = rev(pal_nejm()(2))) +
+    xlab(paste0('PCo1 (', round(ev_bray$V1[1], digits = 1),'%)')) +
+    ylab(paste0('PCo2 (', round(ev_bray$V1[2], digits = 1),'%)')) +
+    scale_color_manual(values = pal_lancet()(2)) +
+    scale_fill_manual(values = pal_lancet()(2), guide = "none") +
+    scale_alpha_manual(guide = "none") +
     theme_Publication() +
-    guides(fill = guide_legend(override.aes = list(shape = 21, size = 2))) +
-    labs(color = "") +
-    stat_ellipse(aes(color = Sex), type = "norm") + 
+    labs(color = "", alpha = "") +
     annotate("text", x= Inf, y = Inf, hjust = 1, vjust = 1,
-             label = str_c("PERMANOVA: p = ", res1$`Pr(>F)`, ", r2 = ", format(round(res1$R2[1],3), nsmall = 3)))
+             label = str_c("PERMANOVA: p = ", res1$`Pr(>F)`, ", r2 = ", 
+                           format(round(res1$R2[1],3), nsmall = 3))
+             ))
 ggsave(braycurt, filename = "results/ordination/PCoA_BrayCurtis.pdf", device = "pdf", width = 8, height = 8)
 
 
 #### Weighted UniFrac ####
-unifracpl <- df %>% 
-    ggplot(aes(PC1_unifrac, PC2_unifrac)) +
-    geom_point(aes(color = Sex), size = 1, alpha = 0.7) +
-    xlab(paste0('PCo1 (', round(expl_variance[3], digits = 1),'%)')) +
-    ylab(paste0('PCo2 (', round(expl_variance[4], digits = 1),'%)')) +
-    theme_Publication() +
-    scale_color_manual(values = rev(pal_nejm()(2))) +
-    ggtitle('PCoA Weighted UniFrac') +
-    guides(fill = guide_legend(override.aes = list(shape = 21, size = 2))) +
-    labs(color = "") +
-    stat_ellipse(aes(color = Sex), type = "norm")
-ggsave(unifracpl, filename = "results/ordination/PCoA_WeightedUnifrac.pdf", device = "pdf", width = 8, height = 8)
+dfanova <- df %>% slice(match(attributes(wunifrac)[["Labels"]], ID)) 
+all(dfanova$ID == attributes(wunifrac)[["Labels"]]) # TRUE
+dim(dfanova)
+res2 <- adonis2(wunifrac ~ timepoint, data = dfanova) # PERMANOVA
+print(res2)
 
-#### CLR-transformed PCA ####
-plclr <- df %>% 
-    ggplot(aes(PC1_clr, PC2_clr)) +
-    geom_point(aes(color = Sex), size = 1, alpha = 0.7) +
-    xlab(paste0('PC1 (', round(expl_variance[5], digits = 1),'%)')) + # PComp, not PCoord
-    ylab(paste0('PC2 (', round(expl_variance[6], digits = 1),'%)')) +
-    theme_Publication() +
-    scale_color_manual(values = rev(pal_nejm()(2))) +
-    guides(fill = guide_legend(override.aes = list(shape = 21))) +
-    ggtitle('PCA CLR-transformed') + 
-    labs(color = "") +
-    stat_ellipse(aes(color = Sex), type = "norm")
-ggsave(plclr, filename = "results/ordination/PCA_CLR.pdf", device = "pdf", width = 8, height = 8)
+(wunifracpl <- df %>% 
+        ggplot(aes(UniFrac1, UniFrac2)) +
+        stat_ellipse(geom = "polygon", aes(color = timepoint, fill = timepoint), type = "norm",
+                     alpha = 0.1) +
+        geom_point(aes(color = timepoint), size = 1, alpha = 0.5) +
+        ggtitle("PCoA Weighted UniFrac") +
+        xlab(paste0('PCo1 (', round(ev_unifrac$V1[1]*100, digits = 1),'%)')) +
+        ylab(paste0('PCo2 (', round(ev_unifrac$V1[2]*100, digits = 1),'%)')) +
+        scale_color_manual(values = pal_lancet()(2)) +
+        scale_fill_manual(values = pal_lancet()(2), guide = "none") +
+        scale_alpha_manual(guide = "none") +
+        theme_Publication() +
+        labs(color = "", alpha = "") +
+        annotate("text", x= Inf, y = Inf, hjust = 1, vjust = 1,
+                 label = str_c("PERMANOVA: p = ", res2$`Pr(>F)`, ", r2 = ", 
+                               format(round(res2$R2[1],3), nsmall = 3))
+        ))
+ggsave(wunifracpl, filename = "results/ordination/PCoA_WeightedUnifrac.pdf", device = "pdf", width = 8, height = 8)
+
+
+## Distance between datapoints
+braymat <- as.matrix(bray)
+# Generate all possible combinations of IDs
+all_combinations <- t(combn(unique(rownames(braymat)), 2, simplify = TRUE))
+# Create a data frame with combinations and distances
+data_long <- data.frame(
+    ID1 = all_combinations[, 1],
+    ID2 = all_combinations[, 2],
+    Distance = braymat[all_combinations]
+)
+data_filt <- data_long %>%
+    filter(str_remove(ID1, "HELIBA_") == str_remove(ID2, "HELIFU_")) %>% 
+    mutate(ID = str_c("S", str_remove(ID1, "HELIBA_"))) %>% 
+    select(-ID1, -ID2)
+
+heliusdist <- inner_join(data_filt, helius, by = "ID")
+
+## Plots 
+
+
