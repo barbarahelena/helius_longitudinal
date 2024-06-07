@@ -50,3 +50,6 @@ rsconnect/
 
 # data
 data/
+
+# renv
+renv/
