@@ -44,12 +44,16 @@ metsyn <- df %>% filter(!is.na(MetSyn_new)) %>%
     mutate(MetSyn_new = case_when(MetSyn_new == "Yes" ~ 1, MetSyn_new == "No" ~ 0))
 lld <- df %>% filter(!is.na(LLD_new)) %>% 
     mutate(LLD_new = case_when(LLD_new == "Yes" ~ 1, LLD_new == "No" ~ 0))
+sbp <- df %>% filter(!is.na(SBP_delta) & HT_BPMed_baseline == "No" & `AntiHT_follow-up` == "No") 
+dbp <- df %>% filter(!is.na(DBP_delta) & HT_BPMed_baseline == "No" & `AntiHT_follow-up` == "No")
+hba1c <- df %>% filter(!is.na(HbA1c_delta) & DM_baseline == "No" & `GlucLowDrugs_follow-up` == "Nee")
+ldl <- df %>% filter(!is.na(LDL_delta) & LLD_baseline == "No" & `LLD_follow-up` == "No")
 mb <- readRDS('data/phyloseq_baseline.RDS')
 
 ## Diabetes
 mb2 <- prune_samples(mb@sam_data$ID %in% dm$ID, mb)
 otu <- t(as(mb2@otu_table, "matrix"))
-tk <- apply(otu, 2, function(x) sum(x > 5) > (0.25*length(x)))
+tk <- apply(otu, 2, function(x) sum(x > 5) > (0.1*length(x)))
 mbdf <- otu[,tk]
 mbdf <- as.data.frame(mbdf)
 dim(mbdf)
@@ -118,4 +122,74 @@ y <- as.data.frame(clindf$LLD_new)
 y
 write_y(y, name_y = 'y_binary.txt', file.path(path, 'input_data'))
 
+## SBP
+mb2 <- prune_samples(mb@sam_data$ID %in% sbp$ID, mb)
+otu <- t(as(mb2@otu_table, "matrix"))
+tk <- apply(otu, 2, function(x) sum(x > 5) > (0.25*length(x)))
+mbdf <- otu[,tk]
+mbdf <- as.data.frame(mbdf)
+dim(mbdf)
+clindf <- sbp[match(rownames(mbdf), sbp$sampleID_baseline), ]
+all(clindf$sampleID_baseline == rownames(mbdf)) # TRUE
+clindf$sampleID_baseline; rownames(mbdf)
+path <- 'sbp'
+dir.create(path)
+dir.create("sbp/input_data")
+write_data(mbdf, file.path(path, 'input_data'))
+y <- as.data.frame(clindf$SBP_delta)
+y
+write_y(y, name_y = 'y_reg.txt', file.path(path, 'input_data'))
 
+## DBP
+mb2 <- prune_samples(mb@sam_data$ID %in% dbp$ID, mb)
+otu <- t(as(mb2@otu_table, "matrix"))
+tk <- apply(otu, 2, function(x) sum(x > 5) > (0.25*length(x)))
+mbdf <- otu[,tk]
+mbdf <- as.data.frame(mbdf)
+dim(mbdf)
+clindf <- dbp[match(rownames(mbdf), dbp$sampleID_baseline), ]
+all(clindf$sampleID_baseline == rownames(mbdf)) # TRUE
+clindf$sampleID_baseline; rownames(mbdf)
+path <- 'dbp'
+dir.create(path)
+dir.create("dbp/input_data")
+write_data(mbdf, file.path(path, 'input_data'))
+y <- as.data.frame(clindf$DBP_delta)
+y
+write_y(y, name_y = 'y_reg.txt', file.path(path, 'input_data'))
+
+## HbA1c
+mb2 <- prune_samples(mb@sam_data$ID %in% hba1c$ID, mb)
+otu <- t(as(mb2@otu_table, "matrix"))
+tk <- apply(otu, 2, function(x) sum(x > 5) > (0.25*length(x)))
+mbdf <- otu[,tk]
+mbdf <- as.data.frame(mbdf)
+dim(mbdf)
+clindf <- hba1c[match(rownames(mbdf), hba1c$sampleID_baseline), ]
+all(clindf$sampleID_baseline == rownames(mbdf)) # TRUE
+clindf$sampleID_baseline; rownames(mbdf)
+path <- 'hba1c'
+dir.create(path)
+dir.create("hba1c/input_data")
+write_data(mbdf, file.path(path, 'input_data'))
+y <- as.data.frame(clindf$HbA1c_delta)
+y
+write_y(y, name_y = 'y_reg.txt', file.path(path, 'input_data'))
+
+## LDL
+mb2 <- prune_samples(mb@sam_data$ID %in% ldl$ID, mb)
+otu <- t(as(mb2@otu_table, "matrix"))
+tk <- apply(otu, 2, function(x) sum(x > 5) > (0.25*length(x)))
+mbdf <- otu[,tk]
+mbdf <- as.data.frame(mbdf)
+dim(mbdf)
+clindf <- ldl[match(rownames(mbdf), ldl$sampleID_baseline), ]
+all(clindf$sampleID_baseline == rownames(mbdf)) # TRUE
+clindf$sampleID_baseline; rownames(mbdf)
+path <- 'ldl'
+dir.create(path)
+dir.create("ldl/input_data")
+write_data(mbdf, file.path(path, 'input_data'))
+y <- as.data.frame(clindf$LDL_delta)
+y
+write_y(y, name_y = 'y_reg.txt', file.path(path, 'input_data'))
