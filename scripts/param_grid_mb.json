@@ -4,5 +4,6 @@
  "min_child_weight": [1],
  "gamma": [0.1, 0.2],
  "subsample": [0.8],
- "colsample_bytree": [0.5, 0.8, 1]
+ "colsample_bytree": [0.5, 0.8, 1],
+ "scale_pos_weight": [40]
 }
