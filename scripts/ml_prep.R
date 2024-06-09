@@ -49,11 +49,21 @@ dbp <- df %>% filter(!is.na(DBP_delta) & HT_BPMed_baseline == "No" & `AntiHT_fol
 hba1c <- df %>% filter(!is.na(HbA1c_delta) & DM_baseline == "No" & `GlucLowDrugs_follow-up` == "Nee")
 ldl <- df %>% filter(!is.na(LDL_delta) & LLD_baseline == "No" & `LLD_follow-up` == "No")
 mb <- readRDS('data/phyloseq_baseline.RDS')
+samdata <- inner_join(as(mb@sam_data, 'data.frame'), df, by = "ID")
+rownames(samdata) <- samdata$sampleID_baseline
+mb <- phyloseq(mb@otu_table, mb@tax_table, mb@refseq, mb@phy_tree, sample_data(samdata))
 
 ## Diabetes
-mb2 <- prune_samples(mb@sam_data$ID %in% dm$ID, mb)
-otu <- t(as(mb2@otu_table, "matrix"))
-tk <- apply(otu, 2, function(x) sum(x > 5) > (0.1*length(x)))
+mbdm <- prune_samples(!is.na(mb@sam_data$DM_new), mb)
+otu <- t(as(mbdm@otu_table, "matrix"))
+mb1 <- prune_samples(mbdm@sam_data$DM_new == "No", mbdm)
+tk1 <- apply(t(as(mb1@otu_table, "matrix")), 2, function(x) sum(x > 5) > (0.20*length(x)))
+mb2 <- prune_samples(mbdm@sam_data$DM_new == "Yes", mbdm)
+tk2 <- apply(t(as(mb2@otu_table, "matrix")), 2, function(x) sum(x > 5) > (0.20*length(x)))
+tk <- Reduce(`+`,list(tk1,tk2)) > 0
+tk1[which(tk1 != tk2)]
+tk2[which(tk1 != tk2)]
+all(tk[which(tk1 != tk2)] == TRUE) # should be TRUE, since either tk1 or tk2 was TRUE
 mbdf <- otu[,tk]
 mbdf <- as.data.frame(mbdf)
 dim(mbdf)
@@ -69,9 +79,16 @@ y
 write_y(y, name_y = 'y_binary.txt', file.path(path, 'input_data'))
 
 ## Hypertension
-mb2 <- prune_samples(mb@sam_data$ID %in% ht$ID, mb)
-otu <- t(as(mb2@otu_table, "matrix"))
-tk <- apply(otu, 2, function(x) sum(x > 5) > (0.25*length(x)))
+mbht <- prune_samples(!is.na(mb@sam_data$HT_new), mb)
+otu <- t(as(mbht@otu_table, "matrix"))
+mb1 <- prune_samples(mbht@sam_data$HT_new == "No", mbht)
+tk1 <- apply(t(as(mb1@otu_table, "matrix")), 2, function(x) sum(x > 5) > (0.20*length(x)))
+mb2 <- prune_samples(mbht@sam_data$HT_new == "Yes", mbht)
+tk2 <- apply(t(as(mb2@otu_table, "matrix")), 2, function(x) sum(x > 5) > (0.20*length(x)))
+tk <- Reduce(`+`,list(tk1,tk2)) > 0
+tk1[which(tk1 != tk2)]
+tk2[which(tk1 != tk2)]
+tk[which(tk1 != tk2)] # should all be true (cause one of tk1 or tk2 was)
 mbdf <- otu[,tk]
 mbdf <- as.data.frame(mbdf)
 dim(mbdf)
@@ -87,9 +104,16 @@ y
 write_y(y, name_y = 'y_binary.txt', file.path(path, 'input_data'))
 
 ## MetSyn
-mb2 <- prune_samples(mb@sam_data$ID %in% metsyn$ID, mb)
-otu <- t(as(mb2@otu_table, "matrix"))
-tk <- apply(otu, 2, function(x) sum(x > 5) > (0.25*length(x)))
+mbms <- prune_samples(!is.na(mb@sam_data$MetSyn_new), mb)
+otu <- t(as(mbms@otu_table, "matrix"))
+mb1 <- prune_samples(mbms@sam_data$MetSyn_new == "No", mbms)
+tk1 <- apply(t(as(mb1@otu_table, "matrix")), 2, function(x) sum(x > 5) > (0.20*length(x)))
+mb2 <- prune_samples(mbms@sam_data$MetSyn_new == "Yes", mbms)
+tk2 <- apply(t(as(mb2@otu_table, "matrix")), 2, function(x) sum(x > 5) > (0.20*length(x)))
+tk <- Reduce(`+`,list(tk1,tk2)) > 0
+tk1[which(tk1 != tk2)]
+tk2[which(tk1 != tk2)]
+tk[which(tk1 != tk2)] # should all be true (cause one of tk1 or tk2 was)
 mbdf <- otu[,tk]
 mbdf <- as.data.frame(mbdf)
 dim(mbdf)
@@ -105,9 +129,16 @@ y
 write_y(y, name_y = 'y_binary.txt', file.path(path, 'input_data'))
 
 ## LLD
-mb2 <- prune_samples(mb@sam_data$ID %in% lld$ID, mb)
-otu <- t(as(mb2@otu_table, "matrix"))
-tk <- apply(otu, 2, function(x) sum(x > 5) > (0.25*length(x)))
+mbll <- prune_samples(!is.na(mb@sam_data$LLD_new), mb)
+otu <- t(as(mbll@otu_table, "matrix"))
+mb1 <- prune_samples(mbll@sam_data$LLD_new == "No", mbll)
+tk1 <- apply(t(as(mb1@otu_table, "matrix")), 2, function(x) sum(x > 5) > (0.20*length(x)))
+mb2 <- prune_samples(mbll@sam_data$LLD_new == "Yes", mbll)
+tk2 <- apply(t(as(mb2@otu_table, "matrix")), 2, function(x) sum(x > 5) > (0.20*length(x)))
+tk <- Reduce(`+`,list(tk1,tk2)) > 0
+tk1[which(tk1 != tk2)]
+tk2[which(tk1 != tk2)]
+tk[which(tk1 != tk2)] # should all be true (cause one of tk1 or tk2 was)
 mbdf <- otu[,tk]
 mbdf <- as.data.frame(mbdf)
 dim(mbdf)
