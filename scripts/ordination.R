@@ -7,7 +7,7 @@ library(tidyverse)
 library(ggplot2)
 library(ggpubr)
 library(ggsci)
-library(doParallel)
+# library(doParallel)
 #registerDoParallel(6)
 
 theme_Publication <- function(base_size=14, base_family="sans") {
@@ -45,9 +45,9 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 #### Load data ####
-df <- readRDS("data/16s/clin_betadiversity.RDS") %>% dplyr::select(1:5)
-helius <- readRDS("data/clinicaldata_delta.RDS")
-df <- left_join(df, helius, by = "ID")
+df <- readRDS("data/16s/clin_betadiversity.RDS") %>% dplyr::select(1:2, sampleID = ID, 4:5)
+helius <- readRDS("data/clinicaldata_long.RDS")
+df <- left_join(df, helius, by = c("sampleID"))
 ev_bray <- read.csv("results/ordination/expl_var_bray.csv", header = FALSE)
 ev_unifrac <- read.csv("results/ordination/expl_var_unifrac.csv", header = FALSE)
 wunifrac <- readRDS("results/ordination/wunifrac.RDS")
@@ -61,15 +61,15 @@ dir.create(resultsfolder, showWarnings = FALSE)
 print('PERMANOVA..')
 set.seed(1234)
 # distance matrix and metadata must have the same sample order
-dfanova <- df %>% slice(match(attributes(bray)[["Labels"]], ID)) 
-all(dfanova$ID == attributes(bray)[["Labels"]]) # TRUE
-dim(dfanova)
-res1 <- adonis2(bray ~ timepoint, data = dfanova) # PERMANOVA
+dfanova <- df[match(attributes(bray)[["Labels"]], df$sampleID),]
+all(dfanova$sampleID == attributes(bray)[["Labels"]]) # TRUE
+dim(df)
+res1 <- adonis2(bray ~ timepoint, data = df) # PERMANOVA
 print(res1)
 
-(braycurt <- df %>% 
+(braycurt <- df %>%
     ggplot(aes(BrayPCo1, BrayPCo2)) +
-    stat_ellipse(geom = "polygon", aes(color = timepoint, fill = timepoint), type = "norm",
+    stat_ellipse(geom = "polygon", aes(color = DM_new, fill = DM_new), type = "norm",
                  alpha = 0.1) +
     geom_point(aes(color = timepoint), size = 1, alpha = 0.5) +
     ggtitle("PCoA Bray-Curtis distance") +
@@ -84,12 +84,73 @@ print(res1)
              label = str_c("PERMANOVA: p = ", res1$`Pr(>F)`, ", r2 = ", 
                            format(round(res1$R2[1],3), nsmall = 3))
              ))
-ggsave(braycurt, filename = "results/ordination/PCoA_BrayCurtis.pdf", device = "pdf", width = 8, height = 8)
+# ggsave(braycurt, filename = "results/ordination/PCoA_BrayCurtis.pdf", device = "pdf", width = 8, height = 8)
 
+
+(dmnewbray <- df %>% filter(!is.na(DM_new)) %>% filter(timepoint == "baseline") %>% 
+        ggplot(aes(BrayPCo1, BrayPCo2)) +
+        stat_ellipse(geom = "polygon", aes(color = DM_new, fill = DM_new), type = "norm",
+                     alpha = 0.1) +
+        geom_point(aes(color = DM_new), size = 1, alpha = 0.5) +
+        ggtitle("New diabetes") +
+        xlab(paste0('PCo1 (', round(ev_bray$V1[1], digits = 1),'%)')) +
+        ylab(paste0('PCo2 (', round(ev_bray$V1[2], digits = 1),'%)')) +
+        scale_color_manual(values = pal_lancet()(2)) +
+        scale_fill_manual(values = pal_lancet()(2), guide = "none") +
+        scale_alpha_manual(guide = "none") +
+        theme_Publication() +
+        labs(alpha = "") )
+
+(htnewbray <- df %>% filter(!is.na(HT_new)) %>% filter(timepoint == "baseline") %>% 
+        ggplot(aes(BrayPCo1, BrayPCo2)) +
+        stat_ellipse(geom = "polygon", aes(color = HT_new, fill = HT_new), type = "norm",
+                     alpha = 0.1) +
+        geom_point(aes(color = HT_new), size = 1, alpha = 0.5) +
+        ggtitle("New hypertension") +
+        xlab(paste0('PCo1 (', round(ev_bray$V1[1], digits = 1),'%)')) +
+        ylab(paste0('PCo2 (', round(ev_bray$V1[2], digits = 1),'%)')) +
+        scale_color_manual(values = pal_lancet()(2)) +
+        scale_fill_manual(values = pal_lancet()(2), guide = "none") +
+        scale_alpha_manual(guide = "none") +
+        theme_Publication() +
+        labs(alpha = "") )
+
+(metsynnewbray <- df %>% filter(!is.na(MetSyn_new)) %>% filter(timepoint == "baseline") %>% 
+        ggplot(aes(BrayPCo1, BrayPCo2)) +
+        stat_ellipse(geom = "polygon", aes(color = MetSyn_new, fill = MetSyn_new), type = "norm",
+                     alpha = 0.1) +
+        geom_point(aes(color = MetSyn_new), size = 1, alpha = 0.5) +
+        ggtitle("New metabolic syndrome") +
+        xlab(paste0('PCo1 (', round(ev_bray$V1[1], digits = 1),'%)')) +
+        ylab(paste0('PCo2 (', round(ev_bray$V1[2], digits = 1),'%)')) +
+        scale_color_manual(values = pal_lancet()(2)) +
+        scale_fill_manual(values = pal_lancet()(2), guide = "none") +
+        scale_alpha_manual(guide = "none") +
+        theme_Publication() +
+        labs(alpha = "") )
+
+
+(lldnewbray <- df %>% filter(!is.na(LLD_new)) %>% filter(timepoint == "baseline") %>% 
+        ggplot(aes(BrayPCo1, BrayPCo2)) +
+        stat_ellipse(geom = "polygon", aes(color = LLD_new, fill = LLD_new), type = "norm",
+                     alpha = 0.1) +
+        geom_point(aes(color = LLD_new), size = 1, alpha = 0.5) +
+        ggtitle("New lipid lowering drug use") +
+        xlab(paste0('PCo1 (', round(ev_bray$V1[1], digits = 1),'%)')) +
+        ylab(paste0('PCo2 (', round(ev_bray$V1[2], digits = 1),'%)')) +
+        scale_color_manual(values = pal_lancet()(2)) +
+        scale_fill_manual(values = pal_lancet()(2), guide = "none") +
+        scale_alpha_manual(guide = "none") +
+        theme_Publication() +
+        labs(alpha = "") )
+
+ggarrange(dmnewbray, htnewbray, metsynnewbray, lldnewbray, nrow = 1,
+          labels = LETTERS[1:4])
+ggsave(file.path(resultsfolder, "clinicaloutcomes_bray.pdf"), width = 18, height = 5)
 
 #### Weighted UniFrac ####
-dfanova <- df %>% slice(match(attributes(wunifrac)[["Labels"]], ID)) 
-all(dfanova$ID == attributes(wunifrac)[["Labels"]]) # TRUE
+dfanova <- df[match(attributes(wunifrac)[["Labels"]], df$sampleID),]
+all(dfanova$sampleID == attributes(wunifrac)[["Labels"]]) # TRUE
 dim(dfanova)
 res2 <- adonis2(wunifrac ~ timepoint, data = dfanova) # PERMANOVA
 print(res2)
@@ -111,7 +172,7 @@ print(res2)
                  label = str_c("PERMANOVA: p = ", res2$`Pr(>F)`, ", r2 = ", 
                                format(round(res2$R2[1],3), nsmall = 3))
         ))
-ggsave(wunifracpl, filename = "results/ordination/PCoA_WeightedUnifrac.pdf", device = "pdf", width = 8, height = 8)
+# ggsave(wunifracpl, filename = "results/ordination/PCoA_WeightedUnifrac.pdf", device = "pdf", width = 8, height = 8)
 
 
 ## Distance between datapoints
