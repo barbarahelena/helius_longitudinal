@@ -1,6 +1,9 @@
 # History files
 .Rhistory
 .Rapp.history
+.DS_Store
+.Rprofile
+*.Rproj
 
 # Session Data files
 .RData
@@ -50,6 +53,18 @@ rsconnect/
 
 # data
 data/
+ldl/
+lld/
+hba1c/
+dbp/
+sbp/
+hypertension/
+diabetes/
+metsyn/
 
 # renv
-renv/
+renv/*
+
+# paper and results
+paper/
+results/
