@@ -126,6 +126,8 @@ df_new2 <- df_new %>%
                                        "Low (<0,08 mmol/L)", "Low (<0,10 mmol/L)",
                                        "Smoking status unknown", "Number or duration unknown",
                                        "Rookstatus onbekend", "Rookduur en/of aantal onbekend"))),
+           sampleID_BA = str_c("HELIBA_", ID),
+           sampleID_FU = str_c("HELIFU_", ID),
            ID = str_c("S",as.character(ID)),
            across(c("FUtime", "Age_BA", "Age_FU", "DiscrSum_BA", "DiscrMean_BA",
                     "ExerciseScore_BA", "ExerciseMinweek_BA", "ResDuration_BA",
@@ -205,43 +207,27 @@ any(str_detect(sample_names(heliusmb), "_T2")) # FALSE (hence no duplicated samp
 sample_names(heliusmb) <- str_replace(sample_names(heliusmb), "_T1", "") # remove _T1
 sample_names(heliusmb)
 all(sample_sums(heliusmb) == 15000) # all rarefied to 15,000 counts
-timepoint <- case_when(
-    str_detect(sample_names(heliusmb), "HELIBA") ~ "baseline",
-    str_detect(sample_names(heliusmb), "HELIFU") ~ "follow-up"
-) %>% as.factor(.)
-df <- data.frame(row.names = sample_names(heliusmb), 
-                 timepoint,
-                 ID = str_c("S",str_remove(str_remove(sample_names(heliusmb), "HELIFU_"), "HELIBA_")))
-heliusmb <- phyloseq(heliusmb@otu_table, heliusmb@tax_table, heliusmb@refseq, heliusmb@phy_tree, sample_data(df))
+df_new3 <- df_new2 %>% filter(sampleID_BA %in% sample_names(heliusmb) | sampleID_FU %in% sample_names(heliusmb))
+write.csv2(df_new3$ID, 'data/16s/ids_16s.csv')
 
-# Check overlap samples
-heliusfu <- prune_samples(heliusmb@sam_data$timepoint == "follow-up", heliusmb)
-summary(heliusfu@sam_data$ID %in% df_new$ID)
-missingfu <- heliusfu@sam_data$ID[which(!heliusfu@sam_data$ID %in% df_new$ID)]
-
-heliusba <- prune_samples(heliusmb@sam_data$timepoint == "baseline", heliusmb)
-summary(heliusba@sam_data$ID %in% df_new$ID)
-missingba <- heliusba@sam_data$ID[which(!heliusba@sam_data$ID %in% df_new2$ID)]
-missingba[which(missingba %in% heliusfu@sam_data$ID)] # 1 subject S207389
-any(str_detect(missingfu, "S207389")) # TRUE so the subject is already in the follow-up missing list
-
-# Select samples that are in dataset
-heliusmb2 <- prune_samples(heliusmb@sam_data$ID %in% df_new2$ID, heliusmb)
+# Select samples that are in clinical dataset
+heliusmb2 <- prune_samples(sample_names(heliusmb) %in% df_new_long$sampleID, heliusmb)
 heliusmb2
-df_new3 <- df_new2 %>% filter(ID %in% heliusmb2@sam_data$ID)
-write.csv2(df_new3$ID, 'data/16s/ids_16s_paired.csv')
-all(df_new3$ID %in% heliusmb2@sam_data$ID) # TRUE
-all(heliusmb2@sam_data$ID %in% df_new3$ID) # TRUE
 
-# Merge clinical data (long) with phyloseq clinical data
-samdata <- as(heliusmb2@sam_data, "data.frame")
-samdata$sampleID <- rownames(samdata)
-df_new_long2 <- left_join(samdata, df_new_long, by = c("sampleID", "timepoint", "ID"))
-rownames(df_new_long2) <- df_new_long2$sampleID
-dfba <- df_new_long2 %>% filter(timepoint == "baseline")
-dffu <- df_new_long2 %>% filter(timepoint == "follow-up") %>% 
-    filter(ID %in% dfba$ID)
-df_new_long2 <- df_new_long2 %>% filter(ID %in% dffu$ID)
+# How many samples have paired data (baseline + follow-up data)
+summary(str_detect(sample_names(heliusmb), "HELIBA")) # 2966 follow-up samples total
+summary(str_detect(sample_names(heliusmb), "HELIFU")) # 2966 follow-up samples total
+summary(str_detect(sample_names(heliusmb2), "HELIFU")) # 1829 follow-up samples with paired clinical data
+fusamples <- sample_names(prune_samples(str_detect(sample_names(heliusmb2), "HELIFU"), heliusmb2))
+basamples <- sample_names(prune_samples(str_detect(sample_names(heliusmb2), "HELIBA"), heliusmb2))
+basamples <- str_remove(basamples, "HELIBA_")
+fusamples <- str_remove(fusamples, "HELIFU_")
+idspaired <- str_c("S",fusamples[which(fusamples %in% basamples)]) # 1825 with paired baseline-FU data
+write.csv2(idspaired, 'data/16s/ids_16s_paired.csv')
+
+## Select paired samples
+idspaired2 <- c(str_replace(idspaired, "S", "HELIBA_"), str_replace(idspaired, "S", "HELIFU_"))
+heliusmbpaired <- prune_samples(sample_names(heliusmb2) %in% idspaired2, heliusmb2)
 
 # Get delta variables
 df_wide <- pivot_wider(df_new_long, id_cols = c(1:8), names_from = "timepoint",
@@ -281,18 +267,21 @@ df_wide_delta <- df_wide %>%
         LLD_new = deltafactor(LLD_baseline, `LLD_follow-up`)
         )
 df_deltas <- df_wide_delta %>% dplyr::select(1:9, contains("delta"), contains("new"))
-df_new_long3 <- df_new_long2 %>% left_join(., df_deltas %>% dplyr::select(-c(2:9)), by = "ID")
-rownames(df_new_long3) <- df_new_long3$sampleID
+coldouble <- colnames(df_wide_delta)[which(str_detect(colnames(df_wide_delta), "_follow-up") | 
+                                               str_detect(colnames(df_wide_delta), "_baseline"))]
+df_long <- df_wide_delta %>% pivot_longer(., cols = all_of(coldouble), names_to = c(".value", "timepoint"),
+                                        names_pattern = "(.*)_([a-z-]+)$")
+df_all <- df_long %>% filter(sampleID %in% sample_names(heliusmb2)) %>% 
+                                    left_join(., df_deltas %>% dplyr::select(-c(2:9)), by = "ID")
+rownames(df_all) <- df_all$sampleID
 
 ## Merge with phyloseq
-heliusmb2 <- phyloseq(heliusmb2@otu_table, heliusmb2@tax_table, heliusmb2@refseq, heliusmb2@phy_tree, 
-                      sample_data(df_new_long3))
+heliusmb2@sam_data <- sample_data(df_all) # for all subject with paired clin data
+heliusmbpaired@sam_data <- sample_data(df_all %>% filter(sampleID %in% sample_names(heliusmbpaired))) # paired 16s
 
 ## Save files
-saveRDS(df_new2, file = "data/clinicaldata.RDS")
-saveRDS(df_wide, file = "data/clinicaldata_wide.RDS")
-saveRDS(df_wide_delta, file = "data/clinicaldata_delta.RDS")
-saveRDS(df_new_long3, file = "data/clinicaldata_long.RDS")
-saveRDS(heliusmb2, file = "data/phyloseq_sampledata.RDS")
-saveRDS(heliusba, file = "data/phyloseq_baseline.RDS")
+saveRDS(df_all, file = "data/clinicaldata_wide.RDS")
+saveRDS(df_long, file = "data/clinicaldata_long.RDS")
+saveRDS(heliusmb2, file = "data/16s/phyloseq_withclinpaired.RDS")
+saveRDS(heliusmbpaired, file = "data/16s/phyloseq_paired16s.RDS")
 
