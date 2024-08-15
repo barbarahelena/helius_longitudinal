@@ -68,6 +68,12 @@ meta <- meta %>% mutate(
 
 write.csv2(meta$subjectID, 'data/metabolomics/ids_metabolomics.csv')
 
+newids <- str_c("S",str_remove(meta$subjectID, "HELI[A-Z]+_"))
+oldmets <- readRDS("~/Documents/VUmc/CKD-metabolites/ckd-metabolomics/data/plasma_metabolites.RDS")
+oldids <- rownames(oldmets)
+oldids[which(oldids %in% newids)]
+unique(newids[which(newids %in% oldids)])
+
 summary(meta$NEG)
 summary(meta$POLAR)
 summary(meta$POS.EARLY)
