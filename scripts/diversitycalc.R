@@ -35,22 +35,24 @@ dffai <- left_join(dffai, dfspec, by = "ID")
 saveRDS(dffai, "data/16s/clin_alphadiversity.RDS")
 
 #### Shotgun data ####
-# ## Load data
-# df_new <- rio:: import("data/clinicaldata_shotgun.RDS")
-# 
-# ## Diversity metrics
-# # Shannon plots
-# shannon <- rio::import("data/metaphlan/diversity/combined_table_shannon.tsv") 
-# shannon <- shannon %>% select(ID = V1, shannon = diversity_shannon) %>% 
-#     mutate(ID = str_remove(ID, "_T1"))
-# df_shan <- left_join(shannon, df_new, by = "ID")
-# 
-# 
-# ## Species richness
-# richness <- rio::import("data/metaphlan/diversity/combined_table_richness.tsv")
-# richness <- richness %>% select(ID = V1, richness = observed) %>% 
-#     mutate(ID = str_remove(ID, "_T1"))
-# dfspec <- left_join(richness, df_new, by = "ID")
-#
-# 
+## Load data
+df_new <- readRDS("data/clinicaldata_long.RDS")
+
+## Diversity metrics
+# Shannon plots
+sg <- readRDS("data/shotgun/shotgun_abundance.RDS")
+sgtab <- as.data.frame(sg)
+shannonsg <- vegan::diversity(sgtab, index = "shannon")
+df_shansg <- data.frame(sampleID = names(shannonsg), shannon = shannonsg)
+df_shansg$ID <- str_remove(str_remove(df_shansg$sampleID, "HELIBA_"), "HELIFU_")
+df_shansg <- left_join(df_shansg, df_new)
+
+## Species richness
+specrichsg <- specnumber(sgtab)
+dfspecsg <- data.frame(sampleID = names(specrichsg), richness = specrichsg)
+dfspecsg$ID <- str_remove(str_remove(dfspecsg$sampleID, "HELIBA_"), "HELIFU_")
+dfspecsg <- left_join(dfspecsg, df_shansg)
+
+saveRDS(dfspecsg, "data/shotgun/clin_alphadiv_sg.RDS")
+
 
