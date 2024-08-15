@@ -1,22 +1,25 @@
-#### Data cleaning
+# Data cleaning of clinical data, 16S, shotgun
+## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
 ## Libraries
 library(tidyverse)
-library(dplyr)
 library(rio) 
 library(haven)
 library(phyloseq)
-library(forcats)
-library(stringr)
 
+#### Clinical data ####
 ## Open HELIUS clinical data
 df <- haven::read_sav("data/210517_HELIUS data Ulrika Boulund_2.sav") # more subjects than other set
 df2 <- haven::read_sav("data/240411_HELIUS data Barbara Verhaar.sav")
+df3 <- haven::read_sav("data/220712_HELIUS data Barbara Verhaar - Cov1 groep en datum.sav") # covid dates
+df4 <- haven::read_sav("data/EGA_standaardvariabelen.sav")
 names(df2)[which(!names(df2) %in% names(df))]
 df <- df %>% dplyr::select("Heliusnr", !names(df)[which(names(df) %in% names(df2))])
-dftot <- full_join(df2, df, by = "Heliusnr")
-df2$Heliusnr[which(!df2$Heliusnr %in% df$Heliusnr)]
-df$Heliusnr[which(!df$Heliusnr %in% df2$Heliusnr)]
+dftot <- full_join(df2, df, by = "Heliusnr") %>% full_join(., df3, by = "Heliusnr") %>% 
+    full_join(., df4)
+all(df3$Heliusnr %in% df$Heliusnr) # TRUE covid set does not have new subjects
+length(df2$Heliusnr[which(!df2$Heliusnr %in% df$Heliusnr)]) # 2 subjects in original set, not in df2
+length(df$Heliusnr[which(!df$Heliusnr %in% df2$Heliusnr)]) # 16 subjects not in original set, but in df2
 
 # Change type of variable 
 yesnosmall <- function(x) fct_recode(x, "No"="nee", "Yes"="ja")
@@ -155,7 +158,9 @@ df_new2 <- df_new %>%
                     "MetSyn_HighGluc_BA", "MetSyn_HighBP_BA"), yesnosmall),
            across(c("ExerciseNorm_BA", "Statins_BA"), ~fct_recode(.x, "No"="no", "Yes"="yes")),
            Sex = fct_recode(Sex, "Male" = "man", "Female" = "vrouw"),
-           EthnicityTot = forcats::fct_recode(EthnicityTot,
+           EthnicityTot = forcats::fct_recode(EthnicityTot, "Dutch" = "NL", "South-Asian Surinamese" = "Hind",
+                                              "African Surinamese" = "Creools", "South-Asian Surinamese" = "Javaans",
+                                              "Ghanaian" = "Ghanees", "Turkish" = "Turks", "Moroccan" = "Marokkaans",
                                               "Other"="Anders/onbekend",
                                               "Other"="Sur anders/onbekend"),
            across(c("Smoking_BA", "Smoking_FU"), ~fct_recode(.x, "Yes" = "Ja", 
@@ -168,7 +173,15 @@ df_new2 <- df_new %>%
          Ethnicity = fct_recode(Ethnicity, "Dutch" = "Nederlands", "Surinamese" = "Surinaams",
                                 "Turkish" = "Turks", "Moroccan" = "Marokkaans", "Ghanaian" = "Ghanees",
                                 "Unknown" = "Onbekend", "Other" = "Anders"),
-         FUtime = as.numeric(dmonths(FUtime), "years")
+         FUtime = as.numeric(dmonths(FUtime), "years"),
+         AgeDecade_BA = cut(Age_BA, 
+                           breaks = c(18, 40, 50, 71), 
+                           labels = paste(c(18, 40, 50), c(39, 49, 70), sep = "-"), 
+                           right = FALSE),
+         AgeDecade_FU = cut(Age_FU, 
+                            breaks = c(18, 40, 50, 78),
+                            labels = paste(c(18, 40, 50), c(39, 49, 78), sep = "-"), 
+                            right = FALSE)
     ) %>%
     droplevels(.)
 dim(df_new2)
@@ -190,44 +203,6 @@ df_new_long <- df_new_long %>%
         timepoint == "follow-up" ~ str_c("HELIFU_", sampleID)
     )
     )
-
-# Overlap GWAS and 16s/shotgun
-gwas <- rio::import("data/GWAS_ids.txt")
-gwas$ID <- str_c("S", gwas$IID)
-summary(df_new2$ID %in% gwas$ID)
-heliussg <- rio::import("data/shotgun/combined_table.tsv")
-sgids <- colnames(heliussg)[which(str_detect(colnames(heliussg), "HELIBA"))]
-sgids <- str_c("S", str_remove_all(sgids, "HELIBA_"))
-summary(sgids %in% gwas$ID)
-
-# Clean phyloseq object
-heliusmb <- readRDS("data/16s/phyloseq/rarefied/phyloseq_rarefied.RDS")
-all(str_detect(sample_names(heliusmb), "_T1")) # TRUE
-any(str_detect(sample_names(heliusmb), "_T2")) # FALSE (hence no duplicated sample IDs)
-sample_names(heliusmb) <- str_replace(sample_names(heliusmb), "_T1", "") # remove _T1
-sample_names(heliusmb)
-all(sample_sums(heliusmb) == 15000) # all rarefied to 15,000 counts
-df_new3 <- df_new2 %>% filter(sampleID_BA %in% sample_names(heliusmb) | sampleID_FU %in% sample_names(heliusmb))
-write.csv2(df_new3$ID, 'data/16s/ids_16s.csv')
-
-# Select samples that are in clinical dataset
-heliusmb2 <- prune_samples(sample_names(heliusmb) %in% df_new_long$sampleID, heliusmb)
-heliusmb2
-
-# How many samples have paired data (baseline + follow-up data)
-summary(str_detect(sample_names(heliusmb), "HELIBA")) # 2966 follow-up samples total
-summary(str_detect(sample_names(heliusmb), "HELIFU")) # 2966 follow-up samples total
-summary(str_detect(sample_names(heliusmb2), "HELIFU")) # 1829 follow-up samples with paired clinical data
-fusamples <- sample_names(prune_samples(str_detect(sample_names(heliusmb2), "HELIFU"), heliusmb2))
-basamples <- sample_names(prune_samples(str_detect(sample_names(heliusmb2), "HELIBA"), heliusmb2))
-basamples <- str_remove(basamples, "HELIBA_")
-fusamples <- str_remove(fusamples, "HELIFU_")
-idspaired <- str_c("S",fusamples[which(fusamples %in% basamples)]) # 1825 with paired baseline-FU data
-write.csv2(idspaired, 'data/16s/ids_16s_paired.csv')
-
-## Select paired samples
-idspaired2 <- c(str_replace(idspaired, "S", "HELIBA_"), str_replace(idspaired, "S", "HELIFU_"))
-heliusmbpaired <- prune_samples(sample_names(heliusmb2) %in% idspaired2, heliusmb2)
 
 # Get delta variables
 df_wide <- pivot_wider(df_new_long, id_cols = c(1:8), names_from = "timepoint",
@@ -266,22 +241,123 @@ df_wide_delta <- df_wide %>%
         CardInt_new = deltafactor(CardInt_baseline, `CardInt_follow-up`),
         LLD_new = deltafactor(LLD_baseline, `LLD_follow-up`)
         )
-df_deltas <- df_wide_delta %>% dplyr::select(1:9, contains("delta"), contains("new"))
+
 coldouble <- colnames(df_wide_delta)[which(str_detect(colnames(df_wide_delta), "_follow-up") | 
                                                str_detect(colnames(df_wide_delta), "_baseline"))]
-df_long <- df_wide_delta %>% pivot_longer(., cols = all_of(coldouble), names_to = c(".value", "timepoint"),
+coldouble <- coldouble[c(1:2, 5:length(coldouble))]
+df_long <- df_wide_delta %>% 
+    pivot_longer(., cols = all_of(coldouble), names_to = c(".value", "timepoint"),
                                         names_pattern = "(.*)_([a-z-]+)$")
-df_all <- df_long %>% filter(sampleID %in% sample_names(heliusmb2)) %>% 
-                                    left_join(., df_deltas %>% dplyr::select(-c(2:9)), by = "ID")
-rownames(df_all) <- df_all$sampleID
 
-## Merge with phyloseq
+## Save files
+saveRDS(df_wide_delta, file = "data/clinicaldata_wide.RDS")
+saveRDS(df_long, file = "data/clinicaldata_long.RDS")
+
+
+#### 16S ####
+# Overlap GWAS and 16s/shotgun
+gwas <- rio::import("data/GWAS_ids.txt")
+gwas$ID <- str_c("S", gwas$IID)
+summary(df_new2$ID %in% gwas$ID)
+heliussg <- rio::import("data/shotgun/combined_table.tsv")
+sgids <- colnames(heliussg)[which(str_detect(colnames(heliussg), "HELIBA"))]
+sgids <- str_c("S", str_remove_all(sgids, "HELIBA_"))
+summary(sgids %in% gwas$ID)
+
+# Clean phyloseq object
+heliusmb <- readRDS("data/16s/phyloseq/rarefied/phyloseq_rarefied.RDS")
+all(str_detect(sample_names(heliusmb), "_T1")) # TRUE
+any(str_detect(sample_names(heliusmb), "_T2")) # FALSE (hence no duplicated sample IDs)
+sample_names(heliusmb) <- str_replace(sample_names(heliusmb), "_T1", "") # remove _T1
+sample_names(heliusmb)
+idsfu <- sample_names(heliusmb)[which(str_detect(sample_names(heliusmb), "HELIFU_"))]
+all(sample_sums(heliusmb) == 15000) # all rarefied to 15,000 counts
+dffu <- df_new2 %>% filter(sampleID_FU %in% sample_names(heliusmb))
+table(dffu$AgeDecade_FU, dffu$Ethnicity, dffu$Sex)
+table(dffu$EthnicityTot)
+df_new3 <- df_new2 %>% filter(sampleID_BA %in% sample_names(heliusmb) | sampleID_FU %in% sample_names(heliusmb))
+write.csv2(df_new3$ID, 'data/16s/ids_16s.csv')
+
+# Select samples that are in clinical dataset
+heliusmb2 <- prune_samples(sample_names(heliusmb) %in% df_new_long$sampleID, heliusmb)
+heliusmb2
+
+# Make baseline mb set for CBS enviroment
+cbs_ids <- rio::import("data/240411_HELIUS data Barbara Verhaar_Heliusnrs.csv") %>% 
+    dplyr::select(ID = V1) %>% 
+    mutate(ID = str_remove(ID, "_T1"))
+heliusmb_baseline <- prune_samples(str_detect(sample_names(heliusmb), "HELIBA_"), heliusmb)
+heliusmb_baseline <- prune_samples(sample_names(heliusmb) %in% cbs_ids$ID, heliusmb)
+heliusmb_baseline <- prune_taxa(taxa_sums(heliusmb_baseline) > 0, heliusmb_baseline)
+sample_names(heliusmb_baseline) <- str_replace(sample_names(heliusmb_baseline), "HELIBA_", "") # remove HELIBA_
+heliusmb_asv <- as.data.frame(t(as(heliusmb_baseline@otu_table, "matrix")))
+write.csv2(heliusmb_asv, "data/CBS/asv_table_heliusba.csv")
+heliusmb_tax <- as.data.frame(as(heliusmb_baseline@tax_table, "matrix"))
+write.csv2(heliusmb_tax, "data/CBS/tax_table_heliusba.csv")
+Biostrings::writeXStringSet(heliusmb_baseline@refseq, "data/CBS/asvs_baseline.fna", append=FALSE,
+                            compress=FALSE, compression_level=NA, format="fasta")
+ape::write.tree(heliusmb_baseline@phy_tree, "data/CBS/tree_heliusba.tree")
+
+# code to put files back together (test for CBS later)
+# asvs <- read.csv2("data/CBS/asv_table_heliusba.csv")
+# rownames(asvs) <- asvs$X
+# asvs$X <- NULL
+# taxs <- read.csv2("data/CBS/tax_table_heliusba.csv")
+# rownames(taxs) <- taxs$ASV <- taxs$X
+# taxs$X <- NULL
+# refseqs <- Biostrings::readDNAStringSet("data/CBS/asvs_baseline.fna")
+# trb <- ape::read.tree("data/CBS/tree_heliusba.tree")
+# phynew <- phyloseq(otu_table(asvs, taxa_are_rows = FALSE), tax_table(as.matrix(taxs)), refseq(refseqs), phy_tree(trb))
+
+# How many samples have paired data (baseline + follow-up data)
+summary(str_detect(sample_names(heliusmb), "HELIBA")) # 2966 follow-up samples total
+summary(str_detect(sample_names(heliusmb), "HELIFU")) # 2966 follow-up samples total
+summary(str_detect(sample_names(heliusmb2), "HELIFU")) # 1829 follow-up samples with paired clinical data
+fusamples <- sample_names(prune_samples(str_detect(sample_names(heliusmb2), "HELIFU"), heliusmb2))
+basamples <- sample_names(prune_samples(str_detect(sample_names(heliusmb2), "HELIBA"), heliusmb2))
+basamples <- str_remove(basamples, "HELIBA_")
+fusamples <- str_remove(fusamples, "HELIFU_")
+idspaired <- str_c("S",fusamples[which(fusamples %in% basamples)]) # 1825 with paired baseline-FU data
+write.csv2(idspaired, 'data/16s/ids_16s_paired.csv')
+
+## Select paired samples
+idspaired2 <- c(str_replace(idspaired, "S", "HELIBA_"), str_replace(idspaired, "S", "HELIFU_"))
+heliusmbpaired <- prune_samples(sample_names(heliusmb2) %in% idspaired2, heliusmb2)
+
+## Add sample data to phyloseq
+df_all <- df_long %>% filter(sampleID %in% sample_names(heliusmb))
+rownames(df_all) <- df_all$sampleID
 heliusmb2@sam_data <- sample_data(df_all) # for all subject with paired clin data
 heliusmbpaired@sam_data <- sample_data(df_all %>% filter(sampleID %in% sample_names(heliusmbpaired))) # paired 16s
 
-## Save files
-saveRDS(df_all, file = "data/clinicaldata_wide.RDS")
-saveRDS(df_long, file = "data/clinicaldata_long.RDS")
+## Save
 saveRDS(heliusmb2, file = "data/16s/phyloseq_withclinpaired.RDS")
 saveRDS(heliusmbpaired, file = "data/16s/phyloseq_paired16s.RDS")
 
+
+#### Shotgun ####
+abundance <- rio::import('data/shotgun/combined_table_fixedlab.tsv') 
+abundance <- abundance[,which(colnames(abundance) != "HELIBA_103370")] # only NAs
+abundance2 <- abundance %>% filter(str_detect(clade_name, "s__") & !str_detect(clade_name, "t__"))
+colnames(abundance2) <- c(colnames(abundance2)[1], str_replace(colnames(abundance2)[2:ncol(abundance2)], "_T1", ""))
+
+# Short labeling bugs
+clade <- abundance2$clade_name
+cladesplit <- str_split(clade, "\\|", n = 8, simplify = TRUE)
+cladesplit <- as.data.frame(cladesplit[,-8])
+colnames(cladesplit) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+cladesplit <- cladesplit %>% mutate(across(everything(.), ~str_remove_all(.x, "[a-z]__")))
+cladesplit$rowname <- clade
+saveRDS(cladesplit, "data/shotgun/shotgun_taxtable.RDS")
+rownames(abundance2) <- cladesplit$Species[match(cladesplit$rowname, abundance2$clade_name)]
+abundance2$clade_name <- NULL
+abundance2 <- t(as.matrix(abundance2))
+write.csv2(abundance2, "data/shotgun/shotgun_abundance.csv", row.names = TRUE)
+saveRDS(abundance2, "data/shotgun/shotgun_abundance.RDS")
+
+# Clinical data filtered for available shotgun
+rownames(abundance2)
+dfshot <- df_new2 %>% 
+    filter(sampleID_BA %in% rownames(abundance2) | sampleID_FU %in% rownames(abundance2)) %>% 
+    droplevels(.)
+table(dfshot$AgeDecade_BA, dfshot$Ethnicity, dfshot$Sex)
