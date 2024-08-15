@@ -5,6 +5,7 @@ library(tableone)
 library(dplyr)
 library(ggplot2)
 library(ggsci)
+library(stringr)
 
 theme_Publication <- function(baselinese_size=14, baselinese_family="sans") {
     library(grid)
@@ -49,7 +50,7 @@ metids$metabolomics <- TRUE
 metids$ID <- str_c("S", str_remove_all(metids$ID, "HELIFU_")) 
 mbids <- read.csv2('data/16s/ids_16s_paired.csv')%>% dplyr::select(ID = x)
 mbids$microbiome_16s <- TRUE
-shotids <- read.csv('data/shotgun/helius_ids.csv') %>% dplyr::select(ID = x) %>% filter(!str_detect(ID, "HELIbaseline"))
+shotids <- read.csv('data/shotgun/helius_ids.csv') %>% dplyr::select(ID = x) %>% filter(!str_detect(ID, "HELIBA"))
 shotids$shotgun <- TRUE
 shotids$ID <- str_c("S", str_remove_all(shotids$ID, "HELIFU_"))
 
@@ -159,6 +160,43 @@ table1 <- helius %>%
            DM, SBP, DBP, HT_BPMed, MetSyn, 
            PPI, Metformin, Statins, TC, LDL, Trig, HbA1c, SCORECVDmortNL,
            timepoint) %>% 
+    CreateTableOne(data=., strata = 'Ethnicity', test = FALSE) %>% 
+    print(nonnormal=c("SCORECVDmortNL", "Trig")) %>% 
+    as.data.frame(.)
+table1 <- table1 %>% mutate(across(everything(.), ~trimws(.x, which = "both")))
+write.csv2(as.data.frame(table1), 'results/followuptable_shotgun_baseline.csv')
+
+
+helius <- readRDS('data/clinicaldata_long.RDS')
+mbids <- read.csv2('data/16s/ids_16s_paired.csv') %>% dplyr::select(ID = x) %>% 
+    mutate(sampleID_baseline = str_c("HELIBA_",str_remove(ID, "S")),
+          `sampleID_follow-up` = str_c("HELIFU_",str_remove(ID, "S"))) %>% 
+    pivot_longer(., 2:3, names_to = c("var", "timepoint"), values_to = "sampleID", names_sep = "_") 
+mbids$microbiome_16s <- TRUE
+helius <- left_join(helius, mbids, by = c("sampleID", "ID", "timepoint")) %>% 
+    mutate(across(c('microbiome_16s'), ~case_when(
+        is.na(.x) ~ FALSE,
+        .default = TRUE
+    )))
+
+table1 <- helius %>% 
+    filter(microbiome_16s == TRUE) %>% 
+    dplyr::select(Age, Sex, Ethnicity, FUtime, BMI, Smoking, AlcCons, 
+                  DM, SBP, DBP, HT_BPMed, MetSyn, HT_BPMed,
+                  PPI, Metformin, Statins, TC, LDL, Trig, HbA1c, SCORECVDmortNL, timepoint) %>% 
+    CreateTableOne(data=., strata = 'timepoint', test = FALSE) %>% 
+    print(nonnormal=c("SCORECVDmortNL", "Trig")) %>% 
+    as.data.frame(.)
+table1 <- table1 %>% mutate(across(everything(.), ~trimws(.x, which = "both")))
+write.csv2(as.data.frame(table1), 'results/followuptable_16s.csv')
+
+table1 <- helius %>% 
+    filter(shotgun == TRUE) %>% droplevels(.) %>% 
+    filter(timepoint == "baseline") %>% 
+    dplyr::select(Age, Sex, Ethnicity, MigrGen, FUtime, BMI, Smoking, AlcCons, 
+                  DM, SBP, DBP, HT_BPMed, MetSyn, 
+                  PPI, Metformin, Statins, TC, LDL, Trig, HbA1c, SCORECVDmortNL,
+                  timepoint) %>% 
     CreateTableOne(data=., strata = 'Ethnicity', test = FALSE) %>% 
     print(nonnormal=c("SCORECVDmortNL", "Trig")) %>% 
     as.data.frame(.)
