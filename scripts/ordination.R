@@ -7,8 +7,6 @@ library(tidyverse)
 library(ggplot2)
 library(ggpubr)
 library(ggsci)
-# library(doParallel)
-#registerDoParallel(6)
 
 theme_Publication <- function(base_size=14, base_family="sans") {
     library(grid)
@@ -181,17 +179,301 @@ braymat <- as.matrix(bray)
 all_combinations <- t(combn(unique(rownames(braymat)), 2, simplify = TRUE))
 # Create a data frame with combinations and distances
 data_long <- data.frame(
-    ID1 = all_combinations[, 1],
-    ID2 = all_combinations[, 2],
-    Distance = braymat[all_combinations]
+    sampleID1 = all_combinations[, 1],
+    sampleID2 = all_combinations[, 2]
 )
-data_filt <- data_long %>%
-    filter(str_remove(ID1, "HELIBA_") == str_remove(ID2, "HELIFU_")) %>% 
-    mutate(ID = str_c("S", str_remove(ID1, "HELIBA_"))) %>% 
-    select(-ID1, -ID2)
-
-heliusdist <- inner_join(data_filt, helius, by = "ID")
+data_long <- data_long %>% 
+    filter(str_remove(sampleID1, "HELIBA_") == str_remove(sampleID2, "HELIFU_")) %>% 
+    mutate(
+        ID = str_c("S", str_remove(sampleID1, "HELIBA_"))
+    )
+for(a in 1:nrow(data_long)){
+    distbray = braymat[paste0(data_long$sampleID1[a]), paste0(data_long$sampleID2[a])]
+    data_long$distance[a] <- distbray
+}
+heliusdist <- inner_join(data_long, helius, by = "ID") %>% filter(timepoint == "baseline")
+saveRDS(heliusdist, "data/16s/braydistance_delta.RDS")
 
 ## Plots 
+comp <- list(c("Dutch", "Moroccan"), c("South-Asian Surinamese", "Moroccan"))
+ggplot(data = heliusdist %>% filter(!is.na(EthnicityTot)), 
+       aes(x = fct_reorder(EthnicityTot, .x = distance, .fun = median), y = distance)) +
+    geom_violin(aes(fill = EthnicityTot)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Bray-Curtis distance", title = "Distance baseline to follow-up", x = "") +
+    stat_compare_means(comparisons = comp, tip.length = 0, hide.ns = TRUE,
+                       label = "p.signif", method = "t.test") +
+    theme_Publication() +
+    coord_flip()
+ggsave("results/ordination/distance_ethnicities.pdf", width = 6, height = 5)
+
+comp <- list(c("Ghanaian", "Moroccan"), c("Ghanaian", "Turkish"))
+ggplot(data = heliusdist %>% filter(!is.na(FUtime)), 
+       aes(x = fct_reorder(EthnicityTot, .x = FUtime, .fun = median), y = FUtime)) +
+    geom_violin(aes(fill = EthnicityTot)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Follow-up time (years)", title = "Follow-up time", x = "") +
+    stat_compare_means(comparisons = comp, tip.length = 0, hide.ns = TRUE,
+                       label = "p.signif", method = "wilcox.test") +
+    theme_Publication() +
+    coord_flip()
+ggsave("results/ordination/futime_ethnicities.pdf", width = 6, height = 5)
+
+#### Categorical outcomes unstratified and stratified ####
+ggplot(data = heliusdist %>% filter(!is.na(HT_BPMed)), aes(x = HT_BPMed, y = distance)) +
+    geom_violin(aes(fill = HT_BPMed)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Hypertension (baseline)", title = "Hypertension") +
+    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+                       label = "p.signif") +
+    theme_Publication()
+ggsave("results/ordination/distance_hypertension.pdf", width = 4, height = 5)
+
+ggplot(data = heliusdist %>% filter(!is.na(HT_BPMed)), aes(x = HT_BPMed, y = distance)) +
+    geom_violin(aes(fill = HT_BPMed)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Hypertension (baseline)", title = "Hypertension") +
+    # stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+    #                    label = "p.signif", method = "wilcox.test") +
+    facet_wrap(~Ethnicity) +
+    theme_Publication()
+ggsave("results/ordination/distance_hypertension_ethnicity.pdf", width = 7, height = 7)
+
+ggplot(data = heliusdist %>% filter(!is.na(DM)), aes(x = DM, y = distance)) +
+    geom_violin(aes(fill = DM)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Diabetes (baseline)", title = "Diabetes") +
+    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+                       label = "p.signif") +
+    theme_Publication()
+ggsave("results/ordination/distance_dm.pdf", width = 4, height = 5)
+
+ggplot(data = heliusdist %>% filter(!is.na(HT_BPMed)), aes(x = HT_BPMed, y = distance)) +
+    geom_violin(aes(fill = HT_BPMed)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Diabetes (baseline)", title = "Diabetes") +
+    # stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+    #                    label = "p.signif", method = "wilcox.test") +
+    facet_wrap(~Ethnicity) +
+    theme_Publication()
+ggsave("results/ordination/distance_diabetes_ethnicity.pdf", width = 7, height = 7)
+
+ggplot(data = heliusdist %>% filter(!is.na(MetSyn)), aes(x = MetSyn, y = distance)) +
+    geom_violin(aes(fill = MetSyn)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Metabolic syndrome (baseline)", title = "Metabolic syndrome") +
+    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+                       label = "p.signif") +
+    theme_Publication()
+ggsave("results/ordination/distance_metsyn.pdf", width = 4, height = 5)
+
+ggplot(data = heliusdist %>% filter(!is.na(MetSyn)), aes(x = MetSyn, y = distance)) +
+    geom_violin(aes(fill = MetSyn)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Metabolic syndrome (baseline)", title = "Metabolic syndrome") +
+    # stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+    #                    label = "p.signif", method = "wilcox.test") +
+    facet_wrap(~Ethnicity) +
+    theme_Publication()
+ggsave("results/ordination/distance_metsyn_ethnicity.pdf", width = 7, height = 7)
 
 
+#### Continuous outcomes unstratified and stratified ####
+ggplot(data = heliusdist %>% filter(!is.na(HbA1c_delta)), aes(x = distance, y = HbA1c_delta)) +
+    geom_jitter(color = "royalblue", alpha = 0.3) +
+    geom_smooth(color = "black", method = "lm") +
+    labs(y = "Delta HbA1c", x= "Bray-Curtis dissimilarity over FU time", title = "Bray-Curtis and HbA1c change") +
+    stat_cor() +
+    theme_Publication()
+ggsave("results/ordination/braycurtis_deltahba1c.pdf", width = 4.5, height = 5)
+
+ggplot(data = heliusdist %>% filter(!is.na(HbA1c_delta)), aes(x = distance, y = HbA1c_delta)) +
+    geom_jitter(aes(color = EthnicityTot), alpha = 0.5) +
+    geom_smooth(color = "black", method = "lm") +
+    scale_color_simpsons(guide = "none") +
+    facet_wrap(~EthnicityTot) +
+    labs(y = "Delta HbA1c", x= "Bray-Curtis dissimilarity over FU time", title = "Bray-Curtis and HbA1c change") +
+    stat_cor() +
+    theme_Publication()
+ggsave("results/ordination/braycurtis_deltahba1c_ethnicity.pdf", width = 7, height = 7)
+
+ggplot(data = heliusdist %>% filter(!is.na(LDL_delta)), aes(x = distance, y = LDL_delta)) +
+    geom_jitter(color = "royalblue", alpha = 0.3) +
+    geom_smooth(color = "black", method = "lm") +
+    scale_color_simpsons(guide = "none") +
+    labs(y = "Delta LDL", x= "Bray-Curtis dissimilarity over FU time", title = "Bray-Curtis and LDL change") +
+    stat_cor(method = "spearman") +
+    theme_Publication()
+ggsave("results/ordination/braycurtis_deltaldl.pdf", width = 4.5, height = 5)
+
+ggplot(data = heliusdist %>% filter(!is.na(LDL_delta)), aes(x = distance, y = LDL_delta)) +
+    geom_jitter(aes(color = EthnicityTot), alpha = 0.5) +
+    geom_smooth(color = "black", method = "lm") +
+    scale_color_simpsons(guide = "none") +
+    facet_wrap(~EthnicityTot) +
+    labs(y = "Delta LDL", x= "Bray-Curtis dissimilarity over FU time", title = "Bray-Curtis and LDL change") +
+    stat_cor(method = "spearman") +
+    theme_Publication()
+ggsave("results/ordination/braycurtis_deltaldl_ethnicity.pdf", width = 7, height = 7)
+
+ggplot(data = heliusdist %>% filter(!is.na(Age_delta)), aes(x = distance, y = Age_delta)) +
+    geom_jitter(color = "royalblue", alpha = 0.3, height = 0) +
+    geom_smooth(color = "black", method = "lm") +
+    scale_color_simpsons(guide = "none") +
+    labs(y = "Delta age", x= "Bray-Curtis dissimilarity over FU time", title = "Bray-Curtis and age change") +
+    stat_cor(method = "spearman") +
+    theme_Publication()
+ggsave("results/ordination/braycurtis_deltaage.pdf", width = 4.5, height = 5)
+
+ggplot(data = heliusdist %>% filter(!is.na(Age_delta)), aes(x = distance, y = Age_delta)) +
+    geom_jitter(aes(color = EthnicityTot), alpha = 0.5, height = 0) +
+    geom_smooth(color = "black", method = "lm") +
+    scale_color_simpsons(guide = "none") +
+    facet_wrap(~EthnicityTot) +
+    labs(y = "Delta Age", x= "Bray-Curtis dissimilarity over FU time", title = "Bray-Curtis and age change") +
+    stat_cor(method = "spearman") +
+    theme_Publication()
+ggsave("results/ordination/braycurtis_deltaage_ethnicity.pdf", width = 7, height = 7)
+
+ggplot(data = heliusdist %>% filter(!is.na(BMI_delta)), aes(x = BMI_delta, y = distance)) +
+    geom_jitter(color = "royalblue", alpha = 0.3, height = 0) +
+    geom_smooth(color = "black", method = "lm") +
+    scale_color_simpsons(guide = "none") +
+    labs(y = "Delta BMI", x= "Bray-Curtis dissimilarity over FU time", title = "Bray-Curtis and BMI change") +
+    stat_cor() +
+    theme_Publication()
+ggsave("results/ordination/braycurtis_deltabmi.pdf", width = 4.5, height = 5)
+
+ggplot(data = heliusdist %>% filter(!is.na(BMI_delta)), aes(x = distance, y = BMI_delta)) +
+    geom_jitter(aes(color = EthnicityTot), alpha = 0.5) +
+    geom_smooth(color = "black", method = "lm") +
+    scale_color_simpsons(guide = "none") +
+    facet_wrap(~EthnicityTot) +
+    labs(y = "Delta BMI", x= "Bray-Curtis dissimilarity over FU time", title = "Bray-Curtis and BMI change") +
+    stat_cor() +
+    theme_Publication()
+ggsave("results/ordination/braycurtis_deltabmi_ethnicity.pdf", width = 7, height = 7)
+
+ggplot(data = heliusdist %>% filter(!is.na(FUtime)), aes(x = FUtime, y = distance)) +
+    geom_jitter(color = "royalblue", alpha = 0.3, width = 0) +
+    geom_smooth(color = "black", method = "lm") +
+    scale_color_simpsons(guide = "none") +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x = "FU time (years)", title = "FU time and sample distance") +
+    stat_cor() +
+    theme_Publication()
+ggsave("results/ordination/braycurtis_futime.pdf", width = 4, height = 4)
+
+ggplot(data = heliusdist %>% filter(!is.na(FUtime)), aes(x = FUtime, y = distance)) +
+    geom_jitter(aes(color = EthnicityTot), alpha = 0.3, width = 0) +
+    geom_smooth(color = "black", method = "lm") +
+    scale_color_simpsons(guide = "none") +
+    facet_wrap(~EthnicityTot) +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x = "FU time (years)", title = "FU time and sample distance") +
+    stat_cor(method = "pearson") +
+    theme_Publication()
+ggsave("results/ordination/braycurtis_futime_ethnicity.pdf", width = 7, height = 7)
+
+# Differences between new diagnoses and controls stratified for EthnicityTot
+heliusdist %>% filter(!is.na(HT_BPMed)) %>% group_by(EthnicityTot, HT_BPMed) %>% summarise(count = length(HT_BPMed))
+ggplot(data = heliusdist %>% filter(!is.na(HT_BPMed)), aes(x = HT_BPMed, y = distance)) +
+    geom_violin(aes(fill = HT_BPMed)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Hypertension", title = "Hypertension") +
+    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+                       label = "p.format") +
+    facet_wrap(~EthnicityTot) +
+    theme_Publication()
+ggsave("results/distance_ethnictiy_hypertension.pdf", width = 6, height = 11)
+
+heliusdist %>% filter(!is.na(DM)) %>% group_by(EthnicityTot, DM) %>% summarise(count = length(DM))
+ggplot(data = heliusdist %>% filter(!is.na(DM)), aes(x = DM, y = distance)) +
+    geom_violin(aes(fill = DM)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Diabetes", title = "Diabetes") +
+    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+                       label = "p.format") +
+    facet_wrap(~EthnicityTot) +
+    theme_Publication()
+ggsave("results/distance_ethnictiy_diabetes.pdf", width = 6, height = 11)
+
+
+heliusdist %>% filter(!is.na(MetSyn)) %>% group_by(EthnicityTot, MetSyn) %>% summarise(count = length(MetSyn))
+ggplot(data = heliusdist %>% filter(!is.na(MetSyn)), aes(x = MetSyn, y = distance)) +
+    geom_violin(aes(fill = MetSyn)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x= "MetSyn", title = "MetSyn") +
+    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+                       label = "p.format") +
+    facet_wrap(~EthnicityTot) +
+    # geom_text(data = cts, aes(label=count), position=position_dodge(width=1.0)) +
+    theme_Publication()
+ggsave("results/distance_ethnictiy_metsyn.pdf", width = 6, height = 11)
+
+#### New diagnoses ####
+(pl1 <- heliusdist %>% filter(!is.na(DM_new)) %>%  
+     ggplot(aes(x = DM_new, y = distance, fill = DM_new)) +
+     geom_violin() +
+     geom_boxplot(fill = "white", width = 0.2) +
+     scale_fill_simpsons(guide = "none") +
+     labs(y = "Bray-Curtis dissimilarity over FU time", x= "Diabetes", title = "New diabetes diagnosis") +
+     stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+                        label = "p.format") +
+     theme_Publication())
+ggsave("results/ordination/newdiabetes.pdf", width = 4.5, height = 5)
+
+(pl1 <- heliusdist %>% filter(!is.na(HT_new)) %>%  
+        ggplot(aes(x = HT_new, y = distance, fill = HT_new)) +
+        geom_violin() +
+        geom_boxplot(fill = "white", width = 0.2) +
+        scale_fill_simpsons(guide = "none") +
+        labs(y = "Bray-Curtis dissimilarity over FU time", x= "Hypertension", title = "New hypertension diagnosis") +
+        stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+                           label = "p.format") +
+        theme_Publication())
+ggsave("results/ordination/newhypertension.pdf", width = 4.5, height = 5)
+
+(pl1 <- heliusdist %>% filter(!is.na(MetSyn_new)) %>%  
+        ggplot(aes(x = MetSyn_new, y = distance, fill = MetSyn_new)) +
+        geom_violin() +
+        geom_boxplot(fill = "white", width = 0.2) +
+        scale_fill_simpsons(guide = "none") +
+        labs(y = "Bray-Curtis dissimilarity over FU time", x= "Metabolic syndrome", title = "New MetSyn diagnosis") +
+        stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+                           label = "p.format") +
+        theme_Publication())
+ggsave("results/ordination/newmetsyn.pdf", width = 4.5, height = 5)
+
+(pl1 <- heliusdist %>% filter(!is.na(DM_new)) %>%  
+     ggplot(aes(x = DM_new, y = distance, fill = DM_new)) +
+     geom_violin() +
+     geom_boxplot(fill = "white", width = 0.2) +
+     scale_fill_simpsons(guide = "none") +
+     labs(y = "Bray-Curtis dissimilarity over FU time", x= "Diabetes", title = "New diabetes diagnosis") +
+     stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+                        label = "p.format") +
+     facet_wrap(~EthnicityTot) +
+     theme_Publication())
+ggsave("results/ordination/newdiabetes_ethnicity.pdf", width = 7, height = 7)
+
+(pl1 <- heliusdist %>% filter(!is.na(HT_new)) %>%  
+        ggplot(aes(x = HT_new, y = distance, fill = HT_new)) +
+        geom_violin() +
+        geom_boxplot(fill = "white", width = 0.2) +
+        scale_fill_simpsons(guide = "none") +
+        labs(y = "Bray-Curtis dissimilarity over FU time", x= "Hypertension", title = "New hypertension diagnosis") +
+        stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
+                           label = "p.format") +
+        facet_wrap(~EthnicityTot) +
+        theme_Publication())
+ggsave("results/ordination/newhypertension_ethnicity.pdf", width = 7, height = 7)
