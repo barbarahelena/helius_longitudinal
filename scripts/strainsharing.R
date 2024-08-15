@@ -6,6 +6,7 @@ library(tidyverse)
 library(ggplot2)
 library(ggpubr)
 library(ggsci)
+library(ggridges)
 
 ## theme
 theme_Publication <- function(base_size=14, base_family="sans") {
@@ -59,6 +60,9 @@ thres <- rio::import("data/shotgun/thresholds_merged.csv") %>%
         across(c("n_markers", "n_samples", "aln_length", "avg_gap_prop",
                  "threshold_value", "max_youden", "false_positive_rate", "false_negative_rate"), 
                transfnum))
+thres$n_markers <- NULL # bug in pipeline: n_samples = n_markers, n_samples not extracted from info..
+thres$n_markers <- thres$n_samples
+thres$n_samples <- NULL
 abundance <- rio::import("data/shotgun/combined_table_fixedlab.tsv")
 
 #### Calculation strain sharing metric ####
@@ -69,7 +73,11 @@ length(sharing_sgb[which(sharing_sgb == 0)])
 sharing_sum <- apply(df[,3:ncol(df)], 1, function(x) sum(x, na.rm = TRUE))
 sharing_sum[1:5]
 df$sharing_sum <- sharing_sum
-df$sharing_perc <- (sharing_sum / ncol(df[,which(str_detect(colnames(df), "t__"))])) * 100
+strain_total <- apply(df[,3:ncol(df)], 1, function(x) sum(!is.na(x), na.rm = TRUE))
+strain_total[1:5]
+df$strain_total <- strain_total
+# df$sharing_perc <- (sharing_sum / ncol(df[,which(str_detect(colnames(df), "t__"))])) * 100
+df$sharing_perc <- (sharing_sum / strain_total) * 100
 
 # How much of microbiota composition is covered by these SGBs?
 sgbs <- str_remove(names(df)[which(str_detect(names(df),"t__"))], "sharing_")
@@ -101,14 +109,16 @@ sgbs[which(!sgbs %in% abundance3$clade_name)]
 #### Exploratory analyses ####
 # How much strain sharing is there between same and different samples
 dfsame <- df %>% filter(str_remove(sampleid_1, "HELIBA_") == str_remove(sampleid_2, "HELIFU_"))
-gghistogram(dfsame$sharing_perc, fill = "royalblue") + 
-    geom_vline(aes(xintercept = median(dfsame$sharing_perc)), color = "firebrick", size = 1) +
+gghistogram(dfsame$sharing_perc, fill = "royalblue", bins = 30) + 
+    geom_vline(aes(xintercept = median(dfsame$sharing_perc)), color = "firebrick", linewidth = 1) +
     labs(title = "Strain sharing - paired samples", x = "percentage of SGBs") +
     theme_Publication()
+ggsave("results/strainsharing/pairedsamples_hist.pdf", width = 4.5, height = 5)
 dfdiff <- df %>% filter(str_remove(sampleid_1, "HELIBA_") != str_remove(sampleid_2, "HELIFU_"))
-gghistogram(dfdiff$sharing_perc, fill = "firebrick") + 
+gghistogram(dfdiff$sharing_perc, fill = "firebrick", bins = 30) + 
     labs(title = "Strain sharing - different samples", x = "percentage of SGBs") +
     theme_Publication()
+ggsave("results/strainsharing/difsamples_hist.pdf", width = 4.5, height = 5)
 mean(dfsame$sharing_perc); median(dfsame$sharing_perc)
 mean(dfdiff$sharing_perc); median(dfdiff$sharing_perc)
 
@@ -126,13 +136,14 @@ bray_alphadiv <- readRDS("data/shotgun/alphabetadiversity_shotgun.RDS") %>%
 dftot <- dftot %>% left_join(., bray_alphadiv)
 
 dftot %>% group_by(EthnicityTot) %>% summarise(mean_sh = mean(sharing_perc, na.rm = TRUE), n_sh = length(sharing_perc))
+comp <- list(c("South-Asian Surinamese", "Dutch"))
 ggplot(data = dftot, aes(x = fct_reorder(EthnicityTot, .x = sharing_perc, .fun = median), y = sharing_perc)) +
     geom_violin(aes(fill = EthnicityTot)) +
     geom_boxplot(fill = "white", width = 0.2) +
     scale_fill_simpsons(guide = "none") +
     labs(y = "Percentage of stable strains", title = "Strain sharing between timepoints", x = "") +
-    stat_compare_means(comparisons = comp, tip.length = 0, hide.ns = TRUE,
-                       label = "p.signif", method = "t.test") +
+    # stat_compare_means(comparisons = comp, tip.length = 0, hide.ns = TRUE, label.y = 95,
+    #                    label = "p.signif", method = "wilcox.test") +
     theme_Publication() 
 ggsave("results/strainsharing/ethnicities.pdf", width = 4.5, height = 5)
 
@@ -141,8 +152,8 @@ ggplot(data = dftot, aes(x = fct_reorder(Sex, .x = sharing_perc, .fun = median),
     geom_boxplot(fill = "white", width = 0.2) +
     scale_fill_simpsons(guide = "none") +
     labs(y = "Percentage of stable strains", title = "Strain sharing between timepoints", x = "Sex") +
-    stat_compare_means(comparisons = list(c("Male", "Female")), tip.length = 0, hide.ns = TRUE,
-                       label = "p.signif", method = "t.test") +
+    # stat_compare_means(comparisons = list(c("Male", "Female")), tip.length = 0, hide.ns = TRUE,
+    #                    label = "p.signif", method = "t.test") +
     theme_Publication() 
 ggsave("results/strainsharing/sex.pdf", width = 4.5, height = 5)
 
@@ -151,8 +162,8 @@ ggplot(data = dftot %>% filter(!is.na(Sex)), aes(x = Sex, y = sharing_perc)) +
     geom_boxplot(fill = "white", width = 0.2) +
     scale_fill_simpsons(guide = "none") +
     labs(y = "Percentage of stable strains", title = "Strain sharing - sex differences", x = "Sex") +
-    stat_compare_means(comparisons = list(c("Female", "Male")), tip.length = 0, hide.ns = TRUE,
-                       label = "p.signif", method = "t.test") +
+    # stat_compare_means(comparisons = list(c("Female", "Male")), tip.length = 0, hide.ns = TRUE,
+    #                    label = "p.signif", method = "t.test") +
     facet_wrap(~EthnicityTot) +
     theme_Publication() 
 ggsave("results/strainsharing/sex_ethnicities.pdf", width = 6, height = 5)
@@ -296,18 +307,17 @@ tax %>% arrange(-abundance) %>% dplyr::select(Species, SGB, abundance) %>%  slic
 
 othernames <- names(dfsame)[which(!str_detect(names(dfsame), "t__"))]
 dfsame <- dfsame[,c(othernames, str_c("t__", tax$SGB))]
-tax$sharing_sum <- apply(dfsame[,5:ncol(dfsame)], 2, function(x) sum(x, na.rm = TRUE) )
-tax <- tax %>% filter(sharing_sum != 0)
+tax$sharing_sum <- apply(dfsame[,6:ncol(dfsame)], 2, function(x) sum(x, na.rm = TRUE) )
+# tax <- tax %>% filter(sharing_sum != 0)
 nrow(tax) # 752 SGBs left that are non-zero
 dfsame2 <- dfsame[,c(othernames, str_c("t__", tax$SGB))]
-tax$sharing_perc <- apply(dfsame2[,5:ncol(dfsame2)], 2, function(x) (sum(x, na.rm = TRUE) / 
-                                (sum(!x, na.rm = TRUE)+sum(x, na.rm = TRUE))) * 100)
-tax$n <- apply(dfsame2[,5:ncol(dfsame2)], 2, function(x) sum(!x, na.rm = TRUE)+sum(x, na.rm = TRUE))
+tax$sharing_perc <- apply(dfsame2[,6:ncol(dfsame2)], 2, function(x) (sum(x, na.rm = TRUE) / 
+                                (sum(!is.na(x), na.rm = TRUE))) * 100)
+tax$n <- apply(dfsame2[,6:ncol(dfsame2)], 2, function(x) (sum(!is.na(x))))
 tax <- tax %>% right_join(., thres, by = "SGB") %>% 
-    filter(n_samples > 100) %>% 
     filter(n > 50)
 
-gghistogram(tax$sharing_perc, fill = "firebrick") + 
+gghistogram(tax$sharing_perc, fill = "firebrick", bins = 30) + 
     labs(title = "Strain sharing per SGB", x = "percentage of samples") +
     theme_Publication()
 
@@ -326,14 +336,14 @@ idsdutch <- dftot$sampleID[which(dftot$EthnicityTot == "Dutch")]
 dfsamedutch <- dfsame %>% filter(sampleid_1 %in% idsdutch) # select Dutch
 dfsamedutch <- dfsamedutch[,c(othernames, str_c("t__", tax$SGB))] # put cols in same sequence as tax
 taxdutch <- tax
-taxdutch$sharing_sum <- apply(dfsamedutch[,5:ncol(dfsamedutch)], 2, function(x) sum(x, na.rm = TRUE) )
-nrow(taxdutch) # 152 SGBs left that are non-zero
+taxdutch$sharing_sum <- apply(dfsamedutch[,6:ncol(dfsamedutch)], 2, function(x) sum(x, na.rm = TRUE) )
+nrow(taxdutch) # 153 SGBs left that are non-zero
 dfsamedutch2 <- dfsamedutch[,c(othernames, str_c("t__", taxdutch$SGB))]
-taxdutch$sharing_perc <- apply(dfsamedutch2[,5:ncol(dfsamedutch2)], 2, 
-                          function(x) (sum(x, na.rm = TRUE) / 
-                                        (sum(!x, na.rm = TRUE)+sum(x, na.rm = TRUE))) * 100)
-taxdutch$n <- apply(dfsamedutch2[,5:ncol(dfsamedutch2)], 2, 
-               function(x) sum(!x, na.rm = TRUE)+sum(x, na.rm = TRUE))
+taxdutch$sharing_perc <- apply(dfsamedutch2[,6:ncol(dfsamedutch2)], 2, 
+                             function(x) (sum(x, na.rm = TRUE) / 
+                                              sum(!is.na(x))) * 100)
+taxdutch$n <- apply(dfsamedutch2[,6:ncol(dfsamedutch2)], 2, 
+                  function(x) sum(!is.na(x)))
 taxdutch$EthnicityTot <- "Dutch"
 
 # Calculate params for SAS
@@ -341,19 +351,19 @@ idssas <- dftot$sampleID[which(dftot$EthnicityTot == "South-Asian Surinamese")]
 dfsamesas <- dfsame %>% filter(sampleid_1 %in% idssas) # select SAS
 dfsamesas <- dfsamesas[,c(othernames, str_c("t__", tax$SGB))] # put cols in same sequence as tax
 taxsas <- tax
-taxsas$sharing_sum <- apply(dfsamesas[,5:ncol(dfsamesas)], 2, function(x) sum(x, na.rm = TRUE) )
-nrow(taxsas) # 752 SGBs left that are non-zero
+taxsas$sharing_sum <- apply(dfsamesas[,6:ncol(dfsamesas)], 2, function(x) sum(x, na.rm = TRUE) )
+nrow(taxsas) # 153 SGBs left that are non-zero
 dfsamesas2 <- dfsamesas[,c(othernames, str_c("t__", tax$SGB))]
-taxsas$sharing_perc <- apply(dfsamesas2[,5:ncol(dfsamesas2)], 2, 
+taxsas$sharing_perc <- apply(dfsamesas2[,6:ncol(dfsamesas2)], 2, 
                           function(x) (sum(x, na.rm = TRUE) / 
-                                           (sum(!x, na.rm = TRUE)+sum(x, na.rm = TRUE))) * 100)
-taxsas$n <- apply(dfsamesas2[,5:ncol(dfsamesas2)], 2, 
-               function(x) sum(!x, na.rm = TRUE)+sum(x, na.rm = TRUE))
+                                           sum(!is.na(x))) * 100)
+taxsas$n <- apply(dfsamesas2[,6:ncol(dfsamesas2)], 2, 
+               function(x) sum(!is.na(x)))
 taxsas$EthnicityTot <- "South-Asian Surinamese"
 taxtot <- rbind(taxdutch, taxsas)
 
 ggplot(data = taxtot %>% arrange(sharing_perc), 
-       aes(x = fct_reorder(SGB, .x = sharing_perc), y = sharing_perc, group = EthnicityTot)) +
+       aes(x = fct_reorder(Species, .x = sharing_perc), y = sharing_perc, group = EthnicityTot)) +
     geom_segment(aes(y = 0, yend = sharing_perc, color = EthnicityTot)) +
     geom_point(aes(color = EthnicityTot), stat = "identity") +
     scale_color_simpsons(guide = "none") +
@@ -396,7 +406,7 @@ ab <- ab[,levels(difftrue$SGB)]
 colnames(ab) <- difftrue$Species[match(difftrue$SGB, colnames(ab))]
 ab <- ab %>% rownames_to_column(var = "sampleID") %>% 
     right_join(dftot, by = "sampleID") %>% 
-    pivot_longer(., cols = 2:35, names_to = "Species", values_to = "abundance") %>% 
+    pivot_longer(., cols = 2:(nlevels(difftrue$SGB)+1), names_to = "Species", values_to = "abundance") %>% 
     mutate(Species = fct_inorder(as.factor(Species))
            )
 
@@ -406,7 +416,7 @@ for(a in difftrue$Species){
     dens <- ggplot(data = ab %>% filter(Species == a), 
                aes(x = abundance + 0.01, fill = EthnicityTot)) +
             geom_density(alpha = 0.5) +
-            scale_x_log10(limits = c(0.1, 26)) +
+            scale_x_log10() + # limits = c(0.1, 26)
             scale_fill_simpsons(guide = "none") +
             labs(y = "", fill = "", x = "") +
             theme_void()
@@ -429,24 +439,32 @@ ggsave("results/strainsharing/diffsgbs_eth_dens.pdf", width = 10, height = 7)
 
 # which strains have higher cut-offs (in general higher mutation rates?)
 thres2 <- thres %>% filter(SGB %in% difftrue$SGB) %>% right_join(difftrue, ., by = "SGB")
-pl3 <- ggplot(data = thres2, aes(x = Species, y = threshold_value)) +
+(pl3 <- ggplot(data = thres2, aes(x = Species, y = threshold_value)) +
     geom_bar(stat = "identity", fill = pal_simpsons()(3)[3]) +
     coord_flip() +
     theme_void() +
     labs(y = "threshold (ngd)", x = "") +
     theme_Publication() +
     theme(axis.line.y = element_blank(), axis.ticks.y = element_blank(),
-          axis.text.y = element_blank())
+          axis.text.y = element_blank()
+          ))
 
 # on how many samples are the data based
-pl4 <- ggplot(data = thres2, aes(x = Species, y = n_samples)) +
-    geom_bar(stat = "identity", fill = pal_simpsons()(4)[4]) +
+taxtrue <- taxtot %>% filter(SGB %in% difftrue$SGB) %>% 
+    right_join(., difftrue, by = c("SGB", "Species")) %>% 
+    mutate(SGB = fct_reorder(SGB, highest), Species = fct_reorder(Species, highest))
+saveRDS(taxtrue, "data/shotgun/sharing_tax.RDS")
+(pl4 <- ggplot(data = taxtrue, 
+              aes(x = Species, y = n, fill = EthnicityTot)) +
+    geom_bar(stat = "identity") +
+    scale_fill_simpsons(guide = "none") +
     coord_flip() +
     theme_void() +
-    labs(y = "number of samples", x = "") +
+    labs(y = "number of subjects", x = "") +
     theme_Publication() +
     theme(axis.line.y = element_blank(), axis.ticks.y = element_blank(),
-          axis.text.y = element_blank())
+          axis.text.y = element_blank()
+          ))
 
 # putting everything together
 options("aplot_guides" = "keep")
@@ -455,4 +473,44 @@ pl %>% aplot::insert_right(dens, width = 0.3) %>%
     aplot::insert_right(pl4, width = 0.3)
 ggsave("results/strainsharing/diffstrains_complete.pdf", width = 15, height = 10)
 
+#### Distance plots of diff strains ####
+ngd <- rio::import("data/shotgun/ngd_merged.csv")
+colnames(ngd) <- str_remove(colnames(ngd), "dist_t__")
+ngd2 <- ngd[,c("sampleid_1", "sampleid_2", paste(difftrue$SGB))]
+colnames(ngd2)[3:ncol(ngd2)] <- as.character(difftrue$Species[match(difftrue$SGB, colnames(ngd2)[3:ncol(ngd2)])])
+ngd2 <- ngd2 %>% mutate(
+    relation = case_when(
+                    str_remove(str_remove(sampleid_1, "HELIFU_"), "HELIBA_") == 
+                        str_remove(str_remove(sampleid_2, "HELIFU_"), "HELIBA_") ~ "same",
+                    .default = "different"
+                )
+    )
 
+plist2 <- c()
+for(b in difftrue$Species) {
+    ngd3 <- ngd2 %>% pivot_longer(., cols = all_of(b), names_to = "Species", values_to = "nGD") %>% 
+        mutate(nGD = transfnum(nGD)) %>% 
+        filter(Species == b)
+    
+    ngd4 <- ngd3 %>% filter(relation == "same") %>% 
+        mutate(sampleID = sampleid_1) %>% 
+        left_join(., dftot, by = "sampleID")
+    
+    pln <- ggplot(data = ngd4) +
+            geom_density_ridges(aes(x = nGD, y = Species, fill = EthnicityTot),
+                                alpha = 0.5, rel_min_height = 0.01, bandwidth = 0.005) +
+            theme_Publication() +
+            scale_fill_simpsons(guide = "none") +
+            # scale_x_continuous(limits = c(0, 0.06)) +
+            labs(x = "nGD", y = "", fill = "", title = b) +
+            theme(axis.text.y = element_blank(),
+                  plot.title = element_text(size = rel(0.7)))
+    # if(b != "Ruminococcus_bromii") {
+    #     plnb <- pln + theme(axis.line.y = element_blank(), axis.ticks.y = element_blank(),
+    #                         axis.text.y = element_blank(), axis.text.x = element_blank())
+    # } else{ plnb <- pln }
+    plist2[[b]] <- pln
+}
+
+ngdpl <- ggarrange(plotlist = rev(plist2), ncol = 7, nrow = 6, common.legend = TRUE)
+ggsave(ngdpl, "results/strainsharing/ngd.pdf", width = 18, height = 12)
