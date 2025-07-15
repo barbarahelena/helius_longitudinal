@@ -50,6 +50,8 @@ metids$metabolomics <- TRUE
 metids$ID <- str_c("S", str_remove_all(metids$ID, "HELIFU_")) 
 mbids <- read.csv2('data/16s/ids_16s_paired.csv')%>% dplyr::select(ID = x)
 mbids$microbiome_16s <- TRUE
+mbids2 <- readRDS('data/16s/phyloseq/complete/phyloseq.RDS')
+mbids2 <- str_c("S", str_extract(str_remove(sample_names(mbids2), "_T1"), "[0-9]+"))
 shotids <- read.csv('data/shotgun/helius_ids.csv') %>% dplyr::select(ID = x) %>% filter(!str_detect(ID, "HELIBA"))
 shotids$shotgun <- TRUE
 shotids$ID <- str_c("S", str_remove_all(shotids$ID, "HELIFU_"))

@@ -55,12 +55,12 @@ meta <- meta %>% mutate(
     subjectID = str_replace_all(CLIENT_IDENTIFIER, "Helius ", "HELIUS_"),
     subjectID = case_when(
         str_detect(CLIENT_IDENTIFIER, "Covid ") ~ str_replace(subjectID, "HELIUS", "HELICOV"),
-        .default = str_replace(subjectID, "HELIUS", "HELIFU")
+        .default = str_replace(subjectID, "HELIUS", "HELIBA")
     ),
     subjectID = str_replace_all(subjectID, "Covid ", ""),
     timepoint = case_when(
-        str_detect(subjectID, "HELICOV") ~ "baseline",
-        str_detect(subjectID, "HELIFU") ~ "follow-up"
+        str_detect(subjectID, "HELICOV") ~ "follow-up",
+        str_detect(subjectID, "HELIBA") ~ "baseline"
     ),
     timepoint = as.factor(timepoint),
     across(c("NEG", "POLAR", "POS.EARLY", "POS.LATE"), as.factor)
@@ -68,11 +68,11 @@ meta <- meta %>% mutate(
 
 write.csv2(meta$subjectID, 'data/metabolomics/ids_metabolomics.csv')
 
-newids <- str_c("S",str_remove(meta$subjectID, "HELI[A-Z]+_"))
-oldmets <- readRDS("~/Documents/VUmc/CKD-metabolites/ckd-metabolomics/data/plasma_metabolites.RDS")
-oldids <- rownames(oldmets)
-oldids[which(oldids %in% newids)]
-unique(newids[which(newids %in% oldids)])
+# newids <- str_c("S",str_remove(meta$subjectID, "HELI[A-Z]+_"))
+# oldmets <- readRDS("~/Documents/VUmc/CKD-metabolites/ckd-metabolomics/data/plasma_metabolites.RDS")
+# oldids <- rownames(oldmets)
+# oldids[which(oldids %in% newids)]
+# unique(newids[which(newids %in% oldids)])
 
 summary(meta$NEG)
 summary(meta$POLAR)
@@ -93,7 +93,13 @@ nameconstants <- names(constants[which(constants == 0)])
 write.csv(nameconstants, "results/constant_metabolites.csv")
 const <- metmatrix[, constants == 0]
 metmatrix <- metmatrix[,constants != 0]
-dim(metmatrix) # so 75 of 1468 lost
+dim(metmatrix) # so 75 of 1468 lost, 1393 left
+missing <- apply(metmatrix, 2, is.na)
+allmissing <- apply(missing, 2, all)
+any(allmissing)
+missing <- apply(metmatrix, 1, is.na)
+allmissing <- apply(missing, 2, all)
+any(allmissing)
 
 infomet <- infomet %>% filter(!CHEMICAL_NAME %in% nameconstants)
 
@@ -111,6 +117,20 @@ metpolar <- metmatrix[,namespolar]
 metposearly <- metmatrix[,namesposearly]
 metposlate <- metmatrix[,namesposlate]
 metneg <- metmatrix[,namesneg]
+
+rownames(metmatrix)
+metdf <- as.data.frame(metmatrix)
+metdf$Heliusnr <- str_remove(str_remove(rownames(metdf), "HELIBA_"), "HELICOV")
+metdf$Timepoint <- str_extract(rownames(metdf), "HELI[A-Z]*")
+metdf$Timepoint <- as.factor(case_when(metdf$Timepoint == "HELIBA" ~ "baseline", 
+                             metdf$Timepoint == "HELICOV" ~ "covid"))
+metdfba <- metdf[str_detect(rownames(metmatrix), "HELIBA"),]
+dim(metmatrixba)
+metdfba <- metdfba %>% relocate(Timepoint) %>% relocate(Heliusnr)
+
+saveRDS(metmatrix, "data/metabolomics/metabolomics_paired.RDS")
+write.csv(metdf, "data/metabolomics/metabolomics_paired.csv")
+write.csv(metdfba, "data/metabolomics/metabolomics_baseline.csv", row.names = FALSE)
 
 # PCA metabolites and timepoints
 pcatimepoints <- function(matrix, helius, plotname){
@@ -257,4 +277,8 @@ ggsave("results/platform_info_metabolites.svg", device = "svg", width = 8, heigh
               axis.ticks.y = element_blank()))
 ggsave("metabolites_noxeno.pdf", device = "pdf", width = 8, height = 6)
 ggsave("metabolites_noxeno.svg", device = "svg", width = 8, height = 6)
+
+
+
+
 

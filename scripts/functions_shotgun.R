@@ -302,7 +302,7 @@ plot_feature_importance_pathways <- function(path_true, top_n){
                  mid = '#0570B0',
                  high = '#034E7B')
     r <- rio::import(file.path(path_true, 'feature_importance.txt'))
-    r <- r %>% arrange(-RelFeatImp)
+    r <- r %>% arrange(-RelFeatImp) %>% mutate(FeatName = fct_reorder(FeatName, RelFeatImp))
     r <- r[1:top_n, ]
     mp <- mean(r$RelFeatImp)
     pl <- ggplot(data=r, aes(y=RelFeatImp, x=FeatName, fill=RelFeatImp)) + 
@@ -312,8 +312,7 @@ plot_feature_importance_pathways <- function(path_true, top_n){
         geom_bar(stat="identity")+
         coord_flip() +
         ylab("Relative Importance (%)")+
-        xlab("") +
-        ggtitle("Feature importance: best predicting pathways for sex")
+        xlab("")
     theme(axis.text.x = element_text(size=12)) + 
         theme(axis.text.y = element_text(size=10))+
         theme(legend.key.size= unit(0.5, "cm"))+

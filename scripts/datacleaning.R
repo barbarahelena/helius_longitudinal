@@ -13,13 +13,15 @@ df <- haven::read_sav("data/210517_HELIUS data Ulrika Boulund_2.sav") # more sub
 df2 <- haven::read_sav("data/240411_HELIUS data Barbara Verhaar.sav")
 df3 <- haven::read_sav("data/220712_HELIUS data Barbara Verhaar - Cov1 groep en datum.sav") # covid dates
 df4 <- haven::read_sav("data/EGA_standaardvariabelen.sav")
+df5 <- haven::read_sav("/Users/barbaraverhaar/Documents/Postdoc/HELIUS/sex_differences/sex-differences-microbiome/data/231109_HELIUS data Barbara Verhaar.sav")
 names(df2)[which(!names(df2) %in% names(df))]
 df <- df %>% dplyr::select("Heliusnr", !names(df)[which(names(df) %in% names(df2))])
 dftot <- full_join(df2, df, by = "Heliusnr") %>% full_join(., df3, by = "Heliusnr") %>% 
-    full_join(., df4)
+    full_join(., df4) %>% full_join(., df5)
 all(df3$Heliusnr %in% df$Heliusnr) # TRUE covid set does not have new subjects
 length(df2$Heliusnr[which(!df2$Heliusnr %in% df$Heliusnr)]) # 2 subjects in original set, not in df2
 length(df$Heliusnr[which(!df$Heliusnr %in% df2$Heliusnr)]) # 16 subjects not in original set, but in df2
+gwasids <- rio::import("data/GWAS_ids.txt")
 
 # Change type of variable 
 yesnosmall <- function(x) fct_recode(x, "No"="nee", "Yes"="ja")
@@ -255,24 +257,19 @@ saveRDS(df_long, file = "data/clinicaldata_long.RDS")
 
 
 #### 16S ####
-# Overlap GWAS and 16s/shotgun
-gwas <- rio::import("data/GWAS_ids.txt")
-gwas$ID <- str_c("S", gwas$IID)
-summary(df_new2$ID %in% gwas$ID)
-heliussg <- rio::import("data/shotgun/combined_table.tsv")
-sgids <- colnames(heliussg)[which(str_detect(colnames(heliussg), "HELIBA"))]
-sgids <- str_c("S", str_remove_all(sgids, "HELIBA_"))
-summary(sgids %in% gwas$ID)
-
 # Clean phyloseq object
 heliusmb <- readRDS("data/16s/phyloseq/rarefied/phyloseq_rarefied.RDS")
 all(str_detect(sample_names(heliusmb), "_T1")) # TRUE
 any(str_detect(sample_names(heliusmb), "_T2")) # FALSE (hence no duplicated sample IDs)
 sample_names(heliusmb) <- str_replace(sample_names(heliusmb), "_T1", "") # remove _T1
 sample_names(heliusmb)
-idsfu <- sample_names(heliusmb)[which(str_detect(sample_names(heliusmb), "HELIFU_"))]
+idsfu <- str_remove(sample_names(heliusmb)[which(str_detect(sample_names(heliusmb), "HELIFU_"))], "HELIFU_")
+idsba <- str_remove(sample_names(heliusmb)[which(str_detect(sample_names(heliusmb), "HELIBA_"))], "HELIBA_")
 all(sample_sums(heliusmb) == 15000) # all rarefied to 15,000 counts
-dffu <- df_new2 %>% filter(sampleID_FU %in% sample_names(heliusmb))
+dffu <- df_new2 %>% filter(sampleID_FU %in% sample_names(heliusmb)) %>% mutate(`16S_FU` = TRUE)
+dfba <- df_new2 %>% filter(sampleID_BA %in% sample_names(heliusmb)) %>% mutate(`16S_BA` = TRUE)
+dfbafu <- full_join(dfba, dffu)
+
 table(dffu$AgeDecade_FU, dffu$Ethnicity, dffu$Sex)
 table(dffu$EthnicityTot)
 df_new3 <- df_new2 %>% filter(sampleID_BA %in% sample_names(heliusmb) | sampleID_FU %in% sample_names(heliusmb))
@@ -361,3 +358,27 @@ dfshot <- df_new2 %>%
     filter(sampleID_BA %in% rownames(abundance2) | sampleID_FU %in% rownames(abundance2)) %>% 
     droplevels(.)
 table(dfshot$AgeDecade_BA, dfshot$Ethnicity, dfshot$Sex)
+
+# Unique samples in H2 set
+h2set <- readxl::read_xlsx("data/H2_samples_20250306.xlsx")
+dim(h2set)
+summary(as.factor(h2set$`16S`))
+
+h2done <- h2set %>% filter(MiCA != "Not done yet") # 3610
+h2done_overlap <- h2done %>% filter(ID %in% as.numeric(idsba)) # 1961 overlap ba-fu
+h2done_notoverlap <- h2done %>% filter(!ID %in% as.numeric(idsba)) # 1649 not overlap ba-fu
+h2done_notoverlap_gwas <- h2done_notoverlap %>% filter(GWAS == "Yes") # 391 gwas
+
+h2todo <- h2set %>% filter(MiCA == "Not done yet") 
+dim(h2_todo) # 4602 to do
+h2todo_overlap <- h2todo %>% filter(ID %in% as.numeric(idsba)) # 1076 to do overlap
+h2todo_notoverlap <- h2todo %>% filter(!ID %in% as.numeric(idsba)) # 3526 to do not overlap
+h2todo_notoverlap_mica <- h2todo %>% filter(`16S` != "Yes") # 3527 to do not overlap (mica)
+h2todo_notoverlap_gwas <- h2todo_notoverlap %>% filter(GWAS == "Yes") # 876 gwas
+
+length(idsba) + nrow(h2done_notoverlap) # currently, 7679 unique IDs
+length(idsba) + nrow(h2done_notoverlap) + nrow(h2todo_notoverlap) # potentially, 11205 unique IDs
+gwas_16s_baseline <- 4777
+gwas_16s_baseline + nrow(h2done_notoverlap_gwas) + nrow(h2todo_notoverlap_gwas)
+
+h2set %>% filter(GWAS == "Yes") %>% nrow(.)

@@ -53,28 +53,9 @@ rsconnect/
 
 # data
 data/
-ldl/
-lld/
-hba1c/
-dbp/
-sbp/
-hypertension/
-diabetes/
-metsyn/
-hypertension_shotgun/
-diabetes_shotgun/
-lld_shotgun/
-metsyn_shotgun/
-timepoint_shotgun/
-timepoint_dutch/
-timepoint_sas/
-eth_fu/
-eth_base/
-timepoint_16s/
-timepoint_dutch_16s/
-timepoint_sas_16s/
-eth_fu_16s/
-eth_base_16s/
+
+# script archive
+scripts/archive
 
 # renv
 renv/*
@@ -82,3 +63,4 @@ renv/*
 # paper and results
 paper/
 results/
+mlmodels/
