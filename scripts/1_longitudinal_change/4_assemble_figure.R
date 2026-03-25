@@ -1,0 +1,25 @@
+## Figure 1 — Longitudinal microbiome change across ethnicities (16S)
+##
+## Panels:
+##   A — Violin: follow-up time by ethnicity
+##   B — PCoA: community composition baseline vs follow-up
+##   C — Scatter: Bray-Curtis dissimilarity vs follow-up time
+##   D — Violin: Bray-Curtis dissimilarity by ethnicity
+##   E — Violin: Shannon by ethnicity × timepoint
+##   F — Scatter: baseline Shannon vs Bray-Curtis dissimilarity (all ethnicities)
+
+library(ggpubr)
+
+## Source subscripts (generates individual PDFs and defines panel objects) ----
+source("scripts/1_longitudinal_change/2_alphadiversity.R")
+source("scripts/1_longitudinal_change/3c_ordination.R")
+
+## Assemble Figure 1 ----
+top_row    <- ggarrange(pl_fig1_futime, pl_fig1_B, pl_fig1_A,
+                        ncol = 3, labels = c("A", "B", "C"))
+bottom_row <- ggarrange(pl_fig1_C, pl_fig1_D, pl_fig1_scatter,
+                        ncol = 3, labels = c("D", "E", "F"))
+fig1 <- ggarrange(top_row, bottom_row, nrow = 2, heights = c(1.0, 1.1))
+
+ggsave(fig1, filename = "results/1_longitudinal_change/figure1.pdf", width = 18, height = 12, device = "pdf")
+# ggsave(fig1, filename = "results/figure1.svg", width = 18, height = 12, device = "svg")

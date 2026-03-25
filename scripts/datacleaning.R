@@ -12,16 +12,14 @@ library(phyloseq)
 df <- haven::read_sav("data/210517_HELIUS data Ulrika Boulund_2.sav") # more subjects than other set
 df2 <- haven::read_sav("data/240411_HELIUS data Barbara Verhaar.sav")
 df3 <- haven::read_sav("data/220712_HELIUS data Barbara Verhaar - Cov1 groep en datum.sav") # covid dates
-df4 <- haven::read_sav("data/EGA_standaardvariabelen.sav")
-df5 <- haven::read_sav("/Users/barbaraverhaar/Documents/Postdoc/HELIUS/sex_differences/sex-differences-microbiome/data/231109_HELIUS data Barbara Verhaar.sav")
 names(df2)[which(!names(df2) %in% names(df))]
 df <- df %>% dplyr::select("Heliusnr", !names(df)[which(names(df) %in% names(df2))])
-dftot <- full_join(df2, df, by = "Heliusnr") %>% full_join(., df3, by = "Heliusnr") %>% 
-    full_join(., df4) %>% full_join(., df5)
+dftot <- full_join(df2, df, by = "Heliusnr") %>% full_join(., df3, by = "Heliusnr")
 all(df3$Heliusnr %in% df$Heliusnr) # TRUE covid set does not have new subjects
 length(df2$Heliusnr[which(!df2$Heliusnr %in% df$Heliusnr)]) # 2 subjects in original set, not in df2
 length(df$Heliusnr[which(!df$Heliusnr %in% df2$Heliusnr)]) # 16 subjects not in original set, but in df2
 gwasids <- rio::import("data/GWAS_ids.txt")
+names(dftot)
 
 # Change type of variable 
 yesnosmall <- function(x) fct_recode(x, "No"="nee", "Yes"="ja")
@@ -258,14 +256,11 @@ saveRDS(df_long, file = "data/clinicaldata_long.RDS")
 
 #### 16S ####
 # Clean phyloseq object
-heliusmb <- readRDS("data/16s/phyloseq/rarefied/phyloseq_rarefied.RDS")
-all(str_detect(sample_names(heliusmb), "_T1")) # TRUE
-any(str_detect(sample_names(heliusmb), "_T2")) # FALSE (hence no duplicated sample IDs)
-sample_names(heliusmb) <- str_replace(sample_names(heliusmb), "_T1", "") # remove _T1
+heliusmb <- readRDS("data/16s/phyloseq_rarefied.RDS")
 sample_names(heliusmb)
 idsfu <- str_remove(sample_names(heliusmb)[which(str_detect(sample_names(heliusmb), "HELIFU_"))], "HELIFU_")
 idsba <- str_remove(sample_names(heliusmb)[which(str_detect(sample_names(heliusmb), "HELIBA_"))], "HELIBA_")
-all(sample_sums(heliusmb) == 15000) # all rarefied to 15,000 counts
+all(sample_sums(heliusmb) == 13000) # all rarefied to 15,000 counts
 dffu <- df_new2 %>% filter(sampleID_FU %in% sample_names(heliusmb)) %>% mutate(`16S_FU` = TRUE)
 dfba <- df_new2 %>% filter(sampleID_BA %in% sample_names(heliusmb)) %>% mutate(`16S_BA` = TRUE)
 dfbafu <- full_join(dfba, dffu)
@@ -279,42 +274,15 @@ write.csv2(df_new3$ID, 'data/16s/ids_16s.csv')
 heliusmb2 <- prune_samples(sample_names(heliusmb) %in% df_new_long$sampleID, heliusmb)
 heliusmb2
 
-# Make baseline mb set for CBS enviroment
-cbs_ids <- rio::import("data/240411_HELIUS data Barbara Verhaar_Heliusnrs.csv") %>% 
-    dplyr::select(ID = V1) %>% 
-    mutate(ID = str_remove(ID, "_T1"))
-heliusmb_baseline <- prune_samples(str_detect(sample_names(heliusmb), "HELIBA_"), heliusmb)
-heliusmb_baseline <- prune_samples(sample_names(heliusmb) %in% cbs_ids$ID, heliusmb)
-heliusmb_baseline <- prune_taxa(taxa_sums(heliusmb_baseline) > 0, heliusmb_baseline)
-sample_names(heliusmb_baseline) <- str_replace(sample_names(heliusmb_baseline), "HELIBA_", "") # remove HELIBA_
-heliusmb_asv <- as.data.frame(t(as(heliusmb_baseline@otu_table, "matrix")))
-write.csv2(heliusmb_asv, "data/CBS/asv_table_heliusba.csv")
-heliusmb_tax <- as.data.frame(as(heliusmb_baseline@tax_table, "matrix"))
-write.csv2(heliusmb_tax, "data/CBS/tax_table_heliusba.csv")
-Biostrings::writeXStringSet(heliusmb_baseline@refseq, "data/CBS/asvs_baseline.fna", append=FALSE,
-                            compress=FALSE, compression_level=NA, format="fasta")
-ape::write.tree(heliusmb_baseline@phy_tree, "data/CBS/tree_heliusba.tree")
-
-# code to put files back together (test for CBS later)
-# asvs <- read.csv2("data/CBS/asv_table_heliusba.csv")
-# rownames(asvs) <- asvs$X
-# asvs$X <- NULL
-# taxs <- read.csv2("data/CBS/tax_table_heliusba.csv")
-# rownames(taxs) <- taxs$ASV <- taxs$X
-# taxs$X <- NULL
-# refseqs <- Biostrings::readDNAStringSet("data/CBS/asvs_baseline.fna")
-# trb <- ape::read.tree("data/CBS/tree_heliusba.tree")
-# phynew <- phyloseq(otu_table(asvs, taxa_are_rows = FALSE), tax_table(as.matrix(taxs)), refseq(refseqs), phy_tree(trb))
-
 # How many samples have paired data (baseline + follow-up data)
-summary(str_detect(sample_names(heliusmb), "HELIBA")) # 2966 follow-up samples total
-summary(str_detect(sample_names(heliusmb), "HELIFU")) # 2966 follow-up samples total
-summary(str_detect(sample_names(heliusmb2), "HELIFU")) # 1829 follow-up samples with paired clinical data
+summary(str_detect(sample_names(heliusmb), "HELIBA")) # 6031 baseline samples total
+summary(str_detect(sample_names(heliusmb), "HELIFU")) # 4415 follow-up samples total
+summary(str_detect(sample_names(heliusmb2), "HELIFU")) # 1944 follow-up samples with paired clinical data
 fusamples <- sample_names(prune_samples(str_detect(sample_names(heliusmb2), "HELIFU"), heliusmb2))
 basamples <- sample_names(prune_samples(str_detect(sample_names(heliusmb2), "HELIBA"), heliusmb2))
 basamples <- str_remove(basamples, "HELIBA_")
 fusamples <- str_remove(fusamples, "HELIFU_")
-idspaired <- str_c("S",fusamples[which(fusamples %in% basamples)]) # 1825 with paired baseline-FU data
+idspaired <- str_c("S",fusamples[which(fusamples %in% basamples)]) # 1825 with paired baseline-FU data --> now 1937
 write.csv2(idspaired, 'data/16s/ids_16s_paired.csv')
 
 ## Select paired samples
@@ -352,33 +320,11 @@ abundance2 <- t(as.matrix(abundance2))
 write.csv2(abundance2, "data/shotgun/shotgun_abundance.csv", row.names = TRUE)
 saveRDS(abundance2, "data/shotgun/shotgun_abundance.RDS")
 
+df <- readRDS("data/shotgun/shotgun_abundance.RDS")
+
 # Clinical data filtered for available shotgun
 rownames(abundance2)
 dfshot <- df_new2 %>% 
     filter(sampleID_BA %in% rownames(abundance2) | sampleID_FU %in% rownames(abundance2)) %>% 
     droplevels(.)
 table(dfshot$AgeDecade_BA, dfshot$Ethnicity, dfshot$Sex)
-
-# Unique samples in H2 set
-h2set <- readxl::read_xlsx("data/H2_samples_20250306.xlsx")
-dim(h2set)
-summary(as.factor(h2set$`16S`))
-
-h2done <- h2set %>% filter(MiCA != "Not done yet") # 3610
-h2done_overlap <- h2done %>% filter(ID %in% as.numeric(idsba)) # 1961 overlap ba-fu
-h2done_notoverlap <- h2done %>% filter(!ID %in% as.numeric(idsba)) # 1649 not overlap ba-fu
-h2done_notoverlap_gwas <- h2done_notoverlap %>% filter(GWAS == "Yes") # 391 gwas
-
-h2todo <- h2set %>% filter(MiCA == "Not done yet") 
-dim(h2_todo) # 4602 to do
-h2todo_overlap <- h2todo %>% filter(ID %in% as.numeric(idsba)) # 1076 to do overlap
-h2todo_notoverlap <- h2todo %>% filter(!ID %in% as.numeric(idsba)) # 3526 to do not overlap
-h2todo_notoverlap_mica <- h2todo %>% filter(`16S` != "Yes") # 3527 to do not overlap (mica)
-h2todo_notoverlap_gwas <- h2todo_notoverlap %>% filter(GWAS == "Yes") # 876 gwas
-
-length(idsba) + nrow(h2done_notoverlap) # currently, 7679 unique IDs
-length(idsba) + nrow(h2done_notoverlap) + nrow(h2todo_notoverlap) # potentially, 11205 unique IDs
-gwas_16s_baseline <- 4777
-gwas_16s_baseline + nrow(h2done_notoverlap_gwas) + nrow(h2todo_notoverlap_gwas)
-
-h2set %>% filter(GWAS == "Yes") %>% nrow(.)

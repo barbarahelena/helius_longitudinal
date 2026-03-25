@@ -63,6 +63,13 @@ renv/*
 # paper and results
 paper/
 results/
-mlmodels/
-machinelearning_cmb/
-machinelearning_time_eth/
+
+# pixi environments
+.pixi/*
+!.pixi/config.toml
+
+# claude
+.claude/*
+
+# vscode
+.vscode/*

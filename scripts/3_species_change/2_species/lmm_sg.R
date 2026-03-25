@@ -1,0 +1,169 @@
+# LMMs
+# Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
+
+# Libraries
+library(tidyverse)
+library(ggsci)
+library(ggpubr)
+library(lme4)
+library(afex)
+
+theme_Publication <- function(base_size=14, base_family="sans") {
+    library(grid)
+    library(ggthemes)
+    library(stringr)
+    suppressWarnings(theme_foundation(base_size=base_size, base_family=base_family)
+        + theme(plot.title = element_text(face = "bold",
+                                          size = rel(0.8), hjust = 0.5),
+                text = element_text(),
+                panel.background = element_rect(colour = NA, fill = NA),
+                plot.background = element_rect(colour = NA, fill = NA),
+                panel.border = element_rect(colour = NA),
+                axis.title = element_text(face = "bold",size = rel(0.8)),
+                axis.title.y = element_text(angle=90,vjust =2),
+                axis.title.x = element_text(vjust = -0.2),
+                axis.text = element_text(), 
+                axis.line = element_line(colour="black"),
+                axis.ticks = element_line(),
+                panel.grid.major = element_line(colour="#f0f0f0"),
+                panel.grid.minor = element_blank(),
+                legend.key = element_rect(colour = NA),
+                legend.position = "bottom",
+                # legend.direction = "horizontal",
+                legend.key.size= unit(0.2, "cm"),
+                legend.spacing  = unit(0, "cm"),
+                # legend.title = element_text(face="italic"),
+                plot.margin=unit(c(10,5,5,5),"mm"),
+                strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
+                strip.text = element_text(face="bold")
+        ))
+    
+} 
+
+# Data
+df <- readRDS("data/clinicaldata_long.RDS")
+mb <- readRDS("data/shotgun/shotgun_abundance.RDS")
+otu <- mb[which(rownames(mb) %in% df$sampleID),]
+mb1 <- otu[str_detect(rownames(otu), "HELIBA"),]
+tk1 <- apply(mb1[,2:ncol(mb1)], 2, function(x) sum(x > 0.1) > (0.20*length(x)))
+mb2 <- otu[str_detect(rownames(otu), "HELIFU"),]
+tk2 <- apply(mb2[,2:ncol(mb2)], 2, function(x) sum(x > 0.1) > (0.20*length(x)))
+tk <- Reduce(`+`,list(tk1,tk2)) > 0
+summary(tk)
+mb <- mb[,tk==TRUE]
+dim(mb)
+mean(mb, na.rm = TRUE)[1:5]
+mb <- apply(mb, 2, function(x) log10(x + 0.01))
+mean(mb, na.rm = TRUE)[1:5]
+mb <- as.data.frame(mb)
+mb$sampleID <- rownames(mb)
+
+# Metadata
+df_tot <- left_join(mb, df, by = c("sampleID"))
+
+statres <- c()
+for(i in c(1:(ncol(mb)-1))) {
+    df_tot$microbe <- df_tot[,i]
+    mbname <- colnames(df_tot)[i]
+    model1 <- lmer(microbe ~ Ethnicity*timepoint + (1|ID), data = df_tot)
+    res <- summary(model1)
+    confint_model1 <- confint(model1)
+    estimate <- as.numeric(format(round(res$coefficients[4,1], 3), nsmall = 3))
+    conflow <- as.numeric(format(round(confint_model1[6,1], 3), nsmall = 3))
+    confhigh <- as.numeric(format(round(confint_model1[6,2], 3), nsmall = 3))
+    pval <- format(round(res$coefficients[4,5], 3), nsmall = 3)
+    pval <- as.numeric(pval)
+    sig <- case_when(
+        pval < 0.0001 ~ paste0("****"),
+        pval < 0.001 ~paste0("***"),
+        pval < 0.01 ~paste0("**"),
+        pval <= 0.05 ~paste0("*"),
+        pval > 0.05 ~paste0("")
+    )
+    statres_line <- cbind(mbname, group1 = "baseline", group2 = "follow-up", pval, 
+                          sig, estimate, conflow, confhigh)
+    statres <- rbind(statres, statres_line)
+}
+
+statres <- as.data.frame(statres)
+statres <- statres %>% arrange(pval, group1) %>% 
+    mutate(qval = p.adjust(pval, method = "fdr")) |> 
+    mutate(sigq = case_when(
+        qval < 0.0001 ~ paste0("****"),
+        qval < 0.001 ~paste0("***"),
+        qval < 0.01 ~paste0("**"),
+        qval <= 0.05 ~paste0("*"),
+        qval > 0.05 ~paste0("")
+    ))
+head(statres, n = 20)
+maxsig <- statres %>% filter(qval <= 0.05) %>% filter(!duplicated(mbname))
+
+plist <- list()
+for(i in 1:nrow(maxsig)){
+    nm <- maxsig$mbname[i]
+    pval <- maxsig$pval[i]
+    df_tot$mb <- df_tot[,maxsig$mbname[i]]
+    df_means <- df_tot %>% group_by(Ethnicity, timepoint) %>% 
+        summarise(mean = mean(mb), sd = sd(mb), n = length(mb), .groups = "drop_last")
+    res_lmm <- statres %>% filter(mbname == nm) %>% dplyr::select(-mbname) %>% filter(sig != "")
+    if(max(df_tot$mb) < 0) mbmax <- max(df_tot$mb*0.8) else mbmax <- max(df_tot$mb*1.2)
+    if(max(df_tot$mb) < 0) mbstat <- max(df_tot$mb*0.9) else mbstat <- max(df_tot$mb*0.7)
+    mbmin <- min(df_tot$mb)
+    pl2 <- ggplot() +
+        geom_line(data = df_tot, aes(x = timepoint, y = mb,
+                  color = Ethnicity, group = ID), alpha = 0.05, linewidth = 0.5) +
+        geom_point(data = df_tot, aes(x = timepoint, y = mb,
+                  color = Ethnicity, group = Ethnicity), alpha = 0.05, size = 0.8) +
+        geom_line(data = df_means, aes(x = timepoint, y = mean, 
+                  color = Ethnicity, group = Ethnicity), alpha = 1, linewidth = 0.8) +
+        geom_point(data = df_means, aes(x = timepoint, y = mean, 
+                  color = Ethnicity, group = Ethnicity), alpha = 1, size = 1.3) +
+        geom_errorbar(data = df_means,
+                      aes(ymin = mean - (sd/sqrt(n)),
+                          ymax = mean + (sd/sqrt(n)),
+                          x = timepoint,
+                          color = Ethnicity), width=0.1) +
+        stat_pvalue_manual(res_lmm, y.position = mbstat, label = "{sigq}", 
+                           tip.length = 0, bracket.shorten = 0.1, size = 5) +
+        scale_color_jco() + 
+        coord_cartesian(ylim = c(mbmin,mbmax)) +
+        theme_Publication() +
+        labs(x = "Timepoint", y = "log10(abundance+0.01)", title = nm, color = "")
+        plist[[i]] <- pl2
+}
+
+dir.create("results/3_species_change/2_species/lmer", recursive = TRUE, showWarnings = FALSE)
+
+(plots <- ggarrange(plotlist = plist, common.legend = TRUE, legend = "bottom",
+          labels = LETTERS[1:11],
+          nrow = 4, ncol = 3))
+ggsave(plots, filename = "results/3_species_change/2_species/lmer/lmer_plots.pdf", width = 10, height = 13)
+write.csv2(statres, "results/3_species_change/2_species/lmer/lmm_results.csv")
+
+#### Figure 3B — Forest plot: species with significant ethnicity × timepoint interaction ####
+
+lmm_sig <- statres %>%
+    filter(sigq != "") %>%
+    mutate(
+        estimate = as.numeric(estimate),
+        conflow  = as.numeric(conflow),
+        confhigh = as.numeric(confhigh),
+        mbname   = str_replace_all(mbname, "_", " "),
+        mbname   = factor(mbname, levels = mbname[order(as.numeric(estimate))]),
+        direction = ifelse(estimate > 0, "SAS more increase", "Dutch more increase")
+    )
+
+dir_colors <- c("Dutch more increase" = pal_jco()(2)[1], "SAS more increase" = pal_jco()(2)[2])
+
+(pl_fig3_C <- ggplot(lmm_sig, aes(x = estimate, y = mbname, color = direction)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+    geom_errorbar(aes(xmin = conflow, xmax = confhigh), orientation = "y", linewidth = 0.5, width = 0.2) +
+    geom_point(size = 3.5) +
+    scale_color_manual(values = dir_colors, name = NULL) +
+    labs(x = "Interaction effect (\u00b1 95% CI)",
+         y = NULL,
+         title = "Species changing differently\nby ethnicity over time") +
+    theme_Publication() +
+    theme(legend.position = "bottom"))
+ggsave(pl_fig3_C, filename = "results/3_species_change/2_species/lmer/lmm_species_forest.pdf",
+       width = 5, height = 6)
