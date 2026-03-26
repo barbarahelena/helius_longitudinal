@@ -14,7 +14,7 @@
 library(ggpubr)
 
 ## Source subscripts (generates supplementary PDFs and defines panel objects) ----
-source("scripts/2_cmb_microbiome/betadiversity_cmb_16s.R")    # defines pl_fig2_prev, pl_fig2_A, pl_fig2_Aint, pl_fig2_Aint_ht, pl_fig2_Aint_lld
+source("scripts/2_cmb_microbiome/1_betadiversity_cmb_16s.R")    # defines pl_fig2_prev, pl_fig2_A, pl_fig2_Aint, pl_fig2_Aint_ht, pl_fig2_Aint_lld
 source("scripts/2_cmb_microbiome/alphadiversity_cmb_16s.R")   # defines pl_shan_A, pl_shan_Aint_dm, pl_shan_Aint_ht, pl_shan_Aint_lld
 
 ## Assemble Figure 2 ----

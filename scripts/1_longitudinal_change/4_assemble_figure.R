@@ -11,8 +11,8 @@
 library(ggpubr)
 
 ## Source subscripts (generates individual PDFs and defines panel objects) ----
-source("scripts/1_longitudinal_change/2_alphadiversity.R")
-source("scripts/1_longitudinal_change/3c_ordination.R")
+source("scripts/1_longitudinal_change/3_alphadiversity.R")
+source("scripts/1_longitudinal_change/2c_ordination.R")
 
 ## Assemble Figure 1 ----
 top_row    <- ggarrange(pl_fig1_futime, pl_fig1_B, pl_fig1_A,

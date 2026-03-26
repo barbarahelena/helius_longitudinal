@@ -63,7 +63,7 @@ df <- df |> dplyr::select(sampleID = ID, everything()) |>
     dplyr::select(1:3)
 heliusdf <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 df <- inner_join(df, heliusdf, by = "sampleID") |> dplyr::select(sampleID, ID, FUtime, Sex, EthnicityTot,
- BrayPCo1, BrayPCo2)
+ BrayPCo1, BrayPCo2, timepoint)
 ev_bray <- read.csv("results/1_longitudinal_change/ordination/expl_var_bray.csv", header = FALSE)
 bray <- readRDS("results/1_longitudinal_change/ordination/bray.RDS")
 
