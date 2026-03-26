@@ -9,16 +9,16 @@ library(phyloseq)
 
 #### Clinical data ####
 ## Open HELIUS clinical data
-df <- haven::read_sav("data/210517_HELIUS data Ulrika Boulund_2.sav") # more subjects than other set
-df2 <- haven::read_sav("data/240411_HELIUS data Barbara Verhaar.sav")
-df3 <- haven::read_sav("data/220712_HELIUS data Barbara Verhaar - Cov1 groep en datum.sav") # covid dates
+df <- haven::read_sav("data/clinicaldata/210517_HELIUS data Ulrika Boulund_2.sav") # more subjects than other set
+df2 <- haven::read_sav("data/clinicaldata/240411_HELIUS data Barbara Verhaar.sav")
+df3 <- haven::read_sav("data/clinicaldata/220712_HELIUS data Barbara Verhaar - Cov1 groep en datum.sav") # covid dates
 names(df2)[which(!names(df2) %in% names(df))]
 df <- df %>% dplyr::select("Heliusnr", !names(df)[which(names(df) %in% names(df2))])
 dftot <- full_join(df2, df, by = "Heliusnr") %>% full_join(., df3, by = "Heliusnr")
 all(df3$Heliusnr %in% df$Heliusnr) # TRUE covid set does not have new subjects
 length(df2$Heliusnr[which(!df2$Heliusnr %in% df$Heliusnr)]) # 2 subjects in original set, not in df2
 length(df$Heliusnr[which(!df$Heliusnr %in% df2$Heliusnr)]) # 16 subjects not in original set, but in df2
-gwasids <- rio::import("data/GWAS_ids.txt")
+gwasids <- rio::import("data/gwas/GWAS_ids.txt")
 names(dftot)
 
 # Change type of variable 
@@ -250,8 +250,8 @@ df_long <- df_wide_delta %>%
                                         names_pattern = "(.*)_([a-z-]+)$")
 
 ## Save files
-saveRDS(df_wide_delta, file = "data/clinicaldata_wide.RDS")
-saveRDS(df_long, file = "data/clinicaldata_long.RDS")
+saveRDS(df_wide_delta, file = "data/clinicaldata/clinicaldata_wide.RDS")
+saveRDS(df_long, file = "data/clinicaldata/clinicaldata_long.RDS")
 
 
 #### 16S ####
@@ -264,6 +264,8 @@ all(sample_sums(heliusmb) == 13000) # all rarefied to 15,000 counts
 dffu <- df_new2 %>% filter(sampleID_FU %in% sample_names(heliusmb)) %>% mutate(`16S_FU` = TRUE)
 dfba <- df_new2 %>% filter(sampleID_BA %in% sample_names(heliusmb)) %>% mutate(`16S_BA` = TRUE)
 dfbafu <- full_join(dfba, dffu)
+length(c(idsfu, idsba)) #10446
+length(unique(c(idsfu, idsba))) #8508
 
 table(dffu$AgeDecade_FU, dffu$Ethnicity, dffu$Sex)
 table(dffu$EthnicityTot)
@@ -328,3 +330,6 @@ dfshot <- df_new2 %>%
     filter(sampleID_BA %in% rownames(abundance2) | sampleID_FU %in% rownames(abundance2)) %>% 
     droplevels(.)
 table(dfshot$AgeDecade_BA, dfshot$Ethnicity, dfshot$Sex)
+dim(dfshot)
+summary(dfshot$ID %in% str_c("S", basamples))
+summary(rownames(df)[which(str_detect(rownames(df), "HELIFU_"))] %in% str_c("HELIFU_", fusamples))
