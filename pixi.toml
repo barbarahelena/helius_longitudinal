@@ -6,7 +6,21 @@ platforms = ["osx-arm64"]
 version = "0.1.0"
 
 [tasks]
-# 1 — Comparison 16S / ordination
+# Chapter 1 — Longitudinal change
+lc-table1           = "Rscript scripts/1_longitudinal_change/1_table1.R"
+lc-ordination-calc  = "Rscript scripts/1_longitudinal_change/2a_ordination_calc.R"
+lc-ordination       = { cmd = "Rscript scripts/1_longitudinal_change/2c_ordination.R", depends-on = ["lc-ordination-calc"] }
+lc-alphadiv         = "Rscript scripts/1_longitudinal_change/3_alphadiversity.R"
+lc-assemble         = { cmd = "Rscript scripts/1_longitudinal_change/4_assemble_figure.R", depends-on = ["lc-table1", "lc-ordination", "lc-alphadiv"] }
+lc-all              = { depends-on = ["lc-table1", "lc-ordination", "lc-alphadiv", "lc-assemble"] }
+
+# Chapter 2 — CMB microbiome
+cmb-betadiv         = "Rscript scripts/2_cmb_microbiome/1_betadiversity_cmb_16s.R"
+cmb-alphadiv        = "Rscript scripts/2_cmb_microbiome/2_alphadiversity_cmb_16s.R"
+cmb-assemble        = { cmd = "Rscript scripts/2_cmb_microbiome/3_assemble_figure.R", depends-on = ["cmb-betadiv", "cmb-alphadiv"] }
+cmb-all             = { depends-on = ["cmb-betadiv", "cmb-alphadiv", "cmb-assemble"] }
+
+# Chapter 3 — Comparison 16S / ordination
 sc-ordination      = "Rscript scripts/3_species_change/1_comparison_16s/ordination_sg.R"
 sc-alphadiv        = "Rscript scripts/3_species_change/1_comparison_16s/alphadiversity_sg.R"
 sc-comparison      = { depends-on = ["sc-ordination", "sc-alphadiv"] }
@@ -37,6 +51,30 @@ sc-assemble        = "Rscript scripts/3_species_change/assemble_figure.R"
 
 # Run full chapter 3
 sc-all             = { depends-on = ["sc-comparison", "sc-species", "sc-strainsharing", "sc-alistipes", "ml-ethnicity", "sc-assemble"] }
+
+# Chapter 4 — Functional change (Cayman)
+fc-cayman-qc        = "Rscript scripts/4_functional_change/cayman/1_cayman_qc.R"
+fc-cayman-cross     = { cmd = "Rscript scripts/4_functional_change/cayman/2_cayman_cross_comparisons.R", depends-on = ["fc-cayman-qc"] }
+fc-cayman-lmm       = { cmd = "Rscript scripts/4_functional_change/cayman/3_cayman_longitudinal_lmm.R", depends-on = ["fc-cayman-qc"] }
+fc-cayman-ordin     = { cmd = "Rscript scripts/4_functional_change/cayman/4_cayman_ordination.R", depends-on = ["fc-cayman-qc"] }
+fc-cayman           = { depends-on = ["fc-cayman-qc", "fc-cayman-cross", "fc-cayman-lmm", "fc-cayman-ordin"] }
+
+# Chapter 4 — Functional change (GutSMASH)
+fc-gutsmash-qc      = "Rscript scripts/4_functional_change/gutsmash/1_gutsmash_qc.R"
+fc-gutsmash-cross   = { cmd = "Rscript \"scripts/4_functional_change/gutsmash/2_gutsmash_cross_diff..R\"", depends-on = ["fc-gutsmash-qc"] }
+fc-gutsmash-lmm     = { cmd = "Rscript scripts/4_functional_change/gutsmash/3_gutsmash_longitudinal_lmm.R", depends-on = ["fc-gutsmash-qc"] }
+fc-gutsmash-betadiv = { cmd = "Rscript scripts/4_functional_change/gutsmash/4_gutsmash_betadiversity.R", depends-on = ["fc-gutsmash-qc"] }
+fc-gutsmash         = { depends-on = ["fc-gutsmash-qc", "fc-gutsmash-cross", "fc-gutsmash-lmm", "fc-gutsmash-betadiv"] }
+
+fc-assemble         = { cmd = "Rscript scripts/4_functional_change/assemble_figure.R", depends-on = ["fc-cayman", "fc-gutsmash"] }
+fc-all              = { depends-on = ["fc-cayman", "fc-gutsmash", "fc-assemble"] }
+
+# Chapter 5 — ARG
+arg-qc              = "Rscript scripts/5_arg/1_arg_descriptive_qc.R"
+arg-cross           = { cmd = "Rscript scripts/5_arg/2_arg_cross_comparisons.R", depends-on = ["arg-qc"] }
+arg-lmm             = { cmd = "Rscript scripts/5_arg/3_arg_longitudinal_lmm.R", depends-on = ["arg-qc"] }
+arg-assemble        = { cmd = "Rscript scripts/5_arg/4_assemble_figure.R", depends-on = ["arg-qc", "arg-cross", "arg-lmm"] }
+arg-all             = { depends-on = ["arg-qc", "arg-cross", "arg-lmm", "arg-assemble"] }
 
 [dependencies]
 r-tidyverse = ">=2.0.0,<3"
