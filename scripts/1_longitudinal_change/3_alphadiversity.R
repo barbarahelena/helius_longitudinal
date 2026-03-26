@@ -181,7 +181,8 @@ ggplot(data = dftot3 %>% filter(!is.na(EthnicityTot)),
     stat_compare_means(tip.length = 0, hide.ns = TRUE, label.x = 1.5,
                        label = "p.signif", method = "wilcox.test") +
     scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
-    theme_Publication()
+    theme_Publication() +
+    theme(strip.text = element_text(size = 8))
 ggsave("results/1_longitudinal_change/alphadiversity/shannon_ethnicities_time.pdf", width = 7, height = 10)
 pl_fig1_D <- last_plot()
 
@@ -298,7 +299,7 @@ ggsave("results/1_longitudinal_change/alphadiversity/braycurtis_shannonbaseline.
     ggplot(aes(x = shannon, y = distance)) +
     geom_point(alpha = 0.35, size = 1.5, color = "royalblue") +
     geom_smooth(method = "lm", se = TRUE, alpha = 0.15, linewidth = 0.9, color = "black") +
-    stat_cor(size = 3) +
+    stat_cor(size = 5) +
     labs(x = "Baseline Shannon diversity",
          y = "Bray-Curtis dissimilarity over FU time",
          title = "Diversity-stability relationship") +
