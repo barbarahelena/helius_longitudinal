@@ -57,9 +57,13 @@ eth_colors <- c(
 )
 
 #### Load data ####
-df <- readRDS("data/16s/archive/clin_betadiversity.RDS") %>% dplyr::select(1:2, sampleID = ID, 4:5)
-helius <- readRDS("data/clinicaldata_long.RDS")
-df <- left_join(df, helius, by = c("sampleID"))
+df <- readRDS("data/16s/clin_bray.RDS") 
+df$sampleID <- NULL
+df <- df |> dplyr::select(sampleID = ID, everything()) |> 
+    dplyr::select(1:3)
+heliusdf <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
+df <- inner_join(df, heliusdf, by = "sampleID") |> dplyr::select(sampleID, ID, FUtime, Sex, EthnicityTot,
+ BrayPCo1, BrayPCo2)
 ev_bray <- read.csv("results/1_longitudinal_change/ordination/expl_var_bray.csv", header = FALSE)
 bray <- readRDS("results/1_longitudinal_change/ordination/bray.RDS")
 
@@ -70,7 +74,7 @@ set.seed(1234)
 dfanova <- df[match(attributes(bray)[["Labels"]], df$sampleID),]
 all(dfanova$sampleID == attributes(bray)[["Labels"]]) # TRUE
 dim(df)
-res1 <- adonis2(bray ~ timepoint, data = df) # PERMANOVA
+res1 <- adonis2(bray ~ timepoint, data = dfanova) # PERMANOVA
 print(res1)
 
 # Figure 1B: clean timepoint-coloured PCoA

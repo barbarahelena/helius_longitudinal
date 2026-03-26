@@ -6,7 +6,7 @@ library(dplyr)
 library(stringr)
 
 ## Data
-helius <- readRDS('data/clinicaldata_wide.RDS')
+helius <- readRDS('data/clinicaldata/clinicaldata_wide.RDS')
 mbids <- read.csv2('data/16s/ids_16s_paired.csv')%>% dplyr::select(ID = x)
 mbids$microbiome_16s <- TRUE
 mbids2 <- readRDS('data/16s/phyloseq_paired16s.RDS')
@@ -15,8 +15,7 @@ shotids <- read.csv('data/shotgun/helius_ids.csv') %>% dplyr::select(ID = x) %>%
 shotids$shotgun <- TRUE
 shotids$ID <- str_c("S", str_remove_all(shotids$ID, "HELIFU_"))
 
-helius <- left_join(helius, metids, by = "ID") %>% 
-    left_join(., mbids, by = 'ID') %>% 
+helius <- left_join(helius, mbids, by = "ID") %>% 
     left_join(., shotids, by = 'ID') %>% 
     mutate(across(c('microbiome_16s', 'shotgun'), ~case_when(
         is.na(.x) ~ FALSE,

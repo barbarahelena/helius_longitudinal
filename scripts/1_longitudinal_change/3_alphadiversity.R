@@ -101,7 +101,7 @@ dfwide <- df %>% pivot_wider(., id_cols = "ID", names_from = "timepoint",
     dplyr::select(1, 8:10) 
 df2 <- left_join(df, dfwide, by = "ID") 
 
-helius <- readRDS("data/clinicaldata_long.RDS")
+helius <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 dftot <- left_join(df2 %>% filter(timepoint == "baseline"), helius %>% filter(timepoint == "baseline"), 
                    by = c("ID", "timepoint", "sampleID")) %>% 
     filter(EthnicityTot != "Other") %>% droplevels(.)
@@ -111,7 +111,7 @@ dftot2 <- left_join(df, helius, by = c("ID", "timepoint", "sampleID")) %>%
             filter(sampleID %in% pairedids) %>% 
             filter(! EthnicityTot %in% "Other" ) %>% droplevels(.)
 
-betadiv <- readRDS("data/16s/archive/braydistance_delta.RDS") %>% dplyr::select(1:4)
+betadiv <- readRDS("data/16s/braydistance_delta.RDS") %>% dplyr::select(1:4)
 dftot3a <- left_join(dftot2 %>% filter(timepoint == "baseline"), 
                      betadiv %>% dplyr::select(sampleID = sampleID1, everything(.)))
 dftot3b <- left_join(dftot2 %>% filter(timepoint == "follow-up"), 
