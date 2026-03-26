@@ -122,7 +122,7 @@ dftot3 <- full_join(dftot3a, dftot3b) %>% droplevels(.) %>%
 #### Overview: baseline vs follow-up ####
 (plshan <- ggplot(data = df_raw, aes(x = timepoint, y = shannon, fill = timepoint)) +
     geom_violin(colour = NA) +
-    scale_fill_manual(values = rev(pal_simpsons()(7)[c(1,7)]), guide = "none") +
+    scale_fill_manual(values = pal_lancet()(2), guide = "none") +
     geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
     stat_compare_means(label.y = 5.5) +
     labs(title = "Shannon index", y = "Shannon index", x="") +
@@ -134,7 +134,7 @@ ggsave(plshan, filename = file.path(resultsfolder, "shannon.pdf"), width = 4, he
     geom_violin(colour = NA) +
     geom_boxplot(outlier.shape = NA, fill = "white", width = 0.1) +
     theme_Publication() +
-    scale_fill_manual(values = rev(pal_simpsons()(7)[c(1,7)]), guide = "none") +
+    scale_fill_manual(values = pal_lancet()(2), guide = "none") +
     labs(title = "Species richness", y = "Number of species", x = "") +
     stat_compare_means(method = "wilcox.test"))
 ggsave(plrich, filename = file.path(resultsfolder, "richness.pdf"), width = 4, height = 5)
@@ -144,7 +144,7 @@ ggsave(plrich, filename = file.path(resultsfolder, "richness.pdf"), width = 4, h
     geom_violin(colour = NA) +
     geom_boxplot(outlier.shape = NA, fill = "white", width = 0.1) +
     theme_Publication() +
-    scale_fill_manual(values = rev(pal_simpsons()(7)[c(1,7)]), guide = "none") +
+    scale_fill_manual(values = pal_lancet()(2), guide = "none") +
     labs(title = "Faith's PD", y = "Faith's phylogenetic diversity", x = "") +
     stat_compare_means(method = "wilcox.test"))
 ggsave(plfaith, filename = file.path(resultsfolder, "faiths.pdf"), width = 4, height = 5)
