@@ -21,5 +21,5 @@ bottom_row <- ggarrange(pl_fig1_C, pl_fig1_D, pl_fig1_scatter,
                         ncol = 3, labels = c("D", "E", "F"))
 fig1 <- ggarrange(top_row, bottom_row, nrow = 2, heights = c(1.0, 1.1))
 
-ggsave(fig1, filename = "results/1_longitudinal_change/figure1.pdf", width = 18, height = 12, device = "pdf")
+ggsave(fig1, filename = "results/1_longitudinal_change/figure1.pdf", width = 14, height = 15, device = "pdf")
 # ggsave(fig1, filename = "results/figure1.svg", width = 18, height = 12, device = "svg")
