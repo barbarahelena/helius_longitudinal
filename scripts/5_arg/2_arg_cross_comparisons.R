@@ -31,7 +31,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 }
 
 df_raw <- rio::import("data/shotgun/arg/all_samples.merged_arg_counts.tsv")
-clinical <- readRDS("data/clinicaldata_long.RDS")
+clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 dir.create("results/5_arg", showWarnings = FALSE, recursive = TRUE)
 dir.create("results/5_arg/crosssectional", showWarnings = FALSE, recursive = TRUE)
 
@@ -44,7 +44,7 @@ gene_prevalence <- df_raw %>%
             .groups = "drop")
 
 prevalent_genes <- gene_prevalence %>%
-  filter(prevalence_pct > 5) %>%
+  filter(prevalence_pct > 0.5) %>%
   pull(Gene_Symbol)
 
 # GENE-LEVEL PREVALENCE ----
@@ -586,3 +586,258 @@ p_followup_volcano <- ggplot(followup_sig, aes(x = estimate, y = -log10(pval), c
        y = "-log10(p-value)",
        title = "Follow-up ARG Abundance Differences Between Ethnicities", color = "")
 ggsave("results/5_arg/crosssectional/followup_abundance_volcano.pdf", p_followup_volcano, width = 7, height = 7)
+
+## ── Figure 5 panels: shared aesthetics ───────────────────────────────────────
+BASE_SIZE  <- 11
+ETH_DUTCH  <- levels(prevalence_clin$EthnicityTot)[1]
+ETH_SAS    <- levels(prevalence_clin$EthnicityTot)[2]
+eth_colors <- c("#2166AC", "#E6B800")
+names(eth_colors) <- c(ETH_DUTCH, ETH_SAS)
+tp_colors  <- pal_lancet()(2)
+names(tp_colors) <- c("baseline", "follow-up")
+
+## ── Panel C: Prevalence Volcano — Baseline ────────────────────────────────────
+dutch_idx_c <- which(levels(prevalence_clin$EthnicityTot) == ETH_DUTCH)
+sign_mult_c  <- if (dutch_idx_c == 1L) -1 else 1
+
+n_tested_c <- nrow(prevalence_results)
+n_sig_c    <- sum(as.numeric(prevalence_results$padj) < 0.05, na.rm = TRUE)
+
+volcano_dat <- prevalence_results %>%
+  mutate(prev_diff_dutch = prev_diff * sign_mult_c)
+
+pl_C <- ggplot(volcano_dat,
+               aes(x = prev_diff_dutch, y = -log10(pval), colour = sig_level)) +
+  geom_point(alpha = 0.55, size = 1.8) +
+  geom_text_repel(
+    data               = filter(volcano_dat, sig_level == "Significant & Large Effect"),
+    aes(label = gene),
+    size               = 3.2, colour = "black",
+    max.overlaps       = 30, box.padding = 0.5, point.padding = 0.3,
+    min.segment.length = 0.2) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", colour = "gray50") +
+  annotate("text", x = -Inf, y = Inf, hjust = -0.05, vjust = 1.5,
+           label = paste0("N tested = ", n_tested_c, "\nFDR sig = ", n_sig_c),
+           size = 2.8, colour = "gray40") +
+  scale_colour_manual(
+    values = c("Significant & Large Effect" = unname(tp_colors["baseline"]),
+               "Significant"               = unname(tp_colors["baseline"]),
+               "Not Significant"           = "gray70"),
+    name = "",
+    breaks = c("Significant & Large Effect", "Not Significant"),
+    labels = c("Significant (FDR < 0.05)", "Not significant")) +
+  theme_Publication(base_size = BASE_SIZE) +
+  labs(x = "Prevalence Difference (% Dutch \u2212 % SAS)",
+       y = "\u2212log\u2081\u2080(p-value)",
+       title = "ARG prevalence differences (baseline)")
+
+## ── Panel D: Prevalence Volcano — Follow-up ──────────────────────────────────
+dutch_idx_d <- which(levels(prevalence_clin_followup$EthnicityTot) == ETH_DUTCH)
+sign_mult_d  <- if (dutch_idx_d == 1L) -1 else 1
+
+n_tested_d <- nrow(prevalence_results_followup)
+n_sig_d    <- sum(as.numeric(prevalence_results_followup$padj) < 0.05, na.rm = TRUE)
+
+volcano_dat_fu <- prevalence_results_followup %>%
+  mutate(prev_diff_dutch = prev_diff * sign_mult_d)
+
+pl_D <- ggplot(volcano_dat_fu,
+               aes(x = prev_diff_dutch, y = -log10(pval), colour = sig_level)) +
+  geom_point(alpha = 0.55, size = 1.8) +
+  geom_text_repel(
+    data               = filter(volcano_dat_fu, sig_level == "Significant & Large Effect"),
+    aes(label = gene),
+    size               = 3.2, colour = "black",
+    max.overlaps       = 30, box.padding = 0.5, point.padding = 0.3,
+    min.segment.length = 0.2) +
+  geom_hline(yintercept = -log10(0.05), linetype = "dashed", colour = "gray50") +
+  annotate("text", x = -Inf, y = Inf, hjust = -0.05, vjust = 1.5,
+           label = paste0("N tested = ", n_tested_d, "\nFDR sig = ", n_sig_d),
+           size = 2.8, colour = "gray40") +
+  scale_colour_manual(
+    values = c("Significant & Large Effect" = unname(tp_colors["follow-up"]),
+               "Significant"               = unname(tp_colors["follow-up"]),
+               "Not Significant"           = "gray70"),
+    name = "",
+    breaks = c("Significant & Large Effect", "Not Significant"),
+    labels = c("Significant (FDR < 0.05)", "Not significant")) +
+  theme_Publication(base_size = BASE_SIZE) +
+  labs(x = "Prevalence Difference (% Dutch \u2212 % SAS)",
+       y = "\u2212log\u2081\u2080(p-value)",
+       title = "ARG prevalence differences (follow-up)")
+
+## ── Panel E: Dumbbell — baseline & follow-up prevalence, Dutch vs SAS ────────
+top_diff <- prevalence_results %>%
+  filter(as.numeric(padj) < 0.05) %>%
+  arrange(desc(abs(prev_diff))) %>%
+  head(20)
+
+if (dutch_idx_c == 1L) {
+  top_diff <- top_diff %>% rename(prev_dutch = prev_group1, prev_sas = prev_group2)
+} else {
+  top_diff <- top_diff %>% rename(prev_dutch = prev_group2, prev_sas = prev_group1)
+}
+
+top_diff <- top_diff %>% mutate(gene = fct_reorder(gene, prev_dutch))
+
+top_diff_fu <- prevalence_results_followup %>%
+  filter(gene %in% top_diff$gene) %>%
+  mutate(gene = factor(gene, levels = levels(top_diff$gene)))
+
+if (dutch_idx_c == 1L) {
+  top_diff_fu <- top_diff_fu %>% rename(prev_dutch = prev_group1, prev_sas = prev_group2)
+} else {
+  top_diff_fu <- top_diff_fu %>% rename(prev_dutch = prev_group2, prev_sas = prev_group1)
+}
+
+top_diff_combined <- bind_rows(
+  top_diff    %>% select(gene, prev_dutch, prev_sas) %>% mutate(timepoint = "Baseline"),
+  top_diff_fu %>% select(gene, prev_dutch, prev_sas) %>% mutate(timepoint = "Follow-up")
+) %>%
+  pivot_longer(c(prev_dutch, prev_sas),
+               names_to = "eth_key", values_to = "prevalence") %>%
+  mutate(ethnicity = if_else(eth_key == "prev_dutch", ETH_DUTCH, ETH_SAS),
+         timepoint = factor(timepoint, levels = c("Baseline", "Follow-up")))
+
+pl_E <- ggplot(top_diff_combined,
+               aes(y = gene, x = prevalence, colour = ethnicity, shape = timepoint)) +
+  geom_line(aes(group = interaction(gene, timepoint)), colour = "gray75", linewidth = 0.6) +
+  geom_point(data = ~filter(.x, timepoint == "Baseline"), fill = NA, size = 2.5, stroke = 1) +
+  geom_point(data = ~filter(.x, timepoint == "Follow-up"), aes(fill = after_scale(colour)), size = 2.5) +
+  geom_vline(xintercept = 50, linetype = "dashed", colour = "gray55") +
+  scale_colour_manual(values = eth_colors, name = "") +
+  scale_shape_manual(values = c("Baseline" = 21, "Follow-up" = 21), name = "",
+                     guide = guide_legend(override.aes = list(
+                       fill   = c(NA, "gray50"),
+                       colour = "gray50",
+                       size   = 3))) +
+  scale_x_continuous(limits = c(0, 100),
+                     labels = function(x) paste0(x, "%"),
+                     breaks = seq(0, 100, 25)) +
+  theme_Publication(base_size = BASE_SIZE) +
+  labs(x = "Prevalence (% of samples)", y = "",
+       title = "Top differential ARG genes")
+
+## ── Panel E_abund: Dumbbell — abundance at baseline & follow-up, Dutch vs SAS ─
+top_abund <- statres_baseline %>%
+  filter(as.numeric(padj) < 0.05) %>%
+  arrange(desc(abs(estimate))) %>%
+  head(20)
+
+abund_means_bl <- df_baseline %>%
+  dplyr::select(sampleID, EthnicityTot, all_of(top_abund$mbname)) %>%
+  pivot_longer(cols = all_of(top_abund$mbname),
+               names_to = "gene", values_to = "RPKM") %>%
+  mutate(log_rpkm = log10(RPKM + 1)) %>%
+  group_by(gene, EthnicityTot) %>%
+  summarise(mean_log = mean(log_rpkm, na.rm = TRUE), .groups = "drop") %>%
+  mutate(timepoint = "Baseline")
+
+abund_means_fu <- df_followup %>%
+  dplyr::select(sampleID, EthnicityTot, all_of(top_abund$mbname)) %>%
+  pivot_longer(cols = all_of(top_abund$mbname),
+               names_to = "gene", values_to = "RPKM") %>%
+  mutate(log_rpkm = log10(RPKM + 1)) %>%
+  group_by(gene, EthnicityTot) %>%
+  summarise(mean_log = mean(log_rpkm, na.rm = TRUE), .groups = "drop") %>%
+  mutate(timepoint = "Follow-up")
+
+abund_means <- bind_rows(abund_means_bl, abund_means_fu) %>%
+  mutate(timepoint = factor(timepoint, levels = c("Baseline", "Follow-up")),
+         gene = factor(gene, levels = abund_means_bl %>%
+                         filter(EthnicityTot == ETH_DUTCH) %>%
+                         arrange(mean_log) %>%
+                         pull(gene)))
+
+pl_E_abund <- ggplot(abund_means,
+                     aes(y = gene, x = mean_log, colour = EthnicityTot, shape = timepoint)) +
+  geom_line(aes(group = interaction(gene, timepoint)), colour = "gray75", linewidth = 0.6) +
+  geom_point(data = ~filter(.x, timepoint == "Baseline"), fill = NA, size = 2.5, stroke = 1) +
+  geom_point(data = ~filter(.x, timepoint == "Follow-up"), aes(fill = after_scale(colour)), size = 2.5) +
+  scale_colour_manual(values = eth_colors, name = "") +
+  scale_shape_manual(values = c("Baseline" = 21, "Follow-up" = 21), name = "",
+                     guide = guide_legend(override.aes = list(
+                       fill   = c(NA, "gray50"),
+                       colour = "gray50",
+                       size   = 3))) +
+  theme_Publication(base_size = BASE_SIZE) +
+  labs(x = "Mean log\u2081\u2080(RPKM + 1)", y = "",
+       title = "Top differential ARG genes (abundance)")
+
+## ── ARG Class Dumbbell — Prevalence ──────────────────────────────────────────
+class_prev_bl_summ <- class_prev_clin %>%
+  group_by(Class, EthnicityTot) %>%
+  summarise(prevalence_pct = mean(class_present) * 100, .groups = "drop") %>%
+  mutate(timepoint = "Baseline")
+
+class_prev_fu_summ <- class_prev_followup %>%
+  group_by(Class, EthnicityTot) %>%
+  summarise(prevalence_pct = mean(class_present) * 100, .groups = "drop") %>%
+  mutate(timepoint = "Follow-up")
+
+# Top 10 classes by mean prevalence across all groups (from baseline)
+top10_classes <- class_prev_bl_summ %>%
+  group_by(Class) %>%
+  summarise(mean_prev = mean(prevalence_pct), .groups = "drop") %>%
+  slice_max(mean_prev, n = 10) %>%
+  pull(Class)
+
+class_prev_db <- bind_rows(class_prev_bl_summ, class_prev_fu_summ) %>%
+  filter(Class %in% top10_classes) %>%
+  mutate(timepoint = factor(timepoint, levels = c("Baseline", "Follow-up")),
+         Class = fct_reorder(tolower(Class), prevalence_pct, .fun = mean))
+
+pl_class_prev <- ggplot(class_prev_db,
+                        aes(y = Class, x = prevalence_pct, colour = EthnicityTot, shape = timepoint)) +
+  geom_line(aes(group = interaction(Class, timepoint)), colour = "gray75", linewidth = 0.6) +
+  geom_point(data = ~filter(.x, timepoint == "Baseline"), fill = NA, size = 2.5, stroke = 1) +
+  geom_point(data = ~filter(.x, timepoint == "Follow-up"), aes(fill = after_scale(colour)), size = 2.5) +
+  geom_vline(xintercept = 50, linetype = "dashed", colour = "gray55") +
+  scale_colour_manual(values = eth_colors, name = "") +
+  scale_shape_manual(values = c("Baseline" = 21, "Follow-up" = 21), name = "",
+                     guide = guide_legend(override.aes = list(
+                       fill   = c(NA, "gray50"),
+                       colour = "gray50",
+                       size   = 3))) +
+  scale_x_continuous(limits = c(0, 100), labels = function(x) paste0(x, "%"),
+                     breaks = seq(0, 100, 25)) +
+  theme_Publication(base_size = BASE_SIZE) +
+  labs(x = "Prevalence (% of samples)", y = "",
+       title = "ARG class prevalence by ethnicity")
+
+## ── ARG Class Dumbbell — Abundance ───────────────────────────────────────────
+class_abund_raw <- df_raw %>%
+  filter(Gene_Symbol %in% prevalent_genes) %>%
+  mutate(sampleID = Sample) %>%
+  group_by(sampleID, Class) %>%
+  summarise(class_rpkm = sum(RPKM, na.rm = TRUE), .groups = "drop")
+
+class_abund_clin <- class_abund_raw %>%
+  left_join(clinical %>% dplyr::select(sampleID, timepoint, EthnicityTot), by = "sampleID") %>%
+  filter(!is.na(EthnicityTot)) %>%
+  mutate(log_rpkm  = log10(class_rpkm + 1),
+         timepoint = factor(recode(as.character(timepoint),
+                                   "baseline"  = "Baseline",
+                                   "follow-up" = "Follow-up"),
+                            levels = c("Baseline", "Follow-up")))
+
+class_abund_means <- class_abund_clin %>%
+  filter(Class %in% top10_classes) %>%
+  group_by(Class, EthnicityTot, timepoint) %>%
+  summarise(mean_log = mean(log_rpkm, na.rm = TRUE), .groups = "drop") %>%
+  mutate(Class = fct_reorder(tolower(Class), mean_log, .fun = mean))
+
+pl_class_abund <- ggplot(class_abund_means,
+                         aes(y = Class, x = mean_log, colour = EthnicityTot, shape = timepoint)) +
+  geom_line(aes(group = interaction(Class, timepoint)), colour = "gray75", linewidth = 0.6) +
+  geom_point(data = ~filter(.x, timepoint == "Baseline"), fill = NA, size = 2.5, stroke = 1) +
+  geom_point(data = ~filter(.x, timepoint == "Follow-up"), aes(fill = after_scale(colour)), size = 2.5) +
+  scale_colour_manual(values = eth_colors, name = "") +
+  scale_shape_manual(values = c("Baseline" = 21, "Follow-up" = 21), name = "",
+                     guide = guide_legend(override.aes = list(
+                       fill   = c(NA, "gray50"),
+                       colour = "gray50",
+                       size   = 3))) +
+  theme_Publication(base_size = BASE_SIZE) +
+  labs(x = "Mean log\u2081\u2080(RPKM + 1)", y = "",
+       title = "ARG class abundance by ethnicity")

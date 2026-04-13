@@ -1,4 +1,6 @@
-## ARG Descriptive Analysis & QC Plots
+## ARG descriptives and QC plots
+## Exploratory plots, not part of the assembled figure
+
 library(tidyverse)
 library(ggsci)
 library(ggpubr)
@@ -29,6 +31,8 @@ theme_Publication <- function(base_size=14, base_family="sans") {
            strip.text = element_text(face="bold")))
 }
 
+dir.create("results/5_arg", showWarnings = FALSE, recursive = TRUE)
+
 df_raw <- rio::import("data/shotgun/arg/all_samples.merged_arg_counts.tsv") %>%
   mutate(Class = str_to_title(Class),
          Subclass = str_to_title(Subclass), 
@@ -36,7 +40,6 @@ df_raw <- rio::import("data/shotgun/arg/all_samples.merged_arg_counts.tsv") %>%
                                 str_detect(Sample, "HELIFU") ~ "Follow-up"),
           timepoint = as.factor(timepoint)) |> 
   filter(! Sample %in% c("HELIBA_"))
-dir.create("results/5_arg", showWarnings = FALSE, recursive = TRUE)
 
 # Class-level prevalence
 class_prevalence <- df_raw |>
@@ -72,7 +75,7 @@ gene_prevalence <- df_raw %>%
   arrange(-n_samples)
 write.csv2(gene_prevalence, "results/5_arg/qc/gene_prevalence.csv", row.names = FALSE)
 
-# QC Plot 1: Class distribution
+# Class distribution
 (p1 <- ggplot(class_prevalence, aes(x = Class, y = n_samples, fill = timepoint)) +
   geom_bar(stat = "identity", position = "dodge") +
   coord_flip() +

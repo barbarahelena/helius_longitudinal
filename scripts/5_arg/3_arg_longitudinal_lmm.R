@@ -34,7 +34,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 }
 
 df_raw <- rio::import("data/shotgun/arg/all_samples.merged_arg_counts.tsv")
-clinical <- readRDS("data/clinicaldata_long.RDS")
+clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 dir.create("results/5_arg/longitudinal", showWarnings = FALSE, recursive = TRUE)
 
 # Get prevalent genes (>5%)
@@ -48,7 +48,7 @@ gene_prevalence <- df_raw %>%
             .groups = "drop")
 
 prevalent_genes <- gene_prevalence %>%
-  filter(prevalence_pct > 5) %>%
+  filter(prevalence_pct > 0.5) %>%
   pull(Gene_Symbol)
 
 # DATA PREPARATION ----
@@ -187,6 +187,83 @@ p_change <- ggplot(arg_change, aes(x = EthnicityTot, y = change, fill = Ethnicit
   theme(legend.position = "none")
 ggsave("results/5_arg/longitudinal/total_burden_change_by_ethnicity.pdf", p_change, width = 6, height = 6)
 
+# ARG DIVERSITY ----
+# Richness = number of distinct ARG genes detected per sample
+# Shannon  = evenness-weighted diversity from RPKM proportions
+arg_div_raw <- df_raw %>%
+  filter(Prevalence > 0, Mapped_Reads > 0) %>%
+  group_by(Sample, Gene_Symbol) %>%
+  summarise(RPKM = sum(RPKM, na.rm = TRUE), .groups = "drop")
+
+arg_diversity <- arg_div_raw %>%
+  group_by(Sample) %>%
+  summarise(
+    richness = n_distinct(Gene_Symbol),
+    shannon  = {
+      p <- RPKM / sum(RPKM)
+      p <- p[p > 0]
+      -sum(p * log(p))
+    },
+    .groups = "drop"
+  ) %>%
+  rename(sampleID = Sample)
+
+arg_div_clin <- arg_diversity %>%
+  left_join(clinical, by = "sampleID") %>%
+  filter(!is.na(EthnicityTot)) %>%
+  mutate(timepoint   = factor(timepoint, levels = c("baseline", "follow-up")),
+         EthnicityTot = factor(EthnicityTot),
+         ID           = factor(ID)) %>%
+  droplevels()
+
+# LMMs: ethnicity × timepoint interaction
+model_rich_int <- lmer(richness ~ EthnicityTot * timepoint + (1|ID), data = arg_div_clin)
+model_shan_int <- lmer(shannon  ~ EthnicityTot * timepoint + (1|ID), data = arg_div_clin)
+
+res_rich <- summary(model_rich_int)
+res_shan <- summary(model_shan_int)
+
+div_results <- data.frame(
+  metric   = c("Richness", "Shannon"),
+  estimate = c(res_rich$coefficients[4, 1], res_shan$coefficients[4, 1]),
+  se       = c(res_rich$coefficients[4, 2], res_shan$coefficients[4, 2]),
+  pval     = c(res_rich$coefficients[4, 5], res_shan$coefficients[4, 5])
+)
+write.csv2(div_results, "results/5_arg/longitudinal/arg_diversity_lmm_results.csv", row.names = FALSE)
+
+# Exploratory plots
+arg_div_plot <- arg_div_clin %>%
+  mutate(tp_label = factor(recode(as.character(timepoint),
+                                  "baseline"  = "Baseline",
+                                  "follow-up" = "Follow-up"),
+                           levels = c("Baseline", "Follow-up")))
+
+p_richness <- ggplot(arg_div_plot, aes(x = EthnicityTot, y = richness, fill = EthnicityTot)) +
+  geom_violin(alpha = 0.75, colour = NA) +
+  geom_boxplot(width = 0.22, fill = "white", outlier.shape = NA, colour = "gray30") +
+  stat_compare_means(method = "wilcox.test", label = "p.format",
+                     label.x = 1.5, label.y.npc = 0.97, size = 2.8, hjust = 0.5) +
+  facet_wrap(~tp_label) +
+  scale_fill_jco() +
+  scale_x_discrete(labels = function(x) gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
+  theme_Publication() +
+  labs(x = "", y = "ARG Richness (n genes)", title = "ARG Richness by Ethnicity") +
+  theme(legend.position = "none")
+ggsave("results/5_arg/longitudinal/arg_richness_ethnicity.pdf", p_richness, width = 8, height = 5)
+
+p_shannon <- ggplot(arg_div_plot, aes(x = EthnicityTot, y = shannon, fill = EthnicityTot)) +
+  geom_violin(alpha = 0.75, colour = NA) +
+  geom_boxplot(width = 0.22, fill = "white", outlier.shape = NA, colour = "gray30") +
+  stat_compare_means(method = "wilcox.test", label = "p.format",
+                     label.x = 1.5, label.y.npc = 0.97, size = 2.8, hjust = 0.5) +
+  facet_wrap(~tp_label) +
+  scale_fill_jco() +
+  scale_x_discrete(labels = function(x) gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
+  theme_Publication() +
+  labs(x = "", y = "Shannon Diversity", title = "ARG Shannon diversity by ethnicity") +
+  theme(legend.position = "none")
+ggsave("results/5_arg/longitudinal/arg_shannon_ethnicity.pdf", p_shannon, width = 8, height = 5)
+
 # GENE-LEVEL LMM ----
 gene_cols <- colnames(df_tot)[2:(length(prevalent_genes) + 1)]
 statres <- data.frame()
@@ -222,6 +299,8 @@ statres <- statres %>%
   arrange(pval) %>%
   mutate(padj = p.adjust(pval, method = "fdr"))
 write.csv2(statres, "results/5_arg/longitudinal/lmm_ethnicity_timepoint_results.csv", row.names = FALSE)
+
+statres_interaction <- statres   # keep before timepoint-only LMM overwrites statres
 
 # LONGITUDINAL PLOTS ----
 statres_sig <- statres %>%
@@ -384,3 +463,113 @@ plots <- ggarrange(plotlist = plist, common.legend = TRUE, legend = "bottom",
 
 ggsave("results/5_arg/longitudinal/significant_arg_timepoint.pdf", plots,
         width = 12, height = 4 * n_rows)
+
+## ── Figure 5 panels: shared aesthetics ───────────────────────────────────────
+BASE_SIZE  <- 11
+tp_colors  <- pal_lancet()(2)
+names(tp_colors) <- c("baseline", "follow-up")
+ETH_DUTCH  <- levels(arg_burden_clin$EthnicityTot)[1]
+ETH_SAS    <- levels(arg_burden_clin$EthnicityTot)[2]
+eth_colors <- c("#2166AC", "#E6B800")
+names(eth_colors) <- c(ETH_DUTCH, ETH_SAS)
+tp_labels  <- c("baseline" = "Baseline", "follow-up" = "Follow-up")
+
+## ── Panel A: Total ARG Burden Over Time ──────────────────────────────────────
+pl_A <- ggplot(arg_burden_clin,
+               aes(x = timepoint, y = log_rpm, fill = timepoint,
+                   alpha = timepoint)) +
+  geom_violin(colour = NA) +
+  geom_boxplot(width = 0.22, fill = "white", outlier.shape = NA, colour = "gray30",
+               alpha = 1) +
+  annotate("text", x = 1.5, y = Inf, vjust = 1.8, hjust = 0.5,
+           label = "p = 5.4e-15", size = 3.2) +
+  scale_fill_manual(values = tp_colors, guide = "none") +
+  scale_alpha_manual(values = c("baseline" = 0.60, "follow-up" = 0.90),
+                     guide = "none") +
+  scale_x_discrete(labels = tp_labels) +
+  theme_Publication(base_size = BASE_SIZE) +
+  labs(x = "", y = "Total ARG Burden (log\u2081\u2080 RPM)",
+       title = "Total ARG burden over time")
+
+## ── Panel B: ARG Burden by Ethnicity × Timepoint ─────────────────────────────
+arg_burden_B <- arg_burden_clin %>%
+  mutate(tp_label = factor(recode(as.character(timepoint),
+                                  "baseline"  = "Baseline",
+                                  "follow-up" = "Follow-up"),
+                           levels = c("Baseline", "Follow-up")))
+
+pl_B <- ggplot(arg_burden_B,
+               aes(x = EthnicityTot, y = log_rpm, fill = EthnicityTot)) +
+  geom_violin(alpha = 0.75, colour = NA) +
+  geom_boxplot(width = 0.22, fill = "white", outlier.shape = NA, colour = "gray30") +
+  stat_compare_means(method = "wilcox.test", label = "p.format",
+                     label.x = 1.5, label.y.npc = 0.97,
+                     size = 2.8, hjust = 0.5) +
+  facet_wrap(~tp_label) +
+  scale_fill_manual(values = eth_colors, guide = "none") +
+  scale_x_discrete(labels = function(x)
+    gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
+  theme_Publication(base_size = BASE_SIZE) +
+  labs(x = "", y = "Total ARG Burden (log\u2081\u2080 RPM)",
+       title = "ARG burden by ethnicity")
+
+## ── Panel B_rich / B_shan: ARG Diversity by Ethnicity × Timepoint ────────────
+arg_div_fig <- arg_div_clin %>%
+  mutate(tp_label = factor(recode(as.character(timepoint),
+                                  "baseline"  = "Baseline",
+                                  "follow-up" = "Follow-up"),
+                           levels = c("Baseline", "Follow-up")))
+
+pl_B_rich <- ggplot(arg_div_fig, aes(x = EthnicityTot, y = richness, fill = EthnicityTot)) +
+  geom_violin(alpha = 0.75, colour = NA) +
+  geom_boxplot(width = 0.22, fill = "white", outlier.shape = NA, colour = "gray30") +
+  stat_compare_means(method = "wilcox.test", label = "p.format",
+                     label.x = 1.5, label.y.npc = 0.97, size = 2.8, hjust = 0.5) +
+  facet_wrap(~tp_label) +
+  scale_fill_manual(values = eth_colors, guide = "none") +
+  scale_x_discrete(labels = function(x) gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
+  theme_Publication(base_size = BASE_SIZE) +
+  labs(x = "", y = "ARG Richness (n genes)", title = "ARG Richness by Ethnicity")
+
+pl_B_shan <- ggplot(arg_div_fig, aes(x = EthnicityTot, y = shannon, fill = EthnicityTot)) +
+  geom_violin(alpha = 0.75, colour = NA) +
+  geom_boxplot(width = 0.22, fill = "white", outlier.shape = NA, colour = "gray30") +
+  stat_compare_means(method = "wilcox.test", label = "p.format",
+                     label.x = 1.5, label.y.npc = 0.97, size = 2.8, hjust = 0.5) +
+  facet_wrap(~tp_label) +
+  scale_fill_manual(values = eth_colors, guide = "none") +
+  scale_x_discrete(labels = function(x) gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
+  theme_Publication(base_size = BASE_SIZE) +
+  labs(x = "", y = "Shannon Diversity", title = "ARG Shannon diversity by ethnicity")
+
+## ── Panels F–: Key gene box + violin (FDR < 0.05 interaction) ────────────────
+key_genes <- statres_interaction %>%
+  filter(as.numeric(padj) < 0.05) %>%
+  arrange(as.numeric(pval)) %>%
+  pull(mbname)
+
+gene_panels <- lapply(key_genes, function(nm) {
+  gr      <- statres_interaction %>% filter(mbname == nm)
+  sub_cls <- gr$subclass[1]
+  int_p   <- as.numeric(gr$pval[1])
+  p_str   <- if (int_p < 0.001) sprintf("interaction p = %.2e", int_p) else
+                                 sprintf("interaction p = %.3f", int_p)
+
+  plot_dat <- df_tot %>%
+    mutate(mb        = log10(.data[[nm]] + 1),
+           timepoint = factor(timepoint, levels = c("baseline", "follow-up"),
+                              labels = c("Baseline", "Follow-up")))
+
+  ggplot(plot_dat, aes(x = EthnicityTot, y = mb, fill = EthnicityTot)) +
+    geom_violin(alpha = 0.75, colour = NA) +
+    geom_boxplot(width = 0.20, fill = "white", outlier.shape = NA, colour = "gray30") +
+    facet_wrap(~timepoint) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    scale_x_discrete(labels = function(x)
+      gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
+    theme_Publication(base_size = BASE_SIZE) +
+    labs(x = "", y = "log\u2081\u2080(RPKM + 1)",
+         title    = paste0(nm, "\n", sub_cls),
+         subtitle = p_str)
+})
+
