@@ -14,14 +14,18 @@ The [HELIUS study](https://www.heliusstudy.nl) (Healthy Life in an Urban Setting
 
 ```
 scripts/
-├── datacleaning.R                  # Master data cleaning and preprocessing
+├── 0_run_workflows/                # Pipeline execution scripts
+│   ├── 1_run_16s_pipeline/         #   16S amplicon pipeline
+│   ├── 2_run_shotgun_pipelines/    #   Shotgun metagenomics pipelines
+│   └── 3_data_cleaning/            #   Master data cleaning and preprocessing
 ├── 1_longitudinal_change/          # Baseline vs follow-up microbiome changes
 ├── 2_cmb_microbiome/               # Comorbidity–microbiome associations
 ├── 3_species_change/               # Species-level longitudinal analysis
 │   ├── 1_comparison_16s/           #   16S diversity comparisons
 │   ├── 2_species/                  #   LMM species trajectories
 │   ├── 3_strain_stability/         #   Strain sharing analysis
-│   ├── 4_alistipes_anno/           #   Functional gene annotation
+│   ├── 4_alistipes_anno/           #   Alistipes functional gene annotation
+│   ├── 4_odoribacter_anno/         #   Odoribacter functional gene annotation
 │   └── 5_mlmodels/                 #   XGBoost ethnicity prediction models
 ├── 4_functional_change/            # Functional genomics (CAZymes, BGCs)
 └── 5_arg/                          # Antimicrobial resistance genes
@@ -54,7 +58,7 @@ Describes cohort characteristics and overall microbiome shifts between baseline 
 Associations between microbiome composition and cardiometabolic comorbidities, including incident type 2 diabetes and strain stability analyses.
 
 ### 3. Species-level Change
-Linear mixed models (`lmer`) for species trajectories over time, stratified by ethnicity. Includes strain sharing analyses, functional annotation of key taxa (e.g., *Alistipes*), and XGBoost machine learning models predicting ethnicity from microbiome features.
+Linear mixed models (`lmer`) for species trajectories over time, stratified by ethnicity. Includes strain sharing analyses, functional annotation of key taxa (*Alistipes*, *Odoribacter*), and XGBoost machine learning models predicting ethnicity from microbiome features.
 
 ### 4. Functional Change
 Longitudinal LMMs for CAZyme families (carbohydrate-active enzymes) and biosynthetic gene clusters (gutSMASH), with cross-sectional comparisons and beta diversity analyses.
@@ -73,12 +77,18 @@ curl -fsSL https://pixi.sh/install.sh | bash
 # Install all dependencies
 pixi install
 
-# Run a specific analysis chapter (example)
-pixi run sc-all       # Full species change chapter
-pixi run ml-ethnicity # ML ethnicity prediction pipeline
+# Run individual chapters
+pixi run lc-all       # Chapter 1: longitudinal change
+pixi run cmb-all      # Chapter 2: comorbidity–microbiome
+pixi run sc-all       # Chapter 3: species change (includes ML)
+pixi run fc-all       # Chapter 4: functional change
+pixi run arg-all      # Chapter 5: antimicrobial resistance genes
+
+# Run everything
+pixi run all
 ```
 
-Key R packages: `tidyverse`, `ggpubr`, `phyloseq`, `vegan`, `lme4`, `emmeans`, `ComplexHeatmap`, `tableone`
+Key R packages: `tidyverse`, `ggpubr`, `phyloseq`, `vegan`, `lme4`, `emmeans`, `ComplexHeatmap`, `tableone`, `mixOmics`, `circlize`
 Key Python packages: `xgboost`, `scikit-learn`, `pandas`
 
 ## Statistical Methods
