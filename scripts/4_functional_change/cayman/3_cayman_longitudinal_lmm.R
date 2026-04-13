@@ -37,7 +37,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 # Data import
 df_raw <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |> dplyr::select(-HELIBA_103370, -HELIFU_103370)
 head(df_raw)[1:5,1:5]
-clinical <- readRDS("data/clinicaldata_long.RDS")
+clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 dir.create("results/4_functional_change/cayman/longitudinal", showWarnings = FALSE, recursive = TRUE)
 
 stats <- rio::import("data/shotgun/cayman_results/sample_statistics.tsv") |> 
@@ -45,7 +45,7 @@ stats <- rio::import("data/shotgun/cayman_results/sample_statistics.tsv") |>
                                 str_detect(sample, "HELIFU") ~ "Follow-up"),
           timepoint = as.factor(timepoint),
         log_richness= log10(richness)) |> 
-  rename(sampleID = sample) |> dplyr::select(-timepoint)
+  dplyr::rename(sampleID = sample) |> dplyr::select(-timepoint)
 stats <- left_join(stats, clinical, by = "sampleID")
 head(stats)[1:5,1:10]
 
@@ -68,6 +68,7 @@ fam <- ncol(df)
 
 dftot <- left_join(df, clinical) |> droplevels()
 summary(as.factor(dftot$timepoint))
+summary(dftot$Fiber)
 
 write.csv2(data.frame(family = prevalent_families), "results/4_functional_change/cayman/longitudinal/prevalent_families_list.csv", row.names = FALSE)
 
@@ -392,6 +393,79 @@ if (sum(statres_adj$padj < 0.05) > 0) {
          subtitle = "Adjusted for baseline age, sex, BMI, smoking, PPI"))
   ggsave("results/4_functional_change/cayman/longitudinal/forest_ethnicity_timepoint_adjusted_fdr.pdf",
          p_forest_adj_fdr, width = 8, height = max(4, nrow(statres_adj_fdr) * 0.25 + 1))
+}
+
+# DIET-ADJUSTED LMMs ----
+# Model: CAZy ~ EthnicityTot * timepoint + Age_baseline + Sex + BMI + Smoking + PPI + Fiber + (1|ID)
+
+diet_baseline <- dftot %>%
+  filter(timepoint == "baseline") %>%
+  dplyr::select(ID, Fiber_BL = Fiber, Carbohydrates_BL = Carbohydrates) %>%
+  distinct(ID, .keep_all = TRUE)
+
+dftot_diet <- dftot_adj %>%
+  left_join(diet_baseline, by = "ID") %>%
+  filter(!is.na(Fiber_BL), !is.na(Carbohydrates_BL))
+
+statres_diet <- data.frame(family   = character(),
+                           estimate = numeric(),
+                           conflow  = numeric(),
+                           confhigh = numeric(),
+                           pval     = numeric())
+for (gf in gene_families) {
+  dftot_diet$mb <- log10(dftot_diet[[gf]] + 1)
+  tryCatch({
+    model_diet <- lmer(mb ~ EthnicityTot * timepoint + Age_baseline +
+                         Sex + BMI_baseline + Smoking_baseline + PPI_baseline +
+                         Fiber_BL + Carbohydrates_BL + (1|ID), data = dftot_diet)
+    res <- summary(model_diet)
+    ci  <- confint(model_diet, method = "Wald")
+    interaction_row <- grep("EthnicityTotSouth-Asian Surinamese:timepointfollow-up", rownames(res$coefficients))
+    ci_row          <- grep("EthnicityTotSouth-Asian Surinamese:timepointfollow-up", rownames(ci))
+    if (length(interaction_row) == 0) return(NULL)
+    statres_diet <- rbind(statres_diet, data.frame(
+      family   = gf,
+      estimate = res$coefficients[interaction_row, 1],
+      conflow  = ifelse(length(ci_row) > 0, ci[ci_row, 1], NA_real_),
+      confhigh = ifelse(length(ci_row) > 0, ci[ci_row, 2], NA_real_),
+      pval     = res$coefficients[interaction_row, 5]
+    ))
+  }, error = function(e) NULL)
+}
+
+statres_diet <- as.data.frame(statres_diet) %>%
+  arrange(pval) %>%
+  mutate(padj = p.adjust(pval, method = "fdr"))
+
+write.csv2(statres_diet,
+           "results/4_functional_change/cayman/longitudinal/lmm_ethnicity_timepoint_dietary.csv",
+           row.names = FALSE)
+
+# Forest plot: dietary model, FDR significant only
+if (sum(statres_diet$padj < 0.05) > 0) {
+  statres_diet_fdr <- statres_diet %>%
+    filter(padj < 0.05) %>%
+    mutate(family    = fct_reorder(family, estimate),
+           direction = ifelse(estimate > 0, "SAS", "Dutch"))
+
+  (p_forest_diet <- ggplot(statres_diet_fdr,
+                           aes(x = estimate, y = family, colour = direction)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+    geom_pointrange(aes(xmin = conflow, xmax = confhigh), size = 0.4, linewidth = 0.5) +
+    scale_colour_manual(values = c("Dutch" = "#2166AC", "SAS" = "#E6B800"),
+                        name   = "",
+                        labels = c("Dutch" = "More increase in Dutch",
+                                   "SAS"   = "More increase in SAS")) +
+    theme_Publication() +
+    labs(x        = "Interaction effect (\u00b1 95% CI)",
+         y        = "",
+         title    = "Differential CAZyme dynamics by ethnicity",
+         subtitle = "Adjusted for baseline age, sex, BMI, smoking, PPI, fiber, carbohydrates (FDR < 0.05)"))
+
+  ggsave("results/4_functional_change/cayman/longitudinal/forest_ethnicity_timepoint_dietary.pdf",
+         p_forest_diet,
+         width  = 8,
+         height = max(4, nrow(statres_diet_fdr) * 0.25 + 1))
 }
 
 # PREDICTED MARGINAL MEANS PLOTS (emmeans) ----

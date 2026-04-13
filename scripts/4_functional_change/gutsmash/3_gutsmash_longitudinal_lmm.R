@@ -54,7 +54,7 @@ dim(df_rel)
 pathway_cols <- colnames(df_rel) # for later use
 df_rel$sampleID <- rownames(df_rel)
 
-clinical <- readRDS("data/clinicaldata_long.RDS")
+clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 dir.create("results/4_functional_change/gutsmash/longitudinal", showWarnings = FALSE, recursive = TRUE)
 df_clin  <- df_rel |> left_join(clinical, by = "sampleID") |> droplevels()
 df_clin <- df_clin |> filter(!is.na(EthnicityTot))
