@@ -4,7 +4,7 @@ Analysis code for the longitudinal follow-up of the HELIUS cohort, examining gut
 
 ## Study Overview
 
-The [HELIUS study](https://www.heliusstudy.nl) (Healthy Life in an Urban Setting) is a large multi-ethnic cohort based at Amsterdam UMC. This repository contains analysis scripts for the longitudinal component, linking baseline and follow-up gut microbiome data (16S rRNA and whole-genome shotgun metagenomics) to cardiometabolic outcomes including incident type 2 diabetes and hypertension.
+The [HELIUS study](https://www.heliusstudy.nl) (Healthy Life in an Urban Setting) is a large multi-ethnic cohort based at Amsterdam UMC. This repository contains analysis scripts for the longitudinal analyses of the HELIUS microbiome data.
 
 **Ethnic groups**: Dutch, South-Asian Surinamese, African Surinamese, Turkish, Moroccan, Ghanaian
 **Microbiome data**: 16S rRNA amplicon sequencing + whole-genome shotgun metagenomics
