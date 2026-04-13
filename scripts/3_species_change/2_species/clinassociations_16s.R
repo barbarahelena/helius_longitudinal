@@ -45,7 +45,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-df <- readRDS("data/clinicaldata_wide.RDS")
+df <- readRDS("data/clinicaldata/clinicaldata_wide.RDS")
 mbs <- readRDS("data/16s/selectedspecies.RDS")
 mb <- mbs
 head(mb)

@@ -1,4 +1,4 @@
-## VFDB virulence factor comparison of Alistipes putredinis bins
+## VFDB virulence factor comparison of Odoribacter splanchnicus bins
 ## Dutch vs South-Asian Surinamese, baseline and follow-up
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
@@ -42,16 +42,16 @@ theme_Publication <- function(base_size = 14, base_family = "sans") {
 }
 
 #### Paths ####
-vfdb_file   <- "data/shotgun/alistipes_annotation/all_vfdb_results.txt"
-fasta_file  <- "data/shotgun/alistipes_annotation/VFDB_setB_pro.fas"
-trans_file  <- "data/shotgun/alistipes_annotation/bin_translation_table.tsv"
+vfdb_file   <- "data/shotgun/odoribacter_annotation/all_vfdb_results.txt"
+fasta_file  <- "data/shotgun/odoribacter_annotation/VFDB_setB_pro.fas"
+trans_file  <- "data/shotgun/odoribacter_annotation/bin_translation_table.tsv"
 clin_file   <- "data/clinicaldata/clinicaldata_long.RDS"
 batch_files <- c(
-  "data/shotgun/alistipes_annotation/bins_alistipes_batch1.csv",
-  "data/shotgun/alistipes_annotation/bins_alistipes_batch2.csv",
-  "data/shotgun/alistipes_annotation/bins_alistipes_batch3.csv"
+  "data/shotgun/odoribacter_annotation/bins_odoribacter_batch1.csv",
+  "data/shotgun/odoribacter_annotation/bins_odoribacter_batch2.csv",
+  "data/shotgun/odoribacter_annotation/bins_odoribacter_batch3.csv"
 )
-results_dir <- "results/3_species_change/4_alistipes_anno"
+results_dir <- "results/3_species_change/4_odoribacter_anno"
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### 1. Load bin translation table ####
@@ -341,7 +341,7 @@ if (nrow(sig_vf) > 0) {
     facet_grid(vf_category ~ timepoint, scales = "free_y") +
     labs(
       title    = "VF category proportions",
-      subtitle = "Significant differences (FDR < 0.05), Alistipes putredinis",
+      subtitle = "Significant differences (FDR < 0.05), Odoribacter splanchnicus",
       x = "", y = "Proportion of VFDB hits",
       caption  = "Proportion = hits in VF category / total VFDB hits per bin"
     ) +
@@ -364,7 +364,7 @@ if (nrow(sig_vf) > 0) {
     scale_fill_manual(values = jco_cols, guide = "none") +
     facet_wrap(~ vf_category, scales = "free_y") +
     scale_y_continuous(expand = expansion(add = c(0, 0.010))) +
-    labs(title = "VFDB: Alistipes putredinis", x = "", y = "Proportion of VFDB hits") +
+    labs(title = "VFDB: Odoribacter splanchnicus", x = "", y = "Proportion of VFDB hits") +
     theme_Publication() +
     theme(strip.text  = element_text(size = rel(0.8)))
 
@@ -409,7 +409,7 @@ p_vf_heat <- ggplot(vf_lmm_heat,
   scale_x_continuous(breaks = NULL) +
   labs(
     title    = "Top 20 VF categories — LMM ethnicity effect",
-    subtitle = paste0("Alistipes putredinis bins  |  blue = higher in Dutch, ",
+    subtitle = paste0("Odoribacter splanchnicus bins  |  blue = higher in Dutch, ",
                       "yellow = higher in SAS\n* FDR<0.05  ** FDR<0.01  *** FDR<0.001"),
     x = "", y = "",
     caption  = "LMM: proportion ~ EthnicityTot * timepoint + (1|bin); estimate = SAS vs Dutch main effect"
@@ -472,7 +472,7 @@ p_vf_heat_ba <- ggplot(vf_ba_heat,
   scale_x_continuous(breaks = NULL) +
   labs(
     title    = "Top 20 VF categories — ethnicity difference at baseline",
-    subtitle = paste0("Alistipes putredinis bins  |  blue = higher in Dutch, ",
+    subtitle = paste0("Odoribacter splanchnicus bins  |  blue = higher in Dutch, ",
                       "yellow = higher in SAS\n* Wilcoxon FDR<0.05  ** FDR<0.01  *** FDR<0.001"),
     x = "", y = "",
     caption  = "Ranked by Wilcoxon W statistic; colour = mean proportion Dutch − SAS at baseline"
@@ -688,7 +688,7 @@ if (nrow(vfname_lmm_heat) > 0 && !is.infinite(lim_vfname)) {
     scale_x_continuous(breaks = NULL) +
     labs(
       title    = paste0("Top ", top_n_vfname, " VF names - LMM ethnicity effect"),
-      subtitle = paste0("Alistipes putredinis bins  |  blue = higher in Dutch, ",
+      subtitle = paste0("Odoribacter splanchnicus bins  |  blue = higher in Dutch, ",
                         "yellow = higher in SAS\n* FDR<0.05  ** FDR<0.01  *** FDR<0.001\n",
                         "VF names in >=", MIN_PREV, " bins"),
       x = "", y = "",
@@ -757,7 +757,7 @@ if (nrow(vfname_ba_heat) > 0 && !is.infinite(lim_ba_vfname)) {
     scale_x_continuous(breaks = NULL) +
     labs(
       title    = paste0("Top ", top_n_vfname, " VF names - ethnicity difference at baseline"),
-      subtitle = paste0("Alistipes putredinis bins  |  blue = higher in Dutch, ",
+      subtitle = paste0("Odoribacter splanchnicus bins  |  blue = higher in Dutch, ",
                         "yellow = higher in SAS\n* Wilcoxon FDR<0.05  ** FDR<0.01  *** FDR<0.001\n",
                         "VF names in >=", MIN_PREV, " bins"),
       x = "", y = "",

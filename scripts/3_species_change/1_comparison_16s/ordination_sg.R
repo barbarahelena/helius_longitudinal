@@ -48,7 +48,7 @@ resultsfolder <- "results/3_species_change/1_comparison_16s/ordination"
 dir.create(resultsfolder, showWarnings = FALSE, recursive = TRUE)
 
 #### Calculate distances ####
-df_new <- readRDS("data/clinicaldata_long.RDS")
+df_new <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 
 expl_var_csv <- file.path(resultsfolder, "expl_var_bray_shotgun.csv")
 if (!file.exists("data/shotgun/bray_shotgun.RDS") ||

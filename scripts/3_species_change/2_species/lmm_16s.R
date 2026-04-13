@@ -43,7 +43,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-meta <- readRDS("data/clinicaldata_wide.RDS")
+meta <- readRDS("data/clinicaldata/clinicaldata_wide.RDS")
 mbs <- readRDS("data/16s/phyloseq_paired16s.RDS")
 mbs
 tax <- as.data.frame(mbs@tax_table)

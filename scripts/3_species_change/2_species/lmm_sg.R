@@ -41,7 +41,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-df <- readRDS("data/clinicaldata_long.RDS")
+df <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 mb <- readRDS("data/shotgun/shotgun_abundance.RDS")
 otu <- mb[which(rownames(mb) %in% df$sampleID),]
 mb1 <- otu[str_detect(rownames(otu), "HELIBA"),]

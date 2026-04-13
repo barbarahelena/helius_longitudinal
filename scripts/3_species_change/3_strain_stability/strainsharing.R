@@ -124,7 +124,7 @@ mean(dfsame$sharing_perc); median(dfsame$sharing_perc)
 mean(dfdiff$sharing_perc); median(dfdiff$sharing_perc)
 
 #### Merge with clinical data ####
-clin <- readRDS("data/clinicaldata_long.RDS")
+clin <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 dfsh <- dfsame %>% 
     filter(str_detect(sampleid_1, "HELIBA_")) %>% 
     dplyr::select(sampleID = sampleid_1, sharing_perc)

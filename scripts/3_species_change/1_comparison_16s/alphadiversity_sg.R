@@ -69,7 +69,7 @@ linearmixed <- function(data, var, groupvar){
 
 #### Shotgun data ####
 ## Load data
-df_new <- readRDS("data/clinicaldata_long.RDS")
+df_new <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 
 ## Diversity metrics
 # Shannon plots

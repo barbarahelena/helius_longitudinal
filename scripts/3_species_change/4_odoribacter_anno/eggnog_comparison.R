@@ -1,4 +1,4 @@
-## Functional annotation comparison of Alistipes putredinis bins
+## Functional annotation comparison of Odoribacter splanchnius bins
 ## Dutch vs South-Asian Surinamese, baseline and follow-up
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
@@ -42,10 +42,10 @@ theme_Publication <- function(base_size = 14, base_family = "sans") {
 }
 
 #### Paths ####
-anno_file      <- "data/shotgun/alistipes_annotation/eggnog/all_eggnog_results.annotations"
-trans_file     <- "data/shotgun/alistipes_annotation/bin_translation_table.tsv"
+anno_file      <- "data/shotgun/odoribacter_annotation/eggnog/all_eggnog_results.annotations"
+trans_file     <- "data/shotgun/odoribacter_annotation/bin_translation_table.tsv"
 clin_file      <- "data/clinicaldata/clinicaldata_long.RDS"
-results_dir    <- "results/3_species_change/4_alistipes_anno"
+results_dir    <- "results/3_species_change/4_odoribacter_anno"
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### 1. Load bin translation table ####
@@ -167,9 +167,9 @@ cat("Modules with description:", sum(!is.na(kegg_long$description)), "/",
 # We only need each bin's depth in its OWN subject's two samples (HELIBA_ / HELIFU_).
 
 batch_files <- c(
-  "data/shotgun/alistipes_annotation/bins_alistipes_batch1.csv",
-  "data/shotgun/alistipes_annotation/bins_alistipes_batch2.csv",
-  "data/shotgun/alistipes_annotation/bins_alistipes_batch3.csv"
+  "data/shotgun/odoribacter_annotation/bins_odoribacter_batch1.csv",
+  "data/shotgun/odoribacter_annotation/bins_odoribacter_batch2.csv",
+  "data/shotgun/odoribacter_annotation/bins_odoribacter_batch3.csv"
 )
 
 depth_raw <- map_dfr(batch_files, function(f) {
@@ -240,7 +240,7 @@ cat("\nAll samples with annotation + clinical data (present AND absent):\n")
 print(table(bin_clin$EthnicityTot, bin_clin$timepoint))
 
 #### 7. Build analysis datasets (present samples only, zeros filled per feature) ####
-# Only samples where depth > 0 (Alistipes present) are included.
+# Only samples where depth > 0 (Odoribacter present) are included.
 # Within those, bins that LACK a given module/category get proportion = 0
 # so that per-feature presence-absence is captured in the statistics.
 

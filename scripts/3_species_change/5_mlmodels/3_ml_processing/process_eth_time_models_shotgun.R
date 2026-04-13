@@ -153,7 +153,6 @@ roc_fu <- ggdraw() +
 
 pl_fig3_A <- roc_base
 pl_fig3_B <- roc_fu
-pl_fig3_D <- heatmap_gg
-ggsave(ggarrange(pl_fig3_A, pl_fig3_B, pl_fig3_D, nrow = 3, labels = c("A", "B", "D")),
-       filename = "results/3_species_change/5_mlmodels/fig3_eth_roc_heatmap.pdf",
-       width = 14, height = 16)
+ggsave(ggarrange(pl_fig3_A, pl_fig3_B, nrow = 2, labels = c("A", "B")),
+       filename = "results/3_species_change/5_mlmodels/fig3_eth_roc.pdf",
+       width = 14, height = 12)

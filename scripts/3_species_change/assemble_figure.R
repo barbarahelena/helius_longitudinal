@@ -16,8 +16,8 @@
 library(ggpubr)
 
 ## Source subscripts (run analyses and define panel objects) ----
-source("scripts/3_species_change/2_species/clinassociations_sg.R")                               # generates heatmap PDF (needed by pl_fig3_D)
-source("scripts/3_species_change/5_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R")  # defines pl_fig3_A, pl_fig3_B, pl_fig3_D
+source("scripts/3_species_change/2_species/clinassociations_sg.R")                               # defines pl_fig3_D (heatmap)
+source("scripts/3_species_change/5_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R")  # defines pl_fig3_A, pl_fig3_B
 source("scripts/3_species_change/2_species/lmm_sg.R")                                            # defines pl_fig3_C
 source("scripts/3_species_change/4_alistipes_anno/eggnog_comparison.R")                          # defines pl_fig3_E
 source("scripts/3_species_change/4_alistipes_anno/vfdb_comparison.R")                            # defines pl_fig3_F

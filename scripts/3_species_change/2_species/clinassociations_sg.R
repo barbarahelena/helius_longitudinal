@@ -45,7 +45,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 } 
 
 # Data
-df <- readRDS("data/clinicaldata_wide.RDS")
+df <- readRDS("data/clinicaldata/clinicaldata_wide.RDS")
 mb <- readRDS("data/shotgun/shotgun_abundance.RDS")
 sp <- rio::import("results/3_species_change/2_species/lmer/lmm_results.csv")
 sp <- sp |> filter(sigq != "")
@@ -165,11 +165,10 @@ for (a in 1:(ncol(mb)-2)){
 
 # heatmap of all correlations
 # Initialize matrices
-cor_mat <- matrix(nrow = ncol(mb)-2, ncol = 8)
-pval_mat <- matrix(nrow = ncol(mb)-2, ncol = 8)
+cor_mat <- matrix(nrow = ncol(mb)-2, ncol = 4)
+pval_mat <- matrix(nrow = ncol(mb)-2, ncol = 4)
 rownames(cor_mat) <- rownames(pval_mat) <- names(mb)[1:(ncol(mb)-2)]
-colnames(cor_mat) <- colnames(pval_mat) <- c("change_SBP", "change_BMI", "change_Trig", "change_HbA1c",
-                                             "baseline_SBP", "baseline_BMI", "baseline_Trig", "baseline_HbA1c")
+colnames(cor_mat) <- colnames(pval_mat) <- c("baseline_SBP", "baseline_BMI", "baseline_Trig", "baseline_HbA1c")
 mb <- mb[rownames(mb) != "HELIFU_103370",]
 for (a in 1:(ncol(mb)-2)){
   microbe <- names(mb)[a]
@@ -200,10 +199,6 @@ for (a in 1:(ncol(mb)-2)){
   }
 
   vars <- list(
-    change_SBP = cor_pval(tot$change, tot$SBP_delta),
-    change_BMI = cor_pval(tot$change, tot$BMI_delta),
-    change_Trig = cor_pval(tot$change, tot$Trig_delta),
-    change_HbA1c = cor_pval(tot$change, tot$HbA1c_delta),
     baseline_SBP = cor_pval(tot$baseline, tot$SBP_delta),
     baseline_BMI = cor_pval(tot$baseline, tot$BMI_delta),
     baseline_Trig = cor_pval(tot$baseline, tot$Trig_delta),
@@ -219,12 +214,7 @@ col_fun <- circlize::colorRamp2(
   c(pal_nejm()(6)[6], "white", pal_nejm()(3)[3])
 )
 
-colnames(cor_mat) <- c(
-  "ΔSBP", "ΔBMI", "ΔTriglycerides", "ΔHbA1c", 
-  "ΔSBP", "ΔBMI", "ΔTriglycerides", "ΔHbA1c"
-)
-
-group_labels <- rep(c("Δ microbe", "baseline microbe"), each = 4)
+colnames(cor_mat) <- c("ΔSBP", "ΔBMI", "ΔTriglycerides", "ΔHbA1c")
 
 # Heatmap
 heatmap_bugs <- Heatmap(
@@ -237,7 +227,6 @@ heatmap_bugs <- Heatmap(
   cluster_columns = FALSE,
   show_row_names = TRUE,
   show_column_names = TRUE,
-  column_split = factor(group_labels, levels = c("Δ microbe", "baseline microbe")),
   row_names_side = "left",
   show_row_dend = FALSE,
   row_names_gp = gpar(fontsize = 10),
@@ -282,6 +271,7 @@ heatmap_gg <- as_ggplot(grid.grabExpr(
     padding = unit(c(5, 25, 5, 5), "mm") # bottom, left, top, right
   )
 ))
+pl_fig3_D <- heatmap_gg
 
 #### Figure 3C — Alistipes putredinis × cardiometabolic change ####
 
