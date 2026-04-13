@@ -6,6 +6,9 @@ platforms = ["osx-arm64"]
 version = "0.1.0"
 
 [tasks]
+# Data cleaning (runs before all chapters)
+datacleaning        = "Rscript scripts/0_run_workflows/3_datacleaning/datacleaning.R"
+
 # Chapter 1 — Longitudinal change
 lc-table1           = "Rscript scripts/1_longitudinal_change/1_table1.R"
 lc-ordination-calc  = "Rscript scripts/1_longitudinal_change/2a_ordination_calc.R"
@@ -36,9 +39,14 @@ sc-species         = { depends-on = ["sc-lmm-sg", "sc-lmm-16s", "sc-clinassoc-sg
 sc-strainsharing   = "Rscript scripts/3_species_change/3_strain_stability/strainsharing.R"
 
 # 4 — Alistipes annotation
-sc-eggnog          = "Rscript scripts/3_species_change/4_alistipes_anno/eggnog_comparison.R"
-sc-vfdb            = "Rscript scripts/3_species_change/4_alistipes_anno/vfdb_comparison.R"
-sc-alistipes       = { depends-on = ["sc-eggnog", "sc-vfdb"] }
+sc-alistipes-eggnog  = "Rscript scripts/3_species_change/4_alistipes_anno/eggnog_comparison.R"
+sc-alistipes-vfdb    = "Rscript scripts/3_species_change/4_alistipes_anno/vfdb_comparison.R"
+sc-alistipes         = { depends-on = ["sc-alistipes-eggnog", "sc-alistipes-vfdb"] }
+
+# 4b — Odoribacter annotation
+sc-odorib-eggnog   = "Rscript scripts/3_species_change/4_odoribacter_anno/eggnog_comparison.R"
+sc-odorib-vfdb     = "Rscript scripts/3_species_change/4_odoribacter_anno/vfdb_comparison.R"
+sc-odoribacter     = { depends-on = ["sc-odorib-eggnog", "sc-odorib-vfdb"] }
 
 # 5 — ML ethnicity models
 ml-prep            = "Rscript scripts/3_species_change/5_mlmodels/1_ml_prep/ml_prep_shotgun_timeeth.R"
@@ -50,7 +58,7 @@ ml-ethnicity       = { depends-on = ["ml-prep", "ml-run", "ml-process"] }
 sc-assemble        = "Rscript scripts/3_species_change/assemble_figure.R"
 
 # Run full chapter 3
-sc-all             = { depends-on = ["sc-comparison", "sc-species", "sc-strainsharing", "sc-alistipes", "ml-ethnicity", "sc-assemble"] }
+sc-all             = { depends-on = ["sc-comparison", "sc-species", "sc-strainsharing", "sc-alistipes", "sc-odoribacter", "ml-ethnicity", "sc-assemble"] }
 
 # Chapter 4 — Functional change (Cayman)
 fc-cayman-qc        = "Rscript scripts/4_functional_change/cayman/1_cayman_qc.R"
@@ -75,6 +83,9 @@ arg-cross           = { cmd = "Rscript scripts/5_arg/2_arg_cross_comparisons.R",
 arg-lmm             = { cmd = "Rscript scripts/5_arg/3_arg_longitudinal_lmm.R", depends-on = ["arg-qc"] }
 arg-assemble        = { cmd = "Rscript scripts/5_arg/4_assemble_figure.R", depends-on = ["arg-qc", "arg-cross", "arg-lmm"] }
 arg-all             = { depends-on = ["arg-qc", "arg-cross", "arg-lmm", "arg-assemble"] }
+
+# Run everything
+all                 = { depends-on = ["datacleaning", "lc-all", "cmb-all", "sc-all", "fc-all", "arg-all"] }
 
 [dependencies]
 r-tidyverse = ">=2.0.0,<3"
