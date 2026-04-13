@@ -53,7 +53,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 
 #### Load data ####
 df <- readRDS("data/16s/archive/clin_betadiversity.RDS") %>% dplyr::select(1:2, sampleID = ID, 4:5)
-helius <- readRDS("data/clinicaldata_long.RDS")
+helius <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 df <- left_join(df, helius, by = c("sampleID"))
 ev_bray <- read.csv("results/1_longitudinal_change/ordination/expl_var_bray.csv", header = FALSE)
 heliusdist <- readRDS("data/16s/archive/braydistance_delta.RDS")
@@ -109,7 +109,7 @@ extract_lm_effect <- function(model, label) {
 
 mod_dm  <- lm(distance ~ DM,       data = heliusdist %>% filter(!is.na(DM))       %>% mutate(DM       = relevel(factor(DM),       ref = "No")))
 mod_ht  <- lm(distance ~ HT_BPMed, data = heliusdist %>% filter(!is.na(HT_BPMed)) %>% mutate(HT_BPMed = relevel(factor(HT_BPMed), ref = "No")))
-mod_lld <- lm(distance ~ LLD,      data = heliusdist %>% filter(!is.na(LLD))      %>% mutate(LLD      = relevel(factor(LLD),      ref = "No")))
+mod_lld <- lm(distance ~ Dyslipidemia, data = heliusdist %>% filter(!is.na(Dyslipidemia)) %>% mutate(Dyslipidemia = relevel(factor(Dyslipidemia), ref = "No")))
 
 effects_df <- bind_rows(
     extract_lm_effect(mod_dm,  "Diabetes"),
@@ -122,7 +122,7 @@ effects_df <- bind_rows(
 
 (pl_fig2_A <- ggplot(effects_df, aes(x = estimate, y = label, color = sig)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8) +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
     geom_point(size = 4) +
     scale_color_manual(
         values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
@@ -130,7 +130,7 @@ effects_df <- bind_rows(
     ) +
     labs(x = "Bray-Curtis (\u00b1 95% CI)",
          y = NULL,
-         title = "Effect on microbiome instability") +
+         title = "Microbiome instability") +
     theme_Publication() +
     theme(legend.position = "bottom"))
 ggsave(file.path(resultsfolder, "effectsize_cmb_bray.pdf"), width = 5, height = 4)
@@ -169,7 +169,7 @@ eth_effects_dm <- lapply(levels(dat_int$EthnicityTot), function(eth) {
 
 (pl_fig2_Aint <- ggplot(eth_effects_dm, aes(x = estimate, y = ethnicity, color = sig)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8) +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
     geom_point(size = 4) +
     scale_color_manual(
         values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
@@ -216,7 +216,7 @@ eth_effects_ht <- lapply(levels(dat_int_ht$EthnicityTot), function(eth) {
 
 (pl_fig2_Aint_ht <- ggplot(eth_effects_ht, aes(x = estimate, y = ethnicity, color = sig)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8) +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
     geom_point(size = 4) +
     scale_color_manual(
         values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
@@ -234,18 +234,18 @@ ggsave(file.path(resultsfolder, "effectsize_ht_byethnicity.pdf"), width = 5, hei
 #### Per-ethnicity effect of LLD on Bray-Curtis ####
 
 dat_int_lld <- heliusdist %>%
-    filter(!is.na(LLD), EthnicityTot != "Other") %>%
-    mutate(LLD          = relevel(factor(LLD), ref = "No"),
+    filter(!is.na(Dyslipidemia), EthnicityTot != "Other") %>%
+    mutate(Dyslipidemia = relevel(factor(Dyslipidemia), ref = "No"),
            EthnicityTot = factor(EthnicityTot))
 
-mod_lld_int    <- lm(distance ~ LLD * EthnicityTot, data = dat_int_lld)
-pint_lld       <- drop1(mod_lld_int, scope = ~LLD:EthnicityTot, test = "F")["LLD:EthnicityTot", "Pr(>F)"]
+mod_lld_int    <- lm(distance ~ Dyslipidemia * EthnicityTot, data = dat_int_lld)
+pint_lld       <- drop1(mod_lld_int, scope = ~Dyslipidemia:EthnicityTot, test = "F")["Dyslipidemia:EthnicityTot", "Pr(>F)"]
 pint_lld_label <- paste0("Interaction p = ", format(round(pint_lld, 3), nsmall = 3))
 
 eth_effects_lld <- lapply(levels(dat_int_lld$EthnicityTot), function(eth) {
     sub <- dat_int_lld %>% filter(EthnicityTot == eth)
-    if (sum(sub$LLD == "Yes") < 5) return(NULL)
-    m  <- lm(distance ~ LLD, data = sub)
+    if (sum(sub$Dyslipidemia == "Yes") < 5) return(NULL)
+    m  <- lm(distance ~ Dyslipidemia, data = sub)
     cf <- coef(summary(m))
     ci <- confint(m)
     data.frame(
@@ -263,7 +263,7 @@ eth_effects_lld <- lapply(levels(dat_int_lld$EthnicityTot), function(eth) {
 
 (pl_fig2_Aint_lld <- ggplot(eth_effects_lld, aes(x = estimate, y = ethnicity, color = sig)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8) +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
     geom_point(size = 4) +
     scale_color_manual(
         values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
@@ -365,9 +365,9 @@ ggsave(file.path(resultsfolder, "distance_hypertension_ethnicity_focus.pdf"), wi
 #### Figure 2: Dyslipidemia compound panel ####
 
 lld_prev <- heliusdist %>%
-    filter(!is.na(LLD), EthnicityTot != "Other") %>%
+    filter(!is.na(Dyslipidemia), EthnicityTot != "Other") %>%
     group_by(EthnicityTot) %>%
-    summarise(prev = mean(LLD == "Yes") * 100, n = n(), .groups = "drop") %>%
+    summarise(prev = mean(Dyslipidemia == "Yes") * 100, n = n(), .groups = "drop") %>%
     mutate(EthnicityTot = forcats::fct_reorder(EthnicityTot, prev))
 
 pl_lld_prev <- ggplot(lld_prev, aes(x = prev, y = EthnicityTot, fill = EthnicityTot)) +
@@ -380,13 +380,13 @@ pl_lld_prev <- ggplot(lld_prev, aes(x = prev, y = EthnicityTot, fill = Ethnicity
     theme(axis.text.y = element_text(size = rel(0.75)))
 
 pl_violin_sas_lld <- ggplot(
-    data = heliusdist %>% filter(!is.na(LLD),
+    data = heliusdist %>% filter(!is.na(Dyslipidemia),
                                  EthnicityTot %in% c("Dutch", "South-Asian Surinamese")),
-    aes(x = LLD, y = distance)) +
+    aes(x = Dyslipidemia, y = distance)) +
     geom_violin(colour = NA, aes(fill = EthnicityTot), alpha = 0.75) +
     geom_boxplot(fill = "white", width = 0.2) +
     scale_fill_manual(values = eth_colors, guide = "none") +
-    labs(y = "Bray-Curtis dissimilarity over FU time", x = "Dyslipidemia / LLD use",
+    labs(y = "Bray-Curtis dissimilarity over FU time", x = "Dyslipidemia",
          title = "Dyslipidemia \u00d7 ethnicity\n(Dutch vs. South-Asian Surinamese)") +
     stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0,
                        hide.ns = FALSE, label = "p.format") +
@@ -412,9 +412,9 @@ prev_long <- bind_rows(
         summarise(prev = mean(HT_BPMed == "Yes") * 100, .groups = "drop") %>%
         mutate(condition = "Hypertension"),
     helius %>%
-        filter(ID %in% paired_ids, !is.na(LLD), EthnicityTot != "Other") %>%
+        filter(ID %in% paired_ids, !is.na(Dyslipidemia), EthnicityTot != "Other") %>%
         group_by(EthnicityTot, timepoint) %>%
-        summarise(prev = mean(LLD == "Yes") * 100, .groups = "drop") %>%
+        summarise(prev = mean(Dyslipidemia == "Yes") * 100, .groups = "drop") %>%
         mutate(condition = "Dyslipidemia")
 ) %>%
     mutate(
@@ -430,28 +430,33 @@ eth_order <- prev_long %>%
     as.character()
 prev_long <- prev_long %>% mutate(EthnicityTot = factor(EthnicityTot, levels = eth_order))
 
-(pl_fig2_prev <- ggplot(prev_long,
+(pl_fig2_prev <- ggplot(prev_long %>%
+                            mutate(EthnicityTot = fct_recode(EthnicityTot,
+                                "South-Asian\nSurinamese" = "South-Asian Surinamese")),
                         aes(x = prev, y = EthnicityTot, fill = EthnicityTot, alpha = timepoint)) +
     geom_col(position = position_dodge(width = 0.75), width = 0.65,
              color = "black", linewidth = 0.3) +
     geom_text(
         data = prev_long %>% filter(condition == "Diabetes",
-                                    EthnicityTot == tail(eth_order, 1)),
+                                    EthnicityTot == head(eth_order, 1)),
         aes(x = prev + 0.5, y = EthnicityTot,
             label = ifelse(timepoint == "baseline", "Baseline", "Follow-up"),
             group = timepoint),
         position = position_dodge(width = 0.75),
         hjust = 0, size = 3, color = "grey30", inherit.aes = FALSE
     ) +
-    scale_alpha_manual(values = c("baseline" = 0.85, "follow-up" = 0.35), guide = "none") +
-    scale_fill_manual(values = eth_colors, guide = "none") +
+    scale_alpha_manual(values = c("baseline" = 0.35, "follow-up" = 0.85), guide = "none") +
+    scale_fill_manual(values = setNames(eth_colors,
+                                        gsub("South-Asian Surinamese", "South-Asian\nSurinamese",
+                                             names(eth_colors))),
+                      guide = "none") +
     scale_x_continuous(expand = expansion(mult = c(0, 0.2))) +
     facet_wrap(~condition, scales = "free_x", nrow = 1) +
     labs(x = "Prevalence (%)", y = NULL,
-         title = "CMB disease prevalence") +
+         title = "Disease prevalence") +
     theme_Publication() +
     theme(legend.position = "none",
-          axis.text.y = element_text(size = rel(0.75))))
+          axis.text.y = element_text(size = rel(1.0))))
 ggsave(file.path(resultsfolder, "cmb_prevalence_combined.pdf"), width = 12, height = 5)
 
 #### Figure 2C — Hypertension & metabolic syndrome ####
@@ -529,11 +534,11 @@ ggsave(file.path(resultsfolder, "clinicaloutcomes_bray.pdf"), width = 18, height
 ggsave(file.path(resultsfolder, "distance_hypertension.pdf"), width = 4, height = 5)
 
 # distance_dyslipidemia.pdf
-(pl_fig2_C2 <- ggplot(data = heliusdist %>% filter(!is.na(LLD)), aes(x = LLD, y = distance)) +
-    geom_violin(colour = NA, aes(fill = LLD)) +
+(pl_fig2_C2 <- ggplot(data = heliusdist %>% filter(!is.na(Dyslipidemia)), aes(x = Dyslipidemia, y = distance)) +
+    geom_violin(colour = NA, aes(fill = Dyslipidemia)) +
     geom_boxplot(fill = "white", width = 0.2) +
     scale_fill_simpsons(guide = "none") +
-    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Dyslipidemia / LLD use (baseline)", title = "Dyslipidemia") +
+    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Dyslipidemia (baseline)", title = "Dyslipidemia") +
     stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
                        label = "p.signif") +
     theme_Publication())
@@ -568,3 +573,94 @@ ggsave(file.path(resultsfolder, "newdiabetes.pdf"), width = 4.5, height = 5)
      facet_wrap(~EthnicityTot) +
      theme_Publication())
 ggsave(file.path(resultsfolder, "newdiabetes_sas_dutch.pdf"), width = 5.5, height = 5)
+
+#### Panel D — Bray-Curtis by diabetes status, all ethnicities (ordered by mean difference) ####
+
+# Ethnicity order: largest mean difference (Yes - No) first
+eth_order_dm <- heliusdist %>%
+    filter(!is.na(DM), EthnicityTot != "Other") %>%
+    group_by(EthnicityTot, DM) %>%
+    summarise(m = mean(distance, na.rm = TRUE), .groups = "drop") %>%
+    tidyr::pivot_wider(names_from = DM, values_from = m) %>%
+    mutate(diff = Yes - No) %>%
+    arrange(desc(diff)) %>%
+    pull(EthnicityTot) %>%
+    as.character()
+
+dat_violin_dm <- heliusdist %>%
+    filter(!is.na(DM), EthnicityTot != "Other") %>%
+    mutate(DM           = relevel(factor(DM), ref = "No"),
+           EthnicityTot = factor(EthnicityTot, levels = eth_order_dm))
+
+pvals_dm <- dat_violin_dm %>%
+    group_by(EthnicityTot) %>%
+    summarise(
+        p.value  = wilcox.test(distance ~ DM)$p.value,
+        .groups  = "drop"
+    ) %>%
+    mutate(
+        group1     = "No",
+        group2     = "Yes",
+        label      = ifelse(p.value < 0.001, "p < 0.001", paste0("p = ", format(round(p.value, 3), nsmall = 3))),
+        y.position = max(dat_violin_dm$distance, na.rm = TRUE) * 1.05
+    )
+
+(pl_fig2_D_violin <- ggplot(dat_violin_dm,
+                            aes(x = DM, y = distance, fill = EthnicityTot)) +
+    geom_violin(aes(alpha = DM), colour = NA) +
+    geom_boxplot(fill = "white", colour = "grey30", width = 0.2, outlier.shape = NA) +
+    stat_pvalue_manual(pvals_dm %>% filter(p.value < 0.05), label = "label",
+                       tip.length = 0, bracket.size = 0, color = "black", size = 3) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    scale_alpha_manual(values = c("No" = 0.35, "Yes" = 0.85), guide = "none") +
+    facet_wrap(~EthnicityTot, nrow = 1) +
+    labs(x = "Diabetes at baseline", y = "Bray-Curtis dissimilarity",
+         title = "Microbiome instability by diabetes status") +
+    theme_Publication() +
+    theme(strip.text = element_text(size = rel(0.65), face = "bold")))
+ggsave(file.path(resultsfolder, "violin_dm_byethnicity.pdf"), width = 14, height = 5)
+
+#### Panel E — Bray-Curtis by dyslipidemia status, all ethnicities (ordered by mean difference) ####
+
+eth_order_lld <- heliusdist %>%
+    filter(!is.na(Dyslipidemia), EthnicityTot != "Other") %>%
+    group_by(EthnicityTot, Dyslipidemia) %>%
+    summarise(m = mean(distance, na.rm = TRUE), .groups = "drop") %>%
+    tidyr::pivot_wider(names_from = Dyslipidemia, values_from = m) %>%
+    mutate(diff = Yes - No) %>%
+    arrange(desc(diff)) %>%
+    pull(EthnicityTot) %>%
+    as.character()
+
+dat_violin_lld <- heliusdist %>%
+    filter(!is.na(Dyslipidemia), EthnicityTot != "Other") %>%
+    mutate(Dyslipidemia = relevel(factor(Dyslipidemia), ref = "No"),
+           EthnicityTot = factor(EthnicityTot, levels = eth_order_lld))
+
+pvals_lld <- dat_violin_lld %>%
+    group_by(EthnicityTot) %>%
+    summarise(
+        p.value  = wilcox.test(distance ~ Dyslipidemia)$p.value,
+        .groups  = "drop"
+    ) %>%
+    mutate(
+        group1     = "No",
+        group2     = "Yes",
+        label      = ifelse(p.value < 0.001, "p < 0.001", paste0("p = ", format(round(p.value, 3), nsmall = 3))),
+        y.position = max(dat_violin_lld$distance, na.rm = TRUE) * 1.05
+    )
+
+(pl_fig2_E_violin <- ggplot(dat_violin_lld,
+                             aes(x = Dyslipidemia, y = distance, fill = EthnicityTot)) +
+    geom_violin(aes(alpha = Dyslipidemia), colour = NA) +
+    geom_boxplot(fill = "white", colour = "grey30", width = 0.2, outlier.shape = NA) +
+    stat_pvalue_manual(pvals_lld %>% filter(p.value < 0.05), label = "label",
+                       tip.length = 0, bracket.size = 0, color = "black", size = 3) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    scale_alpha_manual(values = c("No" = 0.35, "Yes" = 0.85), guide = "none") +
+    facet_wrap(~EthnicityTot, nrow = 1) +
+    labs(x = "Dyslipidemia at baseline", y = "Bray-Curtis dissimilarity",
+         title = "Microbiome instability by dyslipidemia status") +
+    theme_Publication() +
+    theme(strip.text = element_text(size = rel(0.65), face = "bold")))
+ggsave(file.path(resultsfolder, "violin_lld_byethnicity.pdf"), width = 14, height = 5)

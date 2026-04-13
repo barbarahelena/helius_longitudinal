@@ -303,48 +303,65 @@ ggsave(file.path(resultsfolder, "hypertension_deltashannon.pdf"), width = 4, hei
              color = ""))
 ggsave(file.path(resultsfolder, "metsyn_deltashannon.pdf"), width = 4, height = 4)
 
-#### Effect sizes: DM, HTN, LLD on baseline Shannon ####
+#### Effect sizes: DM, HTN, LLD on Shannon change (LMM, disease x timepoint interaction) ####
 
-extract_lm_effect <- function(model, label) {
-    cf <- coef(summary(model))
-    ci <- confint(model)
+# Propagate baseline disease status to both timepoints so the grouping variable
+# reflects diagnosis at baseline for all rows in the paired dataset.
+dftot2_lmm <- dftot2 %>%
+    group_by(ID) %>%
+    mutate(
+        DM_bl           = DM[timepoint == "baseline"][1],
+        HT_BPMed_bl     = HT_BPMed[timepoint == "baseline"][1],
+        Dyslipidemia_bl = Dyslipidemia[timepoint == "baseline"][1]
+    ) %>%
+    ungroup() %>%
+    mutate(timepoint = factor(timepoint, levels = c("baseline", "follow-up")))
+
+extract_lmm_interaction <- function(data, outcome, disease_bl, label) {
+    df <- data %>%
+        filter(!is.na(.data[[disease_bl]])) %>%
+        mutate(
+            outcome = .data[[outcome]],
+            disease = relevel(factor(.data[[disease_bl]]), ref = "No")
+        )
+    model   <- lmer(outcome ~ disease * timepoint + (1|ID), data = df)
+    cf      <- coef(summary(model))
+    ci      <- confint(model, method = "Wald")
+    int_row <- grep(":timepoint", rownames(cf), value = TRUE)[1]
+    int_ci  <- grep(":timepoint", rownames(ci), value = TRUE)[1]
     data.frame(
         label     = label,
-        estimate  = cf[2, "Estimate"],
-        conf.low  = ci[2, 1],
-        conf.high = ci[2, 2],
-        p.value   = cf[2, "Pr(>|t|)"],
+        estimate  = cf[int_row, "Estimate"],
+        conf.low  = ci[int_ci, 1],
+        conf.high = ci[int_ci, 2],
+        p.value   = cf[int_row, "Pr(>|t|)"],
         stringsAsFactors = FALSE
     )
 }
 
-mod_shan_dm  <- lm(shannon ~ DM,       data = dftot %>% filter(!is.na(DM))       %>% mutate(DM       = relevel(factor(DM),       ref = "No")))
-mod_shan_ht  <- lm(shannon ~ HT_BPMed, data = dftot %>% filter(!is.na(HT_BPMed)) %>% mutate(HT_BPMed = relevel(factor(HT_BPMed), ref = "No")))
-mod_shan_lld <- lm(shannon ~ LLD,      data = dftot %>% filter(!is.na(LLD))      %>% mutate(LLD      = relevel(factor(LLD),      ref = "No")))
-
-shan_effects_df <- bind_rows(
-    extract_lm_effect(mod_shan_dm,  "Diabetes"),
-    extract_lm_effect(mod_shan_ht,  "Hypertension"),
-    extract_lm_effect(mod_shan_lld, "Dyslipidemia")
+shan_lmm_effects_df <- bind_rows(
+    extract_lmm_interaction(dftot2_lmm, "shannon", "DM_bl",           "Diabetes"),
+    extract_lmm_interaction(dftot2_lmm, "shannon", "HT_BPMed_bl",     "Hypertension"),
+    extract_lmm_interaction(dftot2_lmm, "shannon", "Dyslipidemia_bl", "Dyslipidemia")
 ) %>% mutate(
     sig   = ifelse(p.value < 0.05, "p < 0.05", "p \u2265 0.05"),
     label = factor(label, levels = c("Dyslipidemia", "Hypertension", "Diabetes"))
 )
 
-(pl_shan_A <- ggplot(shan_effects_df, aes(x = estimate, y = label, color = sig)) +
+(pl_shan_A <- ggplot(shan_lmm_effects_df, aes(x = estimate, y = label, color = sig)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8) +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
     geom_point(size = 4) +
     scale_color_manual(
         values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
         name = NULL
     ) +
-    labs(x = "Shannon (\u00b1 95% CI)",
+    labs(x = "Shannon change (\u00b1 95% CI)",
          y = NULL,
-         title = "Effect on Shannon diversity") +
+         title = "Shannon diversity change") +
     theme_Publication() +
     theme(legend.position = "bottom"))
-ggsave(file.path(resultsfolder, "effectsize_cmb_shannon.pdf"), width = 5, height = 4)
+ggsave(file.path(resultsfolder, "effectsize_cmb_shannon_change.pdf"), width = 5, height = 4)
 
 #### Per-ethnicity effect of DM on Shannon ####
 
@@ -378,7 +395,7 @@ shan_effects_dm <- lapply(levels(dat_shan_dm$EthnicityTot), function(eth) {
 
 (pl_shan_Aint_dm <- ggplot(shan_effects_dm, aes(x = estimate, y = ethnicity, color = sig)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8) +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
     geom_point(size = 4) +
     scale_color_manual(
         values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
@@ -425,7 +442,7 @@ shan_effects_ht <- lapply(levels(dat_shan_ht$EthnicityTot), function(eth) {
 
 (pl_shan_Aint_ht <- ggplot(shan_effects_ht, aes(x = estimate, y = ethnicity, color = sig)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8) +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
     geom_point(size = 4) +
     scale_color_manual(
         values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
@@ -443,18 +460,18 @@ ggsave(file.path(resultsfolder, "effectsize_ht_shannon_byethnicity.pdf"), width 
 #### Per-ethnicity effect of LLD on Shannon ####
 
 dat_shan_lld <- dftot %>%
-    filter(!is.na(LLD), EthnicityTot != "Other") %>%
-    mutate(LLD          = relevel(factor(LLD), ref = "No"),
+    filter(!is.na(Dyslipidemia), EthnicityTot != "Other") %>%
+    mutate(Dyslipidemia = relevel(factor(Dyslipidemia), ref = "No"),
            EthnicityTot = factor(EthnicityTot))
 
-mod_shan_lld_int    <- lm(shannon ~ LLD * EthnicityTot, data = dat_shan_lld)
-pint_shan_lld       <- drop1(mod_shan_lld_int, scope = ~LLD:EthnicityTot, test = "F")["LLD:EthnicityTot", "Pr(>F)"]
+mod_shan_lld_int    <- lm(shannon ~ Dyslipidemia * EthnicityTot, data = dat_shan_lld)
+pint_shan_lld       <- drop1(mod_shan_lld_int, scope = ~Dyslipidemia:EthnicityTot, test = "F")["Dyslipidemia:EthnicityTot", "Pr(>F)"]
 pint_shan_lld_label <- paste0("Interaction p = ", format(round(pint_shan_lld, 3), nsmall = 3))
 
 shan_effects_lld <- lapply(levels(dat_shan_lld$EthnicityTot), function(eth) {
     sub <- dat_shan_lld %>% filter(EthnicityTot == eth)
-    if (sum(sub$LLD == "Yes") < 5) return(NULL)
-    m  <- lm(shannon ~ LLD, data = sub)
+    if (sum(sub$Dyslipidemia == "Yes") < 5) return(NULL)
+    m  <- lm(shannon ~ Dyslipidemia, data = sub)
     cf <- coef(summary(m))
     ci <- confint(m)
     data.frame(
@@ -472,7 +489,7 @@ shan_effects_lld <- lapply(levels(dat_shan_lld$EthnicityTot), function(eth) {
 
 (pl_shan_Aint_lld <- ggplot(shan_effects_lld, aes(x = estimate, y = ethnicity, color = sig)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8) +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
     geom_point(size = 4) +
     scale_color_manual(
         values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
