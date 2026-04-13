@@ -1,16 +1,15 @@
 ## Figure 2 — Cardiometabolic disease and microbiome instability (16S)
 ## Beta-diversity (Bray-Curtis distance) analyses
 ##
-## Figure panels (named pl_fig2_*):
-##   2A: effect sizes (DM, HTN, MetSyn) — dot-whisker
-##   2B: diabetes × ethnicity (Dutch + SAS focus + prevalence bar)
-##   2D: new-onset diabetes, Dutch + SAS only
+## Active panels (used in 3_assemble_figure.R):
+##   A — pl_fig2_prev: disease prevalence by ethnicity (faceted bar, baseline + follow-up)
+##   B — pl_bc_extended: multi-domain predictors of Bray-Curtis instability (forest plot)
 ##
-## Supplementary PDFs also produced:
-##   distance_dm.pdf, braycurtis_deltahba1c.pdf
-##   distance_ethnictiy_diabetes.pdf (all ethnicities)
-##   clinicaloutcomes_bray.pdf, distance_hypertension.pdf, distance_metsyn.pdf
-##   newdiabetes.pdf (all ethnicities)
+## Companion outputs (saved as PDFs, not in main assembled figure):
+##   effectsize_braycurtis_extended_combined.pdf  (forest + ethnicity dots + bar)
+##
+## Archived plots (older exploratory panels):
+##   see scripts/2_cmb_microbiome/archive_betadiversity_plots.R
 
 ## Libraries
 library(phyloseq)
@@ -52,11 +51,10 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 }
 
 #### Load data ####
-df <- readRDS("data/16s/archive/clin_betadiversity.RDS") %>% dplyr::select(1:2, sampleID = ID, 4:5)
-helius <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
-df <- left_join(df, helius, by = c("sampleID"))
-ev_bray <- read.csv("results/1_longitudinal_change/ordination/expl_var_bray.csv", header = FALSE)
-heliusdist <- readRDS("data/16s/archive/braydistance_delta.RDS")
+helius    <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
+heliusdist <- readRDS("data/16s/braydistance_delta.RDS") %>%
+    dplyr::select(-any_of(names(helius)), ID) %>%
+    left_join(helius %>% filter(timepoint == "baseline"), by = "ID")
 
 #### Output folder ####
 resultsfolder <- "results/2_cmb_microbiome"
@@ -72,82 +70,13 @@ eth_colors <- c(
     "Moroccan"               = "#D5E4A2FF"
 )
 
-#### Figure 2A — Effect sizes: DM, HTN, MetSyn on Bray-Curtis ####
+#### Per-ethnicity Bray-Curtis effects — data used by ethnicity companion panel ####
 
-# Supplementary individual plots
-ggplot(data = heliusdist %>% filter(!is.na(DM)), aes(x = DM, y = distance)) +
-    geom_violin(colour = NA, aes(fill = DM)) +
-    geom_boxplot(fill = "white", width = 0.2) +
-    scale_fill_simpsons(guide = "none") +
-    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Diabetes (baseline)", title = "Diabetes") +
-    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
-                       label = "p.signif") +
-    theme_Publication()
-ggsave(file.path(resultsfolder, "distance_dm.pdf"), width = 4, height = 5)
-
-ggplot(data = heliusdist %>% filter(!is.na(HbA1c_delta)), aes(x = distance, y = HbA1c_delta)) +
-    geom_jitter(color = "royalblue", alpha = 0.3) +
-    geom_smooth(color = "black", method = "lm") +
-    labs(y = "Delta HbA1c", x= "Bray-Curtis dissimilarity over FU time", title = "Bray-Curtis and HbA1c change") +
-    stat_cor() +
-    theme_Publication()
-ggsave(file.path(resultsfolder, "braycurtis_deltahba1c.pdf"), width = 4.5, height = 5)
-
-# Effect size dot-whisker: DM, HTN, MetSyn — uses base-R lm(), no extra dependencies
-extract_lm_effect <- function(model, label) {
-    cf <- coef(summary(model))
-    ci <- confint(model)
-    data.frame(
-        label     = label,
-        estimate  = cf[2, "Estimate"],
-        conf.low  = ci[2, 1],
-        conf.high = ci[2, 2],
-        p.value   = cf[2, "Pr(>|t|)"],
-        stringsAsFactors = FALSE
-    )
-}
-
-mod_dm  <- lm(distance ~ DM,       data = heliusdist %>% filter(!is.na(DM))       %>% mutate(DM       = relevel(factor(DM),       ref = "No")))
-mod_ht  <- lm(distance ~ HT_BPMed, data = heliusdist %>% filter(!is.na(HT_BPMed)) %>% mutate(HT_BPMed = relevel(factor(HT_BPMed), ref = "No")))
-mod_lld <- lm(distance ~ Dyslipidemia, data = heliusdist %>% filter(!is.na(Dyslipidemia)) %>% mutate(Dyslipidemia = relevel(factor(Dyslipidemia), ref = "No")))
-
-effects_df <- bind_rows(
-    extract_lm_effect(mod_dm,  "Diabetes"),
-    extract_lm_effect(mod_ht,  "Hypertension"),
-    extract_lm_effect(mod_lld, "Dyslipidemia")
-) %>% mutate(
-    sig   = ifelse(p.value < 0.05, "p < 0.05", "p \u2265 0.05"),
-    label = factor(label, levels = c("Dyslipidemia", "Hypertension", "Diabetes"))
-)
-
-(pl_fig2_A <- ggplot(effects_df, aes(x = estimate, y = label, color = sig)) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
-    geom_point(size = 4) +
-    scale_color_manual(
-        values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
-        name = NULL
-    ) +
-    labs(x = "Bray-Curtis (\u00b1 95% CI)",
-         y = NULL,
-         title = "Microbiome instability") +
-    theme_Publication() +
-    theme(legend.position = "bottom"))
-ggsave(file.path(resultsfolder, "effectsize_cmb_bray.pdf"), width = 5, height = 4)
-
-#### Figure 2A (interaction) — Per-ethnicity effect of DM on Bray-Curtis ####
-
-# Interaction model: DM × EthnicityTot
 dat_int <- heliusdist %>%
     filter(!is.na(DM), EthnicityTot != "Other") %>%
     mutate(DM           = relevel(factor(DM), ref = "No"),
            EthnicityTot = factor(EthnicityTot))
 
-mod_dm_int <- lm(distance ~ DM * EthnicityTot, data = dat_int)
-pint_dm    <- drop1(mod_dm_int, scope = ~DM:EthnicityTot, test = "F")["DM:EthnicityTot", "Pr(>F)"]
-pint_label <- paste0("Interaction p = ", format(round(pint_dm, 3), nsmall = 3))
-
-# Per-ethnicity stratified LMs for clean per-group CIs
 eth_effects_dm <- lapply(levels(dat_int$EthnicityTot), function(eth) {
     sub <- dat_int %>% filter(EthnicityTot == eth)
     if (sum(sub$DM == "Yes") < 5) return(NULL)
@@ -167,33 +96,10 @@ eth_effects_dm <- lapply(levels(dat_int$EthnicityTot), function(eth) {
     mutate(sig       = ifelse(p.value < 0.05, "p < 0.05", "p \u2265 0.05"),
            ethnicity = forcats::fct_reorder(ethnicity, estimate))
 
-(pl_fig2_Aint <- ggplot(eth_effects_dm, aes(x = estimate, y = ethnicity, color = sig)) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
-    geom_point(size = 4) +
-    scale_color_manual(
-        values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
-        name = NULL
-    ) +
-    annotate("text", x = Inf, y = Inf, hjust = 1.05, vjust = 1.8,
-             label = pint_label, size = 3.2, fontface = "italic", color = "grey30") +
-    labs(x = "Bray-Curtis (\u00b1 95% CI)",
-         y = NULL,
-         title = "Diabetes \u00d7 ethnicity") +
-    theme_Publication() +
-    theme(legend.position = "bottom"))
-ggsave(file.path(resultsfolder, "effectsize_dm_byethnicity.pdf"), width = 5, height = 5)
-
-#### Per-ethnicity effect of HT on Bray-Curtis ####
-
 dat_int_ht <- heliusdist %>%
     filter(!is.na(HT_BPMed), EthnicityTot != "Other") %>%
     mutate(HT_BPMed     = relevel(factor(HT_BPMed), ref = "No"),
            EthnicityTot = factor(EthnicityTot))
-
-mod_ht_int    <- lm(distance ~ HT_BPMed * EthnicityTot, data = dat_int_ht)
-pint_ht       <- drop1(mod_ht_int, scope = ~HT_BPMed:EthnicityTot, test = "F")["HT_BPMed:EthnicityTot", "Pr(>F)"]
-pint_ht_label <- paste0("Interaction p = ", format(round(pint_ht, 3), nsmall = 3))
 
 eth_effects_ht <- lapply(levels(dat_int_ht$EthnicityTot), function(eth) {
     sub <- dat_int_ht %>% filter(EthnicityTot == eth)
@@ -214,33 +120,10 @@ eth_effects_ht <- lapply(levels(dat_int_ht$EthnicityTot), function(eth) {
     mutate(sig       = ifelse(p.value < 0.05, "p < 0.05", "p \u2265 0.05"),
            ethnicity = forcats::fct_reorder(ethnicity, estimate))
 
-(pl_fig2_Aint_ht <- ggplot(eth_effects_ht, aes(x = estimate, y = ethnicity, color = sig)) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
-    geom_point(size = 4) +
-    scale_color_manual(
-        values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
-        name = NULL
-    ) +
-    annotate("text", x = Inf, y = Inf, hjust = 1.05, vjust = 1.8,
-             label = pint_ht_label, size = 3.2, fontface = "italic", color = "grey30") +
-    labs(x = "Bray-Curtis effect of hypertension (\u00b1 95% CI)",
-         y = NULL,
-         title = "Hypertension effect on\nmicrobiome instability by ethnicity") +
-    theme_Publication() +
-    theme(legend.position = "bottom"))
-ggsave(file.path(resultsfolder, "effectsize_ht_byethnicity.pdf"), width = 5, height = 5)
-
-#### Per-ethnicity effect of LLD on Bray-Curtis ####
-
 dat_int_lld <- heliusdist %>%
     filter(!is.na(Dyslipidemia), EthnicityTot != "Other") %>%
     mutate(Dyslipidemia = relevel(factor(Dyslipidemia), ref = "No"),
            EthnicityTot = factor(EthnicityTot))
-
-mod_lld_int    <- lm(distance ~ Dyslipidemia * EthnicityTot, data = dat_int_lld)
-pint_lld       <- drop1(mod_lld_int, scope = ~Dyslipidemia:EthnicityTot, test = "F")["Dyslipidemia:EthnicityTot", "Pr(>F)"]
-pint_lld_label <- paste0("Interaction p = ", format(round(pint_lld, 3), nsmall = 3))
 
 eth_effects_lld <- lapply(levels(dat_int_lld$EthnicityTot), function(eth) {
     sub <- dat_int_lld %>% filter(EthnicityTot == eth)
@@ -261,142 +144,7 @@ eth_effects_lld <- lapply(levels(dat_int_lld$EthnicityTot), function(eth) {
     mutate(sig       = ifelse(p.value < 0.05, "p < 0.05", "p \u2265 0.05"),
            ethnicity = forcats::fct_reorder(ethnicity, estimate))
 
-(pl_fig2_Aint_lld <- ggplot(eth_effects_lld, aes(x = estimate, y = ethnicity, color = sig)) +
-    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
-    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.15) +
-    geom_point(size = 4) +
-    scale_color_manual(
-        values = c("p < 0.05" = "#e63946", "p \u2265 0.05" = "grey55"),
-        name = NULL
-    ) +
-    annotate("text", x = Inf, y = Inf, hjust = 1.05, vjust = 1.8,
-             label = pint_lld_label, size = 3.2, fontface = "italic", color = "grey30") +
-    labs(x = "Bray-Curtis (\u00b1 95% CI)",
-         y = NULL,
-         title = "Dyslipidemia \u00d7 ethnicity") +
-    theme_Publication() +
-    theme(legend.position = "bottom"))
-ggsave(file.path(resultsfolder, "effectsize_lld_byethnicity.pdf"), width = 5, height = 5)
-
-#### Figure 2B — Ethnicity × diabetes interaction ####
-
-# Supplementary: all ethnicities
-heliusdist %>% filter(!is.na(DM)) %>% group_by(EthnicityTot, DM) %>% summarise(count = length(DM), .groups = "drop_last")
-ggplot(data = heliusdist %>% filter(!is.na(DM)), aes(x = DM, y = distance)) +
-    geom_violin(colour = NA, aes(fill = DM)) +
-    geom_boxplot(fill = "white", width = 0.2) +
-    scale_fill_simpsons(guide = "none") +
-    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Diabetes", title = "Diabetes") +
-    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
-                       label = "p.format") +
-    facet_wrap(~EthnicityTot) +
-    theme_Publication()
-ggsave(file.path(resultsfolder, "distance_ethnictiy_diabetes.pdf"), width = 6, height = 11)
-
-# Diabetes prevalence by ethnicity — left sub-panel of 2B
-dm_prev <- heliusdist %>%
-    filter(!is.na(DM), EthnicityTot != "Other") %>%
-    group_by(EthnicityTot) %>%
-    summarise(prev = mean(DM == "Yes") * 100, n = n(), .groups = "drop") %>%
-    mutate(EthnicityTot = forcats::fct_reorder(EthnicityTot, prev))
-
-pl_prev <- ggplot(dm_prev, aes(x = prev, y = EthnicityTot, fill = EthnicityTot)) +
-    geom_col(alpha = 0.9, width = 0.6) +
-    geom_text(aes(label = sprintf("n=%d", n)), hjust = -0.1, size = 2.8) +
-    scale_x_continuous(expand = expansion(mult = c(0, 0.25))) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    labs(x = "Diabetes prevalence (%)", y = NULL, title = "Diabetes prevalence\nby ethnicity") +
-    theme_Publication() +
-    theme(axis.text.y = element_text(size = rel(0.75)))
-
-# Dutch + South-Asian Surinamese focus — right sub-panel of 2B
-# (the two groups with highest diabetes burden and largest n)
-pl_violin_sas <- ggplot(
-    data = heliusdist %>% filter(!is.na(DM),
-                                 EthnicityTot %in% c("Dutch", "South-Asian Surinamese")),
-    aes(x = DM, y = distance)) +
-    geom_violin(colour = NA, aes(fill = EthnicityTot), alpha = 0.75) +
-    geom_boxplot(fill = "white", width = 0.2) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    labs(y = "Bray-Curtis dissimilarity over FU time", x = "Diabetes",
-         title = "Diabetes \u00d7 ethnicity\n(Dutch vs. South-Asian Surinamese)") +
-    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0,
-                       hide.ns = FALSE, label = "p.format") +
-    facet_wrap(~EthnicityTot) +
-    theme_Publication()
-
-(pl_fig2_B <- ggarrange(pl_prev, pl_violin_sas, ncol = 2, widths = c(1, 1.4)))
-ggsave(file.path(resultsfolder, "distance_diabetes_ethnicity_focus.pdf"), width = 9, height = 5)
-
-#### Figure 2: Hypertension compound panel ####
-
-ht_prev <- heliusdist %>%
-    filter(!is.na(HT_BPMed), EthnicityTot != "Other") %>%
-    group_by(EthnicityTot) %>%
-    summarise(prev = mean(HT_BPMed == "Yes") * 100, n = n(), .groups = "drop") %>%
-    mutate(EthnicityTot = forcats::fct_reorder(EthnicityTot, prev))
-
-pl_ht_prev <- ggplot(ht_prev, aes(x = prev, y = EthnicityTot, fill = EthnicityTot)) +
-    geom_col(alpha = 0.9, width = 0.6) +
-    geom_text(aes(label = sprintf("n=%d", n)), hjust = -0.1, size = 2.8) +
-    scale_x_continuous(expand = expansion(mult = c(0, 0.25))) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    labs(x = "Hypertension prevalence (%)", y = NULL, title = "Hypertension prevalence\nby ethnicity") +
-    theme_Publication() +
-    theme(axis.text.y = element_text(size = rel(0.75)))
-
-pl_violin_sas_ht <- ggplot(
-    data = heliusdist %>% filter(!is.na(HT_BPMed),
-                                 EthnicityTot %in% c("Dutch", "South-Asian Surinamese")),
-    aes(x = HT_BPMed, y = distance)) +
-    geom_violin(colour = NA, aes(fill = EthnicityTot), alpha = 0.75) +
-    geom_boxplot(fill = "white", width = 0.2) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    labs(y = "Bray-Curtis dissimilarity over FU time", x = "Hypertension",
-         title = "Hypertension \u00d7 ethnicity\n(Dutch vs. South-Asian Surinamese)") +
-    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0,
-                       hide.ns = FALSE, label = "p.format") +
-    facet_wrap(~EthnicityTot) +
-    theme_Publication()
-
-(pl_fig2_C <- ggarrange(pl_ht_prev, pl_violin_sas_ht, ncol = 2, widths = c(1, 1.4)))
-ggsave(file.path(resultsfolder, "distance_hypertension_ethnicity_focus.pdf"), width = 9, height = 5)
-
-#### Figure 2: Dyslipidemia compound panel ####
-
-lld_prev <- heliusdist %>%
-    filter(!is.na(Dyslipidemia), EthnicityTot != "Other") %>%
-    group_by(EthnicityTot) %>%
-    summarise(prev = mean(Dyslipidemia == "Yes") * 100, n = n(), .groups = "drop") %>%
-    mutate(EthnicityTot = forcats::fct_reorder(EthnicityTot, prev))
-
-pl_lld_prev <- ggplot(lld_prev, aes(x = prev, y = EthnicityTot, fill = EthnicityTot)) +
-    geom_col(alpha = 0.9, width = 0.6) +
-    geom_text(aes(label = sprintf("n=%d", n)), hjust = -0.1, size = 2.8) +
-    scale_x_continuous(expand = expansion(mult = c(0, 0.25))) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    labs(x = "Dyslipidemia prevalence (%)", y = NULL, title = "Dyslipidemia prevalence\nby ethnicity") +
-    theme_Publication() +
-    theme(axis.text.y = element_text(size = rel(0.75)))
-
-pl_violin_sas_lld <- ggplot(
-    data = heliusdist %>% filter(!is.na(Dyslipidemia),
-                                 EthnicityTot %in% c("Dutch", "South-Asian Surinamese")),
-    aes(x = Dyslipidemia, y = distance)) +
-    geom_violin(colour = NA, aes(fill = EthnicityTot), alpha = 0.75) +
-    geom_boxplot(fill = "white", width = 0.2) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    labs(y = "Bray-Curtis dissimilarity over FU time", x = "Dyslipidemia",
-         title = "Dyslipidemia \u00d7 ethnicity\n(Dutch vs. South-Asian Surinamese)") +
-    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0,
-                       hide.ns = FALSE, label = "p.format") +
-    facet_wrap(~EthnicityTot) +
-    theme_Publication()
-
-(pl_fig2_D <- ggarrange(pl_lld_prev, pl_violin_sas_lld, ncol = 2, widths = c(1, 1.4)))
-ggsave(file.path(resultsfolder, "distance_dyslipidemia_ethnicity_focus.pdf"), width = 9, height = 5)
-
-#### Combined prevalence panel: DM, HT, LLD — baseline + follow-up ####
+#### Panel A — Disease prevalence by ethnicity: DM, HT, Dyslipidemia, MetSyn ####
 
 paired_ids <- heliusdist$ID
 
@@ -415,10 +163,15 @@ prev_long <- bind_rows(
         filter(ID %in% paired_ids, !is.na(Dyslipidemia), EthnicityTot != "Other") %>%
         group_by(EthnicityTot, timepoint) %>%
         summarise(prev = mean(Dyslipidemia == "Yes") * 100, .groups = "drop") %>%
-        mutate(condition = "Dyslipidemia")
+        mutate(condition = "Dyslipidemia"),
+    helius %>%
+        filter(ID %in% paired_ids, !is.na(MetSyn), EthnicityTot != "Other") %>%
+        group_by(EthnicityTot, timepoint) %>%
+        summarise(prev = mean(MetSyn == "Yes") * 100, .groups = "drop") %>%
+        mutate(condition = "Metabolic syndrome")
 ) %>%
     mutate(
-        condition = factor(condition, levels = c("Diabetes", "Hypertension", "Dyslipidemia")),
+        condition = factor(condition, levels = c("Diabetes", "Hypertension", "Dyslipidemia", "Metabolic syndrome")),
         timepoint = factor(timepoint, levels = c("follow-up", "baseline"))
     )
 
@@ -457,210 +210,275 @@ prev_long <- prev_long %>% mutate(EthnicityTot = factor(EthnicityTot, levels = e
     theme_Publication() +
     theme(legend.position = "none",
           axis.text.y = element_text(size = rel(1.0))))
-ggsave(file.path(resultsfolder, "cmb_prevalence_combined.pdf"), width = 12, height = 5)
+ggsave(file.path(resultsfolder, "cmb_prevalence_combined.pdf"), width = 15, height = 5)
 
-#### Figure 2C — Hypertension & metabolic syndrome ####
+#### Panel B — Extended forest plot: multi-domain predictors of Bray-Curtis instability ####
 
-# clinicaloutcomes_bray.pdf (PCoA panels for new CMB diagnoses)
-(dmnewbray <- df %>% filter(!is.na(DM_new)) %>% filter(timepoint == "baseline") %>%
-        ggplot(aes(BrayPCo1, BrayPCo2)) +
-        stat_ellipse(geom = "polygon", aes(color = DM_new, fill = DM_new), type = "norm",
-                     alpha = 0.1) +
-        geom_point(aes(color = DM_new), size = 1, alpha = 0.5) +
-        ggtitle("New diabetes") +
-        xlab(paste0('PCo1 (', round(ev_bray$V1[1], digits = 1),'%)')) +
-        ylab(paste0('PCo2 (', round(ev_bray$V1[2], digits = 1),'%)')) +
-        scale_color_manual(values = pal_lancet()(2)) +
-        scale_fill_manual(values = pal_lancet()(2), guide = "none") +
-        scale_alpha_manual(guide = "none") +
-        theme_Publication() +
-        labs(alpha = "") )
+# Helper: extract lm() effect (predictor in row 2 of coef table)
+extract_lm_effect_ext <- function(data, predictor_var, label, group) {
+    df <- data %>%
+        filter(!is.na(.data[[predictor_var]])) %>%
+        mutate(predictor = .data[[predictor_var]])
+    model <- lm(distance ~ predictor, data = df)
+    cf <- coef(summary(model))
+    ci <- confint(model)
+    data.frame(
+        label     = label,
+        group     = group,
+        estimate  = cf[2, "Estimate"],
+        conf.low  = ci[2, 1],
+        conf.high = ci[2, 2],
+        p.value   = cf[2, "Pr(>|t|)"],
+        stringsAsFactors = FALSE
+    )
+}
 
-(htnewbray <- df %>% filter(!is.na(HT_new)) %>% filter(timepoint == "baseline") %>%
-        ggplot(aes(BrayPCo1, BrayPCo2)) +
-        stat_ellipse(geom = "polygon", aes(color = HT_new, fill = HT_new), type = "norm",
-                     alpha = 0.1) +
-        geom_point(aes(color = HT_new), size = 1, alpha = 0.5) +
-        ggtitle("New hypertension") +
-        xlab(paste0('PCo1 (', round(ev_bray$V1[1], digits = 1),'%)')) +
-        ylab(paste0('PCo2 (', round(ev_bray$V1[2], digits = 1),'%)')) +
-        scale_color_manual(values = pal_lancet()(2)) +
-        scale_fill_manual(values = pal_lancet()(2), guide = "none") +
-        scale_alpha_manual(guide = "none") +
-        theme_Publication() +
-        labs(alpha = "") )
+# Build analysis dataset from wide clinical data + Bray-Curtis distance
+helius_wide <- readRDS("data/clinicaldata/clinicaldata_wide.RDS")
 
-(metsynnewbray <- df %>% filter(!is.na(MetSyn_new)) %>% filter(timepoint == "baseline") %>%
-        ggplot(aes(BrayPCo1, BrayPCo2)) +
-        stat_ellipse(geom = "polygon", aes(color = MetSyn_new, fill = MetSyn_new), type = "norm",
-                     alpha = 0.1) +
-        geom_point(aes(color = MetSyn_new), size = 1, alpha = 0.5) +
-        ggtitle("New metabolic syndrome") +
-        xlab(paste0('PCo1 (', round(ev_bray$V1[1], digits = 1),'%)')) +
-        ylab(paste0('PCo2 (', round(ev_bray$V1[2], digits = 1),'%)')) +
-        scale_color_manual(values = pal_lancet()(2)) +
-        scale_fill_manual(values = pal_lancet()(2), guide = "none") +
-        scale_alpha_manual(guide = "none") +
-        theme_Publication() +
-        labs(alpha = "") )
+heliusdist_ext <- helius_wide %>%
+    left_join(heliusdist %>% dplyr::select(ID, distance), by = "ID") %>%
+    filter(!is.na(distance)) %>%
+    mutate(across(
+        c(Age_baseline, BMI_baseline, DiscrMean_baseline,
+          Protein_baseline_adj, FattyAcids_baseline_adj,
+          Carbohydrates_baseline_adj, Fiber_baseline_adj, Sodium_g_baseline_adj),
+        ~ as.numeric(scale(.))
+    )) %>%
+    mutate(across(
+        c(DM_baseline, HT_BPMed_baseline, Dyslipidemia_baseline, MetSyn_baseline,
+          Statins_baseline, Metformin_baseline, AntiHT_baseline, PPI_baseline,
+          GlucLowDrugs_baseline, PsychoMed_baseline, Cortico_baseline,
+          Smoking_current_baseline, Alcohol_baseline, ExerciseNorm_baseline),
+        ~ relevel(factor(.), ref = "No"),
+        .names = "{.col}"
+    ))
 
-(lldnewbray <- df %>% filter(!is.na(LLD_new)) %>% filter(timepoint == "baseline") %>%
-        ggplot(aes(BrayPCo1, BrayPCo2)) +
-        stat_ellipse(geom = "polygon", aes(color = LLD_new, fill = LLD_new), type = "norm",
-                     alpha = 0.1) +
-        geom_point(aes(color = LLD_new), size = 1, alpha = 0.5) +
-        ggtitle("New lipid lowering drug use") +
-        xlab(paste0('PCo1 (', round(ev_bray$V1[1], digits = 1),'%)')) +
-        ylab(paste0('PCo2 (', round(ev_bray$V1[2], digits = 1),'%)')) +
-        scale_color_manual(values = pal_lancet()(2)) +
-        scale_fill_manual(values = pal_lancet()(2), guide = "none") +
-        scale_alpha_manual(guide = "none") +
-        theme_Publication() +
-        labs(alpha = "") )
-
-ggarrange(dmnewbray, htnewbray, metsynnewbray, lldnewbray, nrow = 1,
-          labels = LETTERS[1:4])
-ggsave(file.path(resultsfolder, "clinicaloutcomes_bray.pdf"), width = 18, height = 5)
-
-# distance_hypertension.pdf
-(pl_fig2_C1 <- ggplot(data = heliusdist %>% filter(!is.na(HT_BPMed)), aes(x = HT_BPMed, y = distance)) +
-    geom_violin(colour = NA, aes(fill = HT_BPMed)) +
-    geom_boxplot(fill = "white", width = 0.2) +
-    scale_fill_simpsons(guide = "none") +
-    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Hypertension (baseline)", title = "Hypertension") +
-    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
-                       label = "p.signif") +
-    theme_Publication())
-ggsave(file.path(resultsfolder, "distance_hypertension.pdf"), width = 4, height = 5)
-
-# distance_dyslipidemia.pdf
-(pl_fig2_C2 <- ggplot(data = heliusdist %>% filter(!is.na(Dyslipidemia)), aes(x = Dyslipidemia, y = distance)) +
-    geom_violin(colour = NA, aes(fill = Dyslipidemia)) +
-    geom_boxplot(fill = "white", width = 0.2) +
-    scale_fill_simpsons(guide = "none") +
-    labs(y = "Bray-Curtis dissimilarity over FU time", x= "Dyslipidemia (baseline)", title = "Dyslipidemia") +
-    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
-                       label = "p.signif") +
-    theme_Publication())
-ggsave(file.path(resultsfolder, "distance_dyslipidemia.pdf"), width = 4, height = 5)
-
-#### Figure 2D — New-onset diabetes, Dutch + South-Asian Surinamese ####
-
-# Supplementary: all ethnicities combined
-heliusdist %>% filter(!is.na(DM_new)) %>%
-    ggplot(aes(x = DM_new, y = distance, fill = DM_new)) +
-    geom_violin(colour = NA) +
-    geom_boxplot(fill = "white", width = 0.2) +
-    scale_fill_simpsons(guide = "none") +
-    labs(y = "Bray-Curtis dissimilarity over FU time", x= "New diabetes", title = "New diabetes diagnosis") +
-    stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0,
-                       hide.ns = FALSE, label = "p.format") +
-    theme_Publication()
-ggsave(file.path(resultsfolder, "newdiabetes.pdf"), width = 4.5, height = 5)
-
-# Main figure panel: restrict to Dutch + SAS where directional signal is strongest
-(pl_fig2_D <- heliusdist %>%
-     filter(!is.na(DM_new),
-            EthnicityTot %in% c("Dutch", "South-Asian Surinamese")) %>%
-     ggplot(aes(x = DM_new, y = distance, fill = EthnicityTot)) +
-     geom_violin(colour = NA, alpha = 0.75) +
-     geom_boxplot(fill = "white", width = 0.2) +
-     scale_fill_manual(values = eth_colors, guide = "none") +
-     labs(y = "Bray-Curtis dissimilarity over FU time", x = "New diabetes diagnosis",
-          title = "New-onset diabetes\n(Dutch & South-Asian Surinamese)") +
-     stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0,
-                        hide.ns = FALSE, label = "p.format") +
-     facet_wrap(~EthnicityTot) +
-     theme_Publication())
-ggsave(file.path(resultsfolder, "newdiabetes_sas_dutch.pdf"), width = 5.5, height = 5)
-
-#### Panel D — Bray-Curtis by diabetes status, all ethnicities (ordered by mean difference) ####
-
-# Ethnicity order: largest mean difference (Yes - No) first
-eth_order_dm <- heliusdist %>%
-    filter(!is.na(DM), EthnicityTot != "Other") %>%
-    group_by(EthnicityTot, DM) %>%
-    summarise(m = mean(distance, na.rm = TRUE), .groups = "drop") %>%
-    tidyr::pivot_wider(names_from = DM, values_from = m) %>%
-    mutate(diff = Yes - No) %>%
-    arrange(desc(diff)) %>%
-    pull(EthnicityTot) %>%
-    as.character()
-
-dat_violin_dm <- heliusdist %>%
-    filter(!is.na(DM), EthnicityTot != "Other") %>%
-    mutate(DM           = relevel(factor(DM), ref = "No"),
-           EthnicityTot = factor(EthnicityTot, levels = eth_order_dm))
-
-pvals_dm <- dat_violin_dm %>%
-    group_by(EthnicityTot) %>%
-    summarise(
-        p.value  = wilcox.test(distance ~ DM)$p.value,
-        .groups  = "drop"
-    ) %>%
+bc_ext_effects <- bind_rows(
+    # Cardiometabolic disease
+    extract_lm_effect_ext(heliusdist_ext, "DM_baseline",           "Diabetes",                          "Disease"),
+    extract_lm_effect_ext(heliusdist_ext, "HT_BPMed_baseline",     "Hypertension",                      "Disease"),
+    extract_lm_effect_ext(heliusdist_ext, "Dyslipidemia_baseline", "Dyslipidemia",                      "Disease"),
+    extract_lm_effect_ext(heliusdist_ext, "MetSyn_baseline",       "Metabolic syndrome",                "Disease"),
+    # Medications
+    extract_lm_effect_ext(heliusdist_ext, "Statins_baseline",      "Statins",                           "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "Metformin_baseline",    "Metformin",                         "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "AntiHT_baseline",       "Antihypertensives",                 "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "PPI_baseline",          "PPI",                               "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "GlucLowDrugs_baseline", "Glucose-lowering drugs",            "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "PsychoMed_baseline",    "Psychotropics",                     "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "Cortico_baseline",      "Corticosteroids",                   "Medication"),
+    # Risk factors
+    extract_lm_effect_ext(heliusdist_ext, "Smoking_current_baseline", "Current smoking",               "Risk factors"),
+    extract_lm_effect_ext(heliusdist_ext, "Alcohol_baseline",         "Alcohol use",                   "Risk factors"),
+    extract_lm_effect_ext(heliusdist_ext, "ExerciseNorm_baseline",    "Sufficient exercise",            "Risk factors"),
+    extract_lm_effect_ext(heliusdist_ext, "Age_baseline",             "Age (per SD)",                  "Risk factors"),
+    extract_lm_effect_ext(heliusdist_ext, "BMI_baseline",             "BMI (per SD)",                  "Risk factors"),
+    extract_lm_effect_ext(heliusdist_ext, "DiscrMean_baseline",       "Perceived discrimination (per SD)", "Risk factors"),
+    # Diet (energy-adjusted via Willett residual method, pre-computed in dietarydata.R)
+    extract_lm_effect_ext(heliusdist_ext, "Protein_baseline_adj",       "Protein (per SD)",                "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "FattyAcids_baseline_adj",    "Fatty acids (per SD)",            "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Carbohydrates_baseline_adj", "Carbohydrates (per SD)",          "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Fiber_baseline_adj",         "Fiber (per SD)",                  "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Sodium_g_baseline_adj",      "Sodium (per SD)",                 "Diet")
+) %>%
     mutate(
-        group1     = "No",
-        group2     = "Yes",
-        label      = ifelse(p.value < 0.001, "p < 0.001", paste0("p = ", format(round(p.value, 3), nsmall = 3))),
-        y.position = max(dat_violin_dm$distance, na.rm = TRUE) * 1.05
+        p.adj = p.adjust(p.value, method = "BH"),
+        sig   = ifelse(p.adj < 0.05, "FDR < 0.05", "FDR \u2265 0.05"),
+        label = factor(label, levels = rev(unique(label))),
+        group = factor(group, levels = c("Disease", "Medication", "Risk factors", "Diet"))
     )
 
-(pl_fig2_D_violin <- ggplot(dat_violin_dm,
-                            aes(x = DM, y = distance, fill = EthnicityTot)) +
-    geom_violin(aes(alpha = DM), colour = NA) +
-    geom_boxplot(fill = "white", colour = "grey30", width = 0.2, outlier.shape = NA) +
-    stat_pvalue_manual(pvals_dm %>% filter(p.value < 0.05), label = "label",
-                       tip.length = 0, bracket.size = 0, color = "black", size = 3) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    scale_alpha_manual(values = c("No" = 0.35, "Yes" = 0.85), guide = "none") +
-    facet_wrap(~EthnicityTot, nrow = 1) +
-    labs(x = "Diabetes at baseline", y = "Bray-Curtis dissimilarity",
-         title = "Microbiome instability by diabetes status") +
+(pl_bc_extended <- ggplot(bc_ext_effects, aes(x = estimate, y = label, color = sig)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.2) +
+    geom_point(size = 3) +
+    scale_color_manual(
+        values = c("FDR < 0.05" = "#E18727FF", "FDR \u2265 0.05" = "grey55"),
+        name = NULL
+    ) +
+    facet_wrap(~ group, scales = "free_y", ncol = 1) +
+    labs(x = "Bray-Curtis instability: estimate (\u00b1 95% CI)",
+         y = NULL) +
+    guides(color = guide_legend(ncol = 1)) +
     theme_Publication() +
-    theme(strip.text = element_text(size = rel(0.65), face = "bold")))
-ggsave(file.path(resultsfolder, "violin_dm_byethnicity.pdf"), width = 14, height = 5)
+    theme(legend.position = "bottom"))
+ggsave(file.path(resultsfolder, "effectsize_braycurtis_extended.pdf"), width = 6, height = 10)
 
-#### Panel E — Bray-Curtis by dyslipidemia status, all ethnicities (ordered by mean difference) ####
+# Companion bar panel: prevalence (binary) and n non-missing (continuous)
+var_meta_bc <- data.frame(
+    predictor = c(
+        "DM_baseline", "HT_BPMed_baseline", "Dyslipidemia_baseline", "MetSyn_baseline",
+        "Statins_baseline", "Metformin_baseline", "AntiHT_baseline", "PPI_baseline",
+        "GlucLowDrugs_baseline", "PsychoMed_baseline", "Cortico_baseline",
+        "Smoking_current_baseline", "Alcohol_baseline", "ExerciseNorm_baseline",
+        "Age_baseline", "BMI_baseline", "DiscrMean_baseline",
+        "Protein_baseline_adj", "FattyAcids_baseline_adj", "Carbohydrates_baseline_adj",
+        "Fiber_baseline_adj", "Sodium_g_baseline_adj"
+    ),
+    label = c(
+        "Diabetes", "Hypertension", "Dyslipidemia", "Metabolic syndrome",
+        "Statins", "Metformin", "Antihypertensives", "PPI",
+        "Glucose-lowering drugs", "Psychotropics", "Corticosteroids",
+        "Current smoking", "Alcohol use", "Sufficient exercise",
+        "Age (per SD)", "BMI (per SD)", "Perceived discrimination (per SD)",
+        "Protein (per SD)", "Fatty acids (per SD)", "Carbohydrates (per SD)",
+        "Fiber (per SD)", "Sodium (per SD)"
+    ),
+    group = c(
+        rep("Disease", 4), rep("Medication", 7), rep("Risk factors", 6), rep("Diet", 5)
+    ),
+    type = c(
+        rep("binary", 14), rep("continuous", 8)
+    ),
+    stringsAsFactors = FALSE
+)
 
-eth_order_lld <- heliusdist %>%
-    filter(!is.na(Dyslipidemia), EthnicityTot != "Other") %>%
-    group_by(EthnicityTot, Dyslipidemia) %>%
-    summarise(m = mean(distance, na.rm = TRUE), .groups = "drop") %>%
-    tidyr::pivot_wider(names_from = Dyslipidemia, values_from = m) %>%
-    mutate(diff = Yes - No) %>%
-    arrange(desc(diff)) %>%
-    pull(EthnicityTot) %>%
-    as.character()
+n_total_bc <- nrow(heliusdist_ext)
 
-dat_violin_lld <- heliusdist %>%
-    filter(!is.na(Dyslipidemia), EthnicityTot != "Other") %>%
-    mutate(Dyslipidemia = relevel(factor(Dyslipidemia), ref = "No"),
-           EthnicityTot = factor(EthnicityTot, levels = eth_order_lld))
-
-pvals_lld <- dat_violin_lld %>%
-    group_by(EthnicityTot) %>%
-    summarise(
-        p.value  = wilcox.test(distance ~ Dyslipidemia)$p.value,
-        .groups  = "drop"
-    ) %>%
+bar_data_bc <- purrr::map_dfr(seq_len(nrow(var_meta_bc)), function(i) {
+    col <- var_meta_bc$predictor[i]
+    x <- heliusdist_ext[[col]]
+    if (var_meta_bc$type[i] == "binary") {
+        n_yes <- sum(x == "Yes", na.rm = TRUE)
+        n_no  <- sum(x == "No",  na.rm = TRUE)
+        n_tot <- n_yes + n_no
+        data.frame(
+            label    = var_meta_bc$label[i],
+            group    = var_meta_bc$group[i],
+            category = c("Yes", "No"),
+            pct      = c(n_yes / n_tot * 100, n_no / n_tot * 100),
+            n_label  = c(n_yes, NA)
+        )
+    } else {
+        n_valid   <- sum(!is.na(x))
+        pct_valid <- n_valid / n_total_bc * 100
+        data.frame(
+            label    = var_meta_bc$label[i],
+            group    = var_meta_bc$group[i],
+            category = "Non-missing",
+            pct      = pct_valid,
+            n_label  = n_valid
+        )
+    }
+}) %>%
     mutate(
-        group1     = "No",
-        group2     = "Yes",
-        label      = ifelse(p.value < 0.001, "p < 0.001", paste0("p = ", format(round(p.value, 3), nsmall = 3))),
-        y.position = max(dat_violin_lld$distance, na.rm = TRUE) * 1.05
+        label    = factor(label, levels = levels(bc_ext_effects$label)),
+        group    = factor(group, levels = c("Disease", "Medication", "Risk factors", "Diet")),
+        category = factor(category, levels = c("No", "Yes", "Non-missing"))
     )
 
-(pl_fig2_E_violin <- ggplot(dat_violin_lld,
-                             aes(x = Dyslipidemia, y = distance, fill = EthnicityTot)) +
-    geom_violin(aes(alpha = Dyslipidemia), colour = NA) +
-    geom_boxplot(fill = "white", colour = "grey30", width = 0.2, outlier.shape = NA) +
-    stat_pvalue_manual(pvals_lld %>% filter(p.value < 0.05), label = "label",
-                       tip.length = 0, bracket.size = 0, color = "black", size = 3) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    scale_alpha_manual(values = c("No" = 0.35, "Yes" = 0.85), guide = "none") +
-    facet_wrap(~EthnicityTot, nrow = 1) +
-    labs(x = "Dyslipidemia at baseline", y = "Bray-Curtis dissimilarity",
-         title = "Microbiome instability by dyslipidemia status") +
+pl_bc_bar <- ggplot(bar_data_bc, aes(x = pct, y = label, fill = category)) +
+    geom_col(width = 0.6) +
+    geom_text(
+        data = bar_data_bc %>% filter(!is.na(n_label)),
+        aes(label = paste0("n=", n_label), x = 101),
+        hjust = 0, size = 2.8, color = "grey30"
+    ) +
+    scale_fill_manual(
+        values = c("Yes" = "#6F99ADFF", "No" = "#d0d8e4", "Non-missing" = "#6F99ADFF"),
+        guide = "none"
+    ) +
+    scale_x_continuous(limits = c(0, 140), breaks = c(0, 50, 100),
+                       expand = expansion(mult = c(0, 0))) +
+    facet_wrap(~ group, scales = "free_y", ncol = 1) +
+    labs(x = "% Yes / % non-missing", y = NULL, title = " ") +
     theme_Publication() +
-    theme(strip.text = element_text(size = rel(0.65), face = "bold")))
-ggsave(file.path(resultsfolder, "violin_lld_byethnicity.pdf"), width = 14, height = 5)
+    theme(
+        axis.text.y  = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y  = element_blank(),
+        legend.position = "bottom"
+    )
+
+#### Ethnicity companion panel ####
+
+extract_lm_eth <- function(data, predictor_var, label, group) {
+    eth_list <- setdiff(unique(data$EthnicityTot[!is.na(data$EthnicityTot)]), "Other")
+    lapply(eth_list, function(eth) {
+        sub <- data %>%
+            filter(EthnicityTot == eth, !is.na(.data[[predictor_var]])) %>%
+            mutate(predictor = .data[[predictor_var]])
+        if (nrow(sub) < 10) return(NULL)
+        if (is.factor(sub$predictor) && sum(sub$predictor == "Yes") < 5) return(NULL)
+        m  <- lm(distance ~ predictor, data = sub)
+        cf <- coef(summary(m))
+        ci <- confint(m)
+        data.frame(
+            label     = label,
+            group     = group,
+            ethnicity = eth,
+            estimate  = cf[2, "Estimate"],
+            conf.low  = ci[2, 1],
+            conf.high = ci[2, 2],
+            p.value   = cf[2, "Pr(>|t|)"],
+            stringsAsFactors = FALSE
+        )
+    }) %>% bind_rows()
+}
+
+bc_eth_effects <- purrr::map_dfr(seq_len(nrow(var_meta_bc)), function(i) {
+    extract_lm_eth(
+        heliusdist_ext,
+        var_meta_bc$predictor[i],
+        var_meta_bc$label[i],
+        var_meta_bc$group[i]
+    )
+}) %>%
+    mutate(
+        p.adj     = p.adjust(p.value, method = "BH"),
+        sig       = ifelse(p.adj < 0.05, "FDR < 0.05", "FDR \u2265 0.05"),
+        label     = factor(label, levels = levels(bc_ext_effects$label)),
+        group     = factor(group, levels = c("Disease", "Medication", "Risk factors", "Diet")),
+        ethnicity = factor(ethnicity, levels = names(eth_colors))
+    )
+
+# Per-variable interaction p-values (predictor × EthnicityTot F-test)
+bc_int_pvals <- purrr::map_dfr(seq_len(nrow(var_meta_bc)), function(i) {
+    col <- var_meta_bc$predictor[i]
+    sub <- heliusdist_ext %>%
+        filter(!is.na(.data[[col]]), EthnicityTot != "Other", !is.na(EthnicityTot)) %>%
+        mutate(predictor    = .data[[col]],
+               EthnicityTot = factor(EthnicityTot))
+    if (nrow(sub) < 20) return(data.frame(label = var_meta_bc$label[i], p_int = NA_real_))
+    m    <- lm(distance ~ predictor * EthnicityTot, data = sub)
+    pval <- tryCatch(
+        drop1(m, scope = ~predictor:EthnicityTot, test = "F")["predictor:EthnicityTot", "Pr(>F)"],
+        error = function(e) NA_real_
+    )
+    data.frame(label = var_meta_bc$label[i], p_int = pval, stringsAsFactors = FALSE)
+})
+
+bc_eth_heatmap <- bc_eth_effects %>%
+    left_join(bc_int_pvals, by = "label") %>%
+    mutate(
+        sig_label = case_when(p.adj < 0.001 ~ "***",
+                              p.adj < 0.01  ~ "**",
+                              p.adj < 0.05  ~ "*",
+                              TRUE          ~ ""),
+        label     = factor(label, levels = levels(bc_ext_effects$label)),
+        ethnicity = factor(ethnicity, levels = names(eth_colors))
+    )
+
+est_lim <- quantile(abs(bc_eth_heatmap$estimate), 0.95, na.rm = TRUE)
+
+(pl_bc_eth <- ggplot(bc_eth_heatmap,
+                     aes(x = estimate, y = label, color = ethnicity)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+    geom_point(aes(fill = ethnicity), shape = 21, color = "black", size = 2.5, stroke = 0.5, alpha = 0.9) +
+    scale_fill_manual(values = eth_colors, name = NULL) +
+    facet_wrap(~ group, scales = "free_y", ncol = 1) +
+    labs(x = "Estimate", y = NULL,
+         title = "Baseline predictors of microbiome instability") +
+    theme_Publication() +
+    theme(
+        legend.position = "bottom",
+        axis.text.y  = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y  = element_blank()
+    ))
+
+pl_bc_combined <- pl_bc_extended + pl_bc_eth + pl_bc_bar +
+    plot_layout(widths = c(0.6, 0.6, 0.4))
+ggsave(pl_bc_combined, filename = file.path(resultsfolder, "effectsize_braycurtis_extended_combined.pdf"),
+       width = 12, height = 10)
