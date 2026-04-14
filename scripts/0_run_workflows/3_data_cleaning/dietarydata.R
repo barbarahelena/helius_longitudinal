@@ -54,13 +54,13 @@ eth_colors <- c(
 
 
 ## Output folder
-resultsfolder <- "results/0_data_cleaning"
-dir.create(resultsfolder, showWarnings = FALSE)
+resultsfolder1 <- "results/0_data_cleaning"
+dir.create(resultsfolder1, showWarnings = FALSE)
 resultsfolder <- "results/0_data_cleaning/diet"
 dir.create(resultsfolder, showWarnings = FALSE)
 
 ## Load dataset
-df2 <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
+df <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 
 ## PCA diet
 df_diet <- df %>% dplyr::select(ID, EthnicityTot, TotalCalories, Fiber, Protein, Protein_animal, FattyAcids,
@@ -92,10 +92,10 @@ loadings$Variables <- rownames(loadings)
         geom_segment(data = loadings, aes(x = 0, y = 0, xend = (PC1*8), yend = (PC2*8)), 
                      arrow = arrow(length = unit(1/2, "picas")),
                      color = "black", linewidth = 0.9) +
-        annotate("text", x = (loadings$PC1*9), y = (loadings$PC2*9),
+        annotate("text", x = (loadings$PC1*13), y = (loadings$PC2*10),
                  label = loadings$Variables)
 )
-ggsave(pcadiet, filename = "results/diet/PCA_diet_loading.pdf", width = 5, height = 6)
+ggsave(pcadiet, filename = "results/0_data_cleaning/diet/PCA_diet_loading.pdf", width = 7, height = 7)
 
 df <- left_join(df, pcs, by = c("ID", "EthnicityTot")) %>% 
     dplyr::select(everything(.), DietPC1=PC1, DietPC2=PC2)
@@ -166,9 +166,9 @@ saveRDS(df, "data/clinicaldata_long_pcdiet.RDS")
     ggpubr::stat_compare_means(hide.ns = TRUE))
 
 (fig_macronutrients <- ggarrange(pl1, pl2, pl3, pl4, pl5, pl6, pl7,
-                                  ncol = 4, nrow = 2))
+                                  ncol = 3, nrow = 3))
 ggsave(fig_macronutrients, filename = file.path(resultsfolder, "macronutrients_by_ethnicity.pdf"),
-       device = "pdf", width = 16, height = 8)
+       device = "pdf", width = 15, height = 15)
 
 #### Energy-adjusted macronutrients (Willett residual method) ####
 ## For each macronutrient, regress on TotalCalories_baseline and store
