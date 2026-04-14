@@ -157,7 +157,8 @@ ggsave("results/1_longitudinal_change/ordination/braycurtis_futime.pdf", width =
     theme_Publication())
 ggsave("results/1_longitudinal_change/ordination/braycurtis_futime_ethnicity.pdf", width = 7, height = 7)
 
-comp <- list(c("Dutch", "Moroccan"), c("South-Asian Surinamese", "Moroccan"))
+comp <- list(c("Dutch", "Moroccan"), c("South-Asian Surinamese", "Moroccan"), c("Turkish", "Moroccan"),
+                    c("African Surinamese", "Moroccan"))
 bc_data <- heliusdist %>%
     filter(!is.na(EthnicityTot) & EthnicityTot != "Other") %>%
     mutate(EthnicityTot = fct_reorder(EthnicityTot, distance, median))
@@ -208,7 +209,8 @@ heliusdist_adj <- heliusdist_adj %>%
         EthnicityTot = fct_reorder(EthnicityTot, dist_adjusted, median)
     )
 
-comp_adj <- list(c("Dutch", "Moroccan"), c("South-Asian Surinamese", "Moroccan"))
+comp_adj <- list(c("South-Asian Surinamese", "Moroccan"), c("Turkish", "Moroccan"),
+ c("Dutch", "Moroccan"), c("African Surinamese", "Moroccan"))
 (pl_fig1_E <- ggplot(heliusdist_adj, aes(x = EthnicityTot, y = dist_adjusted)) +
     geom_violin(colour = NA, aes(fill = EthnicityTot)) +
     geom_boxplot(fill = "white", width = 0.2) +
