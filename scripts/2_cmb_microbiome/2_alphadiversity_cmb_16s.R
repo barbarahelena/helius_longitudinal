@@ -78,6 +78,16 @@ dftot2 <- left_join(df, helius, by = c("ID", "timepoint", "sampleID")) %>%
 resultsfolder <- "results/2_cmb_microbiome"
 dir.create(resultsfolder, showWarnings = FALSE)
 
+#### Ethnicity colour palette ####
+eth_colors <- c(
+    "Dutch"                  = "#709AE1FF",
+    "South-Asian Surinamese" = "#FED439FF",
+    "African Surinamese"     = "#8A9197FF",
+    "Ghanaian"               = "#D2AF81FF",
+    "Turkish"                = "#FD7446FF",
+    "Moroccan"               = "#D5E4A2FF"
+)
+
 #### Extended forest plot: multi-domain predictors of Shannon change ####
 
 # Helper: extract disease x timepoint interaction from LMM
@@ -183,8 +193,7 @@ shan_ext_effects <- bind_rows(
     ) +
     facet_wrap(~ group, scales = "free_y", ncol = 1) +
     labs(x = "Shannon change: interaction estimate (\u00b1 95% CI)",
-         y = NULL,
-         title = "Predictors of Shannon diversity change") +
+         y = NULL) +
     theme_Publication() +
     theme(legend.position = "bottom"))
 ggsave(file.path(resultsfolder, "effectsize_shannon_change_extended.pdf"), width = 6, height = 10)
@@ -271,7 +280,7 @@ pl_shan_bar <- ggplot(bar_data_shan, aes(x = pct, y = label, fill = category)) +
     scale_x_continuous(limits = c(0, 140), breaks = c(0, 50, 100),
                        expand = expansion(mult = c(0, 0))) +
     facet_wrap(~ group, scales = "free_y", ncol = 1) +
-    labs(x = "% Yes / % non-missing", y = NULL, title = " ") +
+    labs(x = "% Yes / % non-missing", y = NULL) +
     theme_Publication() +
     theme(
         axis.text.y  = element_blank(),
@@ -280,11 +289,80 @@ pl_shan_bar <- ggplot(bar_data_shan, aes(x = pct, y = label, fill = category)) +
         legend.position = "bottom"
     )
 
-pl_shan_combined <- pl_shan_extended %>% aplot::insert_right(pl_shan_bar, width = 0.4)
+#### Ethnicity companion panel ####
+
+extract_lmm_eth <- function(data, outcome_var, predictor_var, label, group) {
+    eth_list <- setdiff(unique(data$EthnicityTot[!is.na(data$EthnicityTot)]), "Other")
+    lapply(eth_list, function(eth) {
+        sub <- data %>%
+            filter(EthnicityTot == eth, !is.na(.data[[predictor_var]])) %>%
+            mutate(
+                outcome   = .data[[outcome_var]],
+                predictor = .data[[predictor_var]],
+                timepoint = factor(timepoint, levels = c("baseline", "follow-up"))
+            )
+        if (nrow(sub) < 10) return(NULL)
+        if (is.factor(sub$predictor) && sum(sub$predictor == "Yes") < 5) return(NULL)
+        model <- tryCatch(
+            lmer(outcome ~ predictor * timepoint + FUtime + (1|ID), data = sub),
+            error = function(e) NULL
+        )
+        if (is.null(model)) return(NULL)
+        cf <- coef(summary(model))
+        ci <- confint(model, method = "Wald")
+        int_row_cf <- grep(":timepoint", rownames(cf), value = TRUE)[1]
+        int_row_ci <- grep(":timepoint", rownames(ci), value = TRUE)[1]
+        if (is.na(int_row_cf) || is.na(int_row_ci)) return(NULL)
+        data.frame(
+            label     = label,
+            group     = group,
+            ethnicity = eth,
+            estimate  = cf[int_row_cf, "Estimate"],
+            conf.low  = ci[int_row_ci, 1],
+            conf.high = ci[int_row_ci, 2],
+            p.value   = cf[int_row_cf, "Pr(>|t|)"],
+            stringsAsFactors = FALSE
+        )
+    }) %>% bind_rows()
+}
+
+shan_eth_effects <- purrr::map_dfr(seq_len(nrow(var_meta_shan)), function(i) {
+    extract_lmm_eth(
+        dftot2_ext, "shannon",
+        var_meta_shan$predictor[i],
+        var_meta_shan$label[i],
+        var_meta_shan$group[i]
+    )
+}) %>%
+    mutate(
+        p.adj     = p.adjust(p.value, method = "BH"),
+        sig       = ifelse(p.adj < 0.05, "FDR < 0.05", "FDR \u2265 0.05"),
+        label     = factor(label, levels = levels(shan_ext_effects$label)),
+        group     = factor(group, levels = c("Risk factors", "Disease", "Medication", "Diet")),
+        ethnicity = factor(ethnicity, levels = names(eth_colors))
+    )
+
+pl_shan_eth <- ggplot(shan_eth_effects,
+                      aes(x = estimate, y = label)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+    geom_point(aes(fill = ethnicity), shape = 21, color = "black", size = 2.5, stroke = 0.5, alpha = 0.9) +
+    scale_fill_manual(values = eth_colors, name = NULL) +
+    facet_wrap(~ group, scales = "free_y", ncol = 1) +
+    labs(x = "Estimate", y = NULL, title = "Baseline predictors of Shannon diversity change") +
+    theme_Publication() +
+    theme(
+        legend.position = "bottom",
+        axis.text.y  = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y  = element_blank()
+    )
+
+pl_shan_combined <- pl_shan_extended + pl_shan_eth + pl_shan_bar +
+    plot_layout(widths = c(0.6, 0.6, 0.4))
 ggsave(pl_shan_combined, filename = file.path(resultsfolder, "effectsize_shannon_change_extended_combined.pdf"),
-       width = 9, height = 10)
+       width = 13, height = 10)
 
 #### Supplementary figure — Alpha-diversity × cardiometabolic disease ####
 
 ggsave(pl_shan_combined, filename = file.path(resultsfolder, "supplementary_alphadiversity.pdf"),
-       width = 9, height = 10, device = "pdf")
+       width = 13, height = 10, device = "pdf")
