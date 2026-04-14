@@ -175,6 +175,22 @@ prev_long <- bind_rows(
         timepoint = factor(timepoint, levels = c("follow-up", "baseline"))
     )
 
+# Prevalence table with relative increase
+prev_table <- prev_long %>%
+    pivot_wider(names_from = timepoint, values_from = prev) %>%
+    mutate(relative_increase_pct = ((`follow-up` - baseline) / baseline) * 100) %>%
+    dplyr::select(condition, EthnicityTot, baseline, `follow-up`, relative_increase_pct) %>%
+    rename(
+        Condition        = condition,
+        Ethnicity        = EthnicityTot,
+        Baseline_prev    = baseline,
+        Followup_prev    = `follow-up`,
+        Relative_increase_pct = relative_increase_pct
+    ) %>%
+    arrange(Condition, Ethnicity)
+
+write.csv(prev_table, file.path(resultsfolder, "prevalence_table.csv"), row.names = FALSE)
+
 # Order ethnicities by baseline DM prevalence
 eth_order <- prev_long %>%
     filter(condition == "Diabetes", timepoint == "baseline") %>%
@@ -241,8 +257,8 @@ heliusdist_ext <- helius_wide %>%
     filter(!is.na(distance)) %>%
     mutate(across(
         c(Age_baseline, BMI_baseline, DiscrMean_baseline,
-          Protein_baseline_adj, FattyAcids_baseline_adj,
-          Carbohydrates_baseline_adj, Fiber_baseline_adj, Sodium_g_baseline_adj),
+          Protein_baseline, FattyAcids_baseline,
+          Carbohydrates_baseline, Fiber_baseline, Sodium_g_baseline),
         ~ as.numeric(scale(.))
     )) %>%
     mutate(across(
@@ -276,11 +292,11 @@ bc_ext_effects <- bind_rows(
     extract_lm_effect_ext(heliusdist_ext, "BMI_baseline",             "BMI (per SD)",                  "Risk factors"),
     extract_lm_effect_ext(heliusdist_ext, "DiscrMean_baseline",       "Perceived discrimination (per SD)", "Risk factors"),
     # Diet (energy-adjusted via Willett residual method, pre-computed in dietarydata.R)
-    extract_lm_effect_ext(heliusdist_ext, "Protein_baseline_adj",       "Protein (per SD)",                "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "FattyAcids_baseline_adj",    "Fatty acids (per SD)",            "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "Carbohydrates_baseline_adj", "Carbohydrates (per SD)",          "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "Fiber_baseline_adj",         "Fiber (per SD)",                  "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "Sodium_g_baseline_adj",      "Sodium (per SD)",                 "Diet")
+    extract_lm_effect_ext(heliusdist_ext, "Protein_baseline",       "Protein (per SD)",                "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "FattyAcids_baseline",    "Fatty acids (per SD)",            "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Carbohydrates_baseline", "Carbohydrates (per SD)",          "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Fiber_baseline",         "Fiber (per SD)",                  "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Sodium_g_baseline",      "Sodium (per SD)",                 "Diet")
 ) %>%
     mutate(
         p.adj = p.adjust(p.value, method = "BH"),
@@ -313,8 +329,8 @@ var_meta_bc <- data.frame(
         "GlucLowDrugs_baseline", "PsychoMed_baseline", "Cortico_baseline",
         "Smoking_current_baseline", "Alcohol_baseline", "ExerciseNorm_baseline",
         "Age_baseline", "BMI_baseline", "DiscrMean_baseline",
-        "Protein_baseline_adj", "FattyAcids_baseline_adj", "Carbohydrates_baseline_adj",
-        "Fiber_baseline_adj", "Sodium_g_baseline_adj"
+        "Protein_baseline", "FattyAcids_baseline", "Carbohydrates_baseline",
+        "Fiber_baseline", "Sodium_g_baseline"
     ),
     label = c(
         "Diabetes", "Hypertension", "Dyslipidemia", "Metabolic syndrome",
