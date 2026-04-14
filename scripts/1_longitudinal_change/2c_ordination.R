@@ -175,14 +175,7 @@ bc_data <- heliusdist %>%
 ggsave("results/1_longitudinal_change/ordination/distance_ethnicities.pdf", width = 6, height = 5)
 
 ## Confounder-adjusted Bray-Curtis dissimilarity per ethnicity ####
-
-# Join with diet PCs (only available in clinicaldata_long_pcdiet.RDS)
-pcdiet <- readRDS("data/clinicaldata_long_pcdiet.RDS") %>%
-    filter(timepoint == "baseline") %>%
-    dplyr::select(ID, DietPC1, DietPC2)
-
 heliusdist_adj <- heliusdist %>%
-    left_join(pcdiet, by = "ID") %>%
     filter(!is.na(EthnicityTot) & EthnicityTot != "Other") %>%
     filter(
         !is.na(Age) & !is.na(Sex) & !is.na(BMI) &
@@ -230,3 +223,58 @@ comp_adj <- list(c("South-Asian Surinamese", "Moroccan"), c("Turkish", "Moroccan
     coord_flip())
 ggsave("results/1_longitudinal_change/ordination/distance_ethnicities_adjusted.pdf", width = 6, height = 5)
 
+## Confounder-adjusted Bray-Curtis dissimilarity per ethnicity ####
+
+# Join with diet PCs (only available in clinicaldata_long_pcdiet.RDS)
+pcdiet <- readRDS("data/clinicaldata_long_pcdiet.RDS") %>%
+    filter(timepoint == "baseline") %>%
+    dplyr::select(ID, DietPC1, DietPC2)
+
+heliusdist_adj <- heliusdist %>%
+    left_join(pcdiet, by = "ID") %>%
+    filter(!is.na(EthnicityTot) & EthnicityTot != "Other") %>%
+    filter(
+        !is.na(Age) & !is.na(Sex) & !is.na(BMI) &
+        !is.na(Metformin) & !is.na(PPI) & !is.na(AntiHT) & !is.na(Statins) &
+        !is.na(DiscrMean_baseline) & !is.na(AlcCons) & !is.na(DietPC1) & !is.na(DietPC2)
+    )
+
+# Linear regression: distance ~ all confounders + ethnicity
+lm_full <- lm(distance ~ Age + Sex + BMI + DietPC1 + DietPC2 +
+                  Metformin + PPI + AntiHT + Statins +
+                  DiscrMean_baseline + AlcCons + FUtime + EthnicityTot,
+              data = heliusdist_adj)
+print(summary(lm_full))
+
+# Confounder-only model: residuals + grand mean = adjusted dissimilarity
+lm_confounders <- lm(distance ~ Age + Sex + BMI + DietPC1 + DietPC2 +
+                         Metformin + PPI + AntiHT + Statins +
+                         DiscrMean_baseline + AlcCons + FUtime,
+                     data = heliusdist_adj)
+
+heliusdist_adj <- heliusdist_adj %>%
+    mutate(
+        dist_adjusted = residuals(lm_confounders) + mean(distance, na.rm = TRUE),
+        EthnicityTot = fct_reorder(EthnicityTot, dist_adjusted, median)
+    )
+
+comp_adj <- list(c("South-Asian Surinamese", "Moroccan"), c("African Surinamese", "Moroccan"),
+ c("Dutch", "Moroccan"), c("Turkish", "Moroccan"))
+(pl_suppl_diet <- ggplot(heliusdist_adj, aes(x = EthnicityTot, y = dist_adjusted)) +
+    geom_violin(colour = NA, aes(fill = EthnicityTot)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    labs(
+        y = "Adjusted Bray-Curtis dissimilarity",
+        title = "Confounder-adjusted\nincluding diet",
+        x = ""
+    ) +
+    stat_compare_means(
+        aes(label = sprintf("p = %s", ..p.format..)),
+        tip.length = 0,
+        comparisons = comp_adj
+    ) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.25))) +
+    theme_Publication() +
+    coord_flip())
+ggsave("results/1_longitudinal_change/ordination/suppl_distance_ethnicities_adjusted.pdf", width = 6, height = 5)
