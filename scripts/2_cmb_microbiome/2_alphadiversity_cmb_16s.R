@@ -89,7 +89,7 @@ extract_lmm_int <- function(data, outcome_var, predictor_var, label, group = NUL
             predictor = .data[[predictor_var]],
             timepoint = factor(timepoint, levels = c("baseline", "follow-up"))
         )
-    model   <- lmer(outcome ~ predictor * timepoint + (1|ID), data = df)
+    model   <- lmer(outcome ~ predictor * timepoint + FUtime + (1|ID), data = df)
     cf      <- coef(summary(model))
     ci      <- confint(model, method = "Wald")
     int_row_cf <- grep(":timepoint", rownames(cf), value = TRUE)[1]
@@ -135,25 +135,31 @@ dftot2_ext <- dftot2 %>%
           Smoking_current_bl, Alcohol_bl, ExerciseNorm_bl),
         ~ relevel(factor(.), ref = "No"),
         .names = "{.col}"
-    ))
+    )) %>%
+    mutate(Sex = relevel(factor(Sex), ref = "Male"))
 
 shan_ext_effects <- bind_rows(
-    extract_lmm_int(dftot2_ext, "shannon", "DM_bl",           "Diabetes",       group = "Disease"),
-    extract_lmm_int(dftot2_ext, "shannon", "HT_BPMed_bl",     "Hypertension",   group = "Disease"),
-    extract_lmm_int(dftot2_ext, "shannon", "Dyslipidemia_bl", "Dyslipidemia",   group = "Disease"),
-    extract_lmm_int(dftot2_ext, "shannon", "Statins_bl",      "Statins",        group = "Medication"),
-    extract_lmm_int(dftot2_ext, "shannon", "Metformin_bl",    "Metformin",      group = "Medication"),
-    extract_lmm_int(dftot2_ext, "shannon", "AntiHT_bl",       "Antihypertensives", group = "Medication"),
-    extract_lmm_int(dftot2_ext, "shannon", "PPI_bl",          "PPI",            group = "Medication"),
+    # Risk factors
+    extract_lmm_int(dftot2_ext, "shannon", "Age_bl",             "Age (per SD)",                      group = "Risk factors"),
+    extract_lmm_int(dftot2_ext, "shannon", "Sex",                "Sex (female)",                      group = "Risk factors"),
+    extract_lmm_int(dftot2_ext, "shannon", "BMI_bl",             "BMI (per SD)",                      group = "Risk factors"),
+    extract_lmm_int(dftot2_ext, "shannon", "Smoking_current_bl", "Current smoking",                   group = "Risk factors"),
+    extract_lmm_int(dftot2_ext, "shannon", "Alcohol_bl",         "Alcohol use",                       group = "Risk factors"),
+    extract_lmm_int(dftot2_ext, "shannon", "ExerciseNorm_bl",    "Sufficient exercise",               group = "Risk factors"),
+    extract_lmm_int(dftot2_ext, "shannon", "DiscrMean_bl",       "Perceived discrimination (per SD)", group = "Risk factors"),
+    # Cardiometabolic disease
+    extract_lmm_int(dftot2_ext, "shannon", "DM_bl",           "Diabetes",     group = "Disease"),
+    extract_lmm_int(dftot2_ext, "shannon", "HT_BPMed_bl",     "Hypertension", group = "Disease"),
+    extract_lmm_int(dftot2_ext, "shannon", "Dyslipidemia_bl", "Dyslipidemia", group = "Disease"),
+    # Medications
+    extract_lmm_int(dftot2_ext, "shannon", "Statins_bl",      "Statins",                group = "Medication"),
+    extract_lmm_int(dftot2_ext, "shannon", "Metformin_bl",    "Metformin",              group = "Medication"),
+    extract_lmm_int(dftot2_ext, "shannon", "AntiHT_bl",       "Antihypertensives",      group = "Medication"),
+    extract_lmm_int(dftot2_ext, "shannon", "PPI_bl",          "PPI",                    group = "Medication"),
     extract_lmm_int(dftot2_ext, "shannon", "GlucLowDrugs_bl", "Glucose-lowering drugs", group = "Medication"),
-    extract_lmm_int(dftot2_ext, "shannon", "PsychoMed_bl",    "Psychotropics",  group = "Medication"),
-    extract_lmm_int(dftot2_ext, "shannon", "Cortico_bl",      "Corticosteroids", group = "Medication"),
-    extract_lmm_int(dftot2_ext, "shannon", "Smoking_current_bl", "Current smoking", group = "Risk factors"),
-    extract_lmm_int(dftot2_ext, "shannon", "Alcohol_bl",      "Alcohol use",    group = "Risk factors"),
-    extract_lmm_int(dftot2_ext, "shannon", "ExerciseNorm_bl", "Sufficient exercise", group = "Risk factors"),
-    extract_lmm_int(dftot2_ext, "shannon", "Age_bl",          "Age (per SD)",                    group = "Risk factors"),
-    extract_lmm_int(dftot2_ext, "shannon", "BMI_bl",          "BMI (per SD)",                    group = "Risk factors"),
-    extract_lmm_int(dftot2_ext, "shannon", "DiscrMean_bl",    "Perceived discrimination (per SD)", group = "Risk factors"),
+    extract_lmm_int(dftot2_ext, "shannon", "PsychoMed_bl",    "Psychotropics",          group = "Medication"),
+    extract_lmm_int(dftot2_ext, "shannon", "Cortico_bl",      "Corticosteroids",        group = "Medication"),
+    # Diet
     extract_lmm_int(dftot2_ext, "shannon", "Protein_bl",       "Protein (per SD)",       group = "Diet"),
     extract_lmm_int(dftot2_ext, "shannon", "FattyAcids_bl",    "Fatty acids (per SD)",   group = "Diet"),
     extract_lmm_int(dftot2_ext, "shannon", "Carbohydrates_bl", "Carbohydrates (per SD)", group = "Diet"),
@@ -164,7 +170,7 @@ shan_ext_effects <- bind_rows(
         p.adj = p.adjust(p.value, method = "BH"),
         sig   = ifelse(p.adj < 0.05, "FDR < 0.05", "FDR \u2265 0.05"),
         label = factor(label, levels = rev(unique(label))),
-        group = factor(group, levels = c("Disease", "Medication", "Risk factors", "Diet"))
+        group = factor(group, levels = c("Risk factors", "Disease", "Medication", "Diet"))
     )
 
 (pl_shan_extended <- ggplot(shan_ext_effects, aes(x = estimate, y = label, color = sig)) +
@@ -186,28 +192,31 @@ ggsave(file.path(resultsfolder, "effectsize_shannon_change_extended.pdf"), width
 # Companion bar panel
 var_meta_shan <- data.frame(
     predictor = c(
+        "Age_bl", "Sex", "BMI_bl",
+        "Smoking_current_bl", "Alcohol_bl", "ExerciseNorm_bl", "DiscrMean_bl",
         "DM_bl", "HT_BPMed_bl", "Dyslipidemia_bl",
         "Statins_bl", "Metformin_bl", "AntiHT_bl", "PPI_bl",
         "GlucLowDrugs_bl", "PsychoMed_bl", "Cortico_bl",
-        "Smoking_current_bl", "Alcohol_bl", "ExerciseNorm_bl",
-        "Age_bl", "BMI_bl", "DiscrMean_bl",
         "Protein_bl", "FattyAcids_bl", "Carbohydrates_bl",
         "Fiber_bl", "Sodium_g_bl"
     ),
     label = c(
+        "Age (per SD)", "Sex (female)", "BMI (per SD)",
+        "Current smoking", "Alcohol use", "Sufficient exercise", "Perceived discrimination (per SD)",
         "Diabetes", "Hypertension", "Dyslipidemia",
         "Statins", "Metformin", "Antihypertensives", "PPI",
         "Glucose-lowering drugs", "Psychotropics", "Corticosteroids",
-        "Current smoking", "Alcohol use", "Sufficient exercise",
-        "Age (per SD)", "BMI (per SD)", "Perceived discrimination (per SD)",
         "Protein (per SD)", "Fatty acids (per SD)", "Carbohydrates (per SD)",
         "Fiber (per SD)", "Sodium (per SD)"
     ),
     group = c(
-        rep("Disease", 3), rep("Medication", 7), rep("Risk factors", 6), rep("Diet", 5)
+        rep("Risk factors", 7), rep("Disease", 3), rep("Medication", 7), rep("Diet", 5)
     ),
     type = c(
-        rep("binary", 13), rep("continuous", 8)
+        "continuous", "continuous", "continuous",
+        rep("binary", 3), "continuous",
+        rep("binary", 10),
+        rep("continuous", 5)
     ),
     stringsAsFactors = FALSE
 )
@@ -244,7 +253,7 @@ bar_data_shan <- purrr::map_dfr(seq_len(nrow(var_meta_shan)), function(i) {
 }) %>%
     mutate(
         label    = factor(label, levels = levels(shan_ext_effects$label)),
-        group    = factor(group, levels = c("Disease", "Medication", "Risk factors", "Diet")),
+        group    = factor(group, levels = c("Risk factors", "Disease", "Medication", "Diet")),
         category = factor(category, levels = c("No", "Yes", "Non-missing"))
     )
 

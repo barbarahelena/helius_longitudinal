@@ -21,5 +21,5 @@ fig2 <- ggarrange(
     heights = c(1, 2.5)
 )
 
-ggsave(fig2, filename = "results/2_cmb_microbiome/figure2.pdf",
-       width = 10, height = 12, device = "pdf")
+ggsave(fig2, filename = "results/2_cmb_microbiome/figure2b.pdf",
+       width = 11, height = 12, device = "pdf")

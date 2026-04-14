@@ -1,15 +1,10 @@
 ## Figure 2 — Cardiometabolic disease and microbiome instability (16S)
 ## Beta-diversity (Bray-Curtis distance) analyses
 ##
-## Active panels (used in 3_assemble_figure.R):
+## Panels (used in 3_assemble_figure.R):
 ##   A — pl_fig2_prev: disease prevalence by ethnicity (faceted bar, baseline + follow-up)
 ##   B — pl_bc_extended: multi-domain predictors of Bray-Curtis instability (forest plot)
 ##
-## Companion outputs (saved as PDFs, not in main assembled figure):
-##   effectsize_braycurtis_extended_combined.pdf  (forest + ethnicity dots + bar)
-##
-## Archived plots (older exploratory panels):
-##   see scripts/2_cmb_microbiome/archive_betadiversity_plots.R
 
 ## Libraries
 library(phyloseq)
@@ -235,7 +230,7 @@ extract_lm_effect_ext <- function(data, predictor_var, label, group) {
     df <- data %>%
         filter(!is.na(.data[[predictor_var]])) %>%
         mutate(predictor = .data[[predictor_var]])
-    model <- lm(distance ~ predictor, data = df)
+    model <- lm(distance ~ predictor + FUtime, data = df)
     cf <- coef(summary(model))
     ci <- confint(model)
     data.frame(
@@ -268,41 +263,43 @@ heliusdist_ext <- helius_wide %>%
           Smoking_current_baseline, Alcohol_baseline, ExerciseNorm_baseline),
         ~ relevel(factor(.), ref = "No"),
         .names = "{.col}"
-    ))
+    )) %>%
+    mutate(Sex = relevel(factor(Sex), ref = "Male"))
 
 bc_ext_effects <- bind_rows(
-    # Cardiometabolic disease
-    extract_lm_effect_ext(heliusdist_ext, "DM_baseline",           "Diabetes",                          "Disease"),
-    extract_lm_effect_ext(heliusdist_ext, "HT_BPMed_baseline",     "Hypertension",                      "Disease"),
-    extract_lm_effect_ext(heliusdist_ext, "Dyslipidemia_baseline", "Dyslipidemia",                      "Disease"),
-    extract_lm_effect_ext(heliusdist_ext, "MetSyn_baseline",       "Metabolic syndrome",                "Disease"),
-    # Medications
-    extract_lm_effect_ext(heliusdist_ext, "Statins_baseline",      "Statins",                           "Medication"),
-    extract_lm_effect_ext(heliusdist_ext, "Metformin_baseline",    "Metformin",                         "Medication"),
-    extract_lm_effect_ext(heliusdist_ext, "AntiHT_baseline",       "Antihypertensives",                 "Medication"),
-    extract_lm_effect_ext(heliusdist_ext, "PPI_baseline",          "PPI",                               "Medication"),
-    extract_lm_effect_ext(heliusdist_ext, "GlucLowDrugs_baseline", "Glucose-lowering drugs",            "Medication"),
-    extract_lm_effect_ext(heliusdist_ext, "PsychoMed_baseline",    "Psychotropics",                     "Medication"),
-    extract_lm_effect_ext(heliusdist_ext, "Cortico_baseline",      "Corticosteroids",                   "Medication"),
     # Risk factors
-    extract_lm_effect_ext(heliusdist_ext, "Smoking_current_baseline", "Current smoking",               "Risk factors"),
-    extract_lm_effect_ext(heliusdist_ext, "Alcohol_baseline",         "Alcohol use",                   "Risk factors"),
-    extract_lm_effect_ext(heliusdist_ext, "ExerciseNorm_baseline",    "Sufficient exercise",            "Risk factors"),
-    extract_lm_effect_ext(heliusdist_ext, "Age_baseline",             "Age (per SD)",                  "Risk factors"),
-    extract_lm_effect_ext(heliusdist_ext, "BMI_baseline",             "BMI (per SD)",                  "Risk factors"),
+    extract_lm_effect_ext(heliusdist_ext, "Age_baseline",             "Age (per SD)",                      "Risk factors"),
+    extract_lm_effect_ext(heliusdist_ext, "Sex",                      "Sex (female)",                      "Risk factors"),
+    extract_lm_effect_ext(heliusdist_ext, "BMI_baseline",             "BMI (per SD)",                      "Risk factors"),
+    extract_lm_effect_ext(heliusdist_ext, "Smoking_current_baseline", "Current smoking",                   "Risk factors"),
+    extract_lm_effect_ext(heliusdist_ext, "Alcohol_baseline",         "Alcohol use",                       "Risk factors"),
+    extract_lm_effect_ext(heliusdist_ext, "ExerciseNorm_baseline",    "Sufficient exercise",               "Risk factors"),
     extract_lm_effect_ext(heliusdist_ext, "DiscrMean_baseline",       "Perceived discrimination (per SD)", "Risk factors"),
+    # Cardiometabolic disease
+    extract_lm_effect_ext(heliusdist_ext, "DM_baseline",           "Diabetes",           "Disease"),
+    extract_lm_effect_ext(heliusdist_ext, "HT_BPMed_baseline",     "Hypertension",       "Disease"),
+    extract_lm_effect_ext(heliusdist_ext, "Dyslipidemia_baseline", "Dyslipidemia",       "Disease"),
+    extract_lm_effect_ext(heliusdist_ext, "MetSyn_baseline",       "Metabolic syndrome", "Disease"),
+    # Medications
+    extract_lm_effect_ext(heliusdist_ext, "Statins_baseline",      "Statins",                "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "Metformin_baseline",    "Metformin",              "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "AntiHT_baseline",       "Antihypertensives",      "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "PPI_baseline",          "PPI",                    "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "GlucLowDrugs_baseline", "Glucose-lowering drugs", "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "PsychoMed_baseline",    "Psychotropics",          "Medication"),
+    extract_lm_effect_ext(heliusdist_ext, "Cortico_baseline",      "Corticosteroids",        "Medication"),
     # Diet (energy-adjusted via Willett residual method, pre-computed in dietarydata.R)
-    extract_lm_effect_ext(heliusdist_ext, "Protein_baseline",       "Protein (per SD)",                "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "FattyAcids_baseline",    "Fatty acids (per SD)",            "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "Carbohydrates_baseline", "Carbohydrates (per SD)",          "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "Fiber_baseline",         "Fiber (per SD)",                  "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "Sodium_g_baseline",      "Sodium (per SD)",                 "Diet")
+    extract_lm_effect_ext(heliusdist_ext, "Protein_baseline",       "Protein (per SD)",       "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "FattyAcids_baseline",    "Fatty acids (per SD)",   "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Carbohydrates_baseline", "Carbohydrates (per SD)", "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Fiber_baseline",         "Fiber (per SD)",         "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Sodium_g_baseline",      "Sodium (per SD)",        "Diet")
 ) %>%
     mutate(
         p.adj = p.adjust(p.value, method = "BH"),
         sig   = ifelse(p.adj < 0.05, "FDR < 0.05", "FDR \u2265 0.05"),
         label = factor(label, levels = rev(unique(label))),
-        group = factor(group, levels = c("Disease", "Medication", "Risk factors", "Diet"))
+        group = factor(group, levels = c("Risk factors", "Disease", "Medication", "Diet"))
     )
 
 (pl_bc_extended <- ggplot(bc_ext_effects, aes(x = estimate, y = label, color = sig)) +
@@ -324,28 +321,31 @@ ggsave(file.path(resultsfolder, "effectsize_braycurtis_extended.pdf"), width = 6
 # Companion bar panel: prevalence (binary) and n non-missing (continuous)
 var_meta_bc <- data.frame(
     predictor = c(
+        "Age_baseline", "Sex", "BMI_baseline",
+        "Smoking_current_baseline", "Alcohol_baseline", "ExerciseNorm_baseline", "DiscrMean_baseline",
         "DM_baseline", "HT_BPMed_baseline", "Dyslipidemia_baseline", "MetSyn_baseline",
         "Statins_baseline", "Metformin_baseline", "AntiHT_baseline", "PPI_baseline",
         "GlucLowDrugs_baseline", "PsychoMed_baseline", "Cortico_baseline",
-        "Smoking_current_baseline", "Alcohol_baseline", "ExerciseNorm_baseline",
-        "Age_baseline", "BMI_baseline", "DiscrMean_baseline",
         "Protein_baseline", "FattyAcids_baseline", "Carbohydrates_baseline",
         "Fiber_baseline", "Sodium_g_baseline"
     ),
     label = c(
+        "Age (per SD)", "Sex (female)", "BMI (per SD)",
+        "Current smoking", "Alcohol use", "Sufficient exercise", "Perceived discrimination (per SD)",
         "Diabetes", "Hypertension", "Dyslipidemia", "Metabolic syndrome",
         "Statins", "Metformin", "Antihypertensives", "PPI",
         "Glucose-lowering drugs", "Psychotropics", "Corticosteroids",
-        "Current smoking", "Alcohol use", "Sufficient exercise",
-        "Age (per SD)", "BMI (per SD)", "Perceived discrimination (per SD)",
         "Protein (per SD)", "Fatty acids (per SD)", "Carbohydrates (per SD)",
         "Fiber (per SD)", "Sodium (per SD)"
     ),
     group = c(
-        rep("Disease", 4), rep("Medication", 7), rep("Risk factors", 6), rep("Diet", 5)
+        rep("Risk factors", 7), rep("Disease", 4), rep("Medication", 7), rep("Diet", 5)
     ),
     type = c(
-        rep("binary", 14), rep("continuous", 8)
+        "continuous", "continuous", "continuous",
+        rep("binary", 3), "continuous",
+        rep("binary", 11),
+        rep("continuous", 5)
     ),
     stringsAsFactors = FALSE
 )
@@ -380,7 +380,7 @@ bar_data_bc <- purrr::map_dfr(seq_len(nrow(var_meta_bc)), function(i) {
 }) %>%
     mutate(
         label    = factor(label, levels = levels(bc_ext_effects$label)),
-        group    = factor(group, levels = c("Disease", "Medication", "Risk factors", "Diet")),
+        group    = factor(group, levels = c("Risk factors", "Disease", "Medication", "Diet")),
         category = factor(category, levels = c("No", "Yes", "Non-missing"))
     )
 
@@ -445,7 +445,7 @@ bc_eth_effects <- purrr::map_dfr(seq_len(nrow(var_meta_bc)), function(i) {
         p.adj     = p.adjust(p.value, method = "BH"),
         sig       = ifelse(p.adj < 0.05, "FDR < 0.05", "FDR \u2265 0.05"),
         label     = factor(label, levels = levels(bc_ext_effects$label)),
-        group     = factor(group, levels = c("Disease", "Medication", "Risk factors", "Diet")),
+        group     = factor(group, levels = c("Risk factors", "Disease", "Medication", "Diet")),
         ethnicity = factor(ethnicity, levels = names(eth_colors))
     )
 
@@ -485,7 +485,7 @@ est_lim <- quantile(abs(bc_eth_heatmap$estimate), 0.95, na.rm = TRUE)
     scale_fill_manual(values = eth_colors, name = NULL) +
     facet_wrap(~ group, scales = "free_y", ncol = 1) +
     labs(x = "Estimate", y = NULL,
-         title = "Baseline predictors of microbiome instability") +
+         title = "Baseline predictors of microbiota instability") +
     theme_Publication() +
     theme(
         legend.position = "bottom",
