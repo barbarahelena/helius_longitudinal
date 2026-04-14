@@ -84,9 +84,9 @@ pl_fig1_B <- df %>%
     geom_point(aes(color = timepoint), size = 1, alpha = 0.5) +
     xlab(paste0("PCo1 (", round(ev_bray$V1[1], 1), "%)")) +
     ylab(paste0("PCo2 (", round(ev_bray$V1[2], 1), "%)")) +
-    scale_color_manual(values = pal_lancet()(2)) +
+    scale_color_manual(values = pal_lancet()(2), guide = guide_legend(position = "right")) +
     scale_fill_manual(values = pal_lancet()(2), guide = "none") +
-    labs(color = "", title = "Community composition shift") +
+    labs(color = "", title = "Microbiota composition change") +
     theme_Publication() +
     annotate("text", x = Inf, y = Inf, hjust = 1, vjust = 1,
              label = paste0("paste('PERMANOVA: R'^2*' = ",
@@ -117,51 +117,114 @@ for(a in 1:nrow(data_long)){
 heliusdist <- inner_join(data_long, helius, by = "ID") %>% filter(timepoint == "baseline")
 saveRDS(heliusdist, "data/16s/braydistance_delta.RDS")
 
-## Plots 
-comp <- list(c("Dutch", "Moroccan"), c("South-Asian Surinamese", "Moroccan"))
-ggplot(data = heliusdist %>% filter(!is.na(EthnicityTot) & EthnicityTot != "Other"), 
-       aes(x = fct_reorder(EthnicityTot, .x = distance, .fun = median), y = distance)) +
-    geom_violin(colour = NA, aes(fill = EthnicityTot)) +
-    geom_boxplot(fill = "white", width = 0.2) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    labs(y = "Bray-Curtis distance", title = "Distance baseline to follow-up", x = "") +
-    stat_compare_means(comparisons = comp, tip.length = 0, hide.ns = TRUE,
-                       label = "p.signif", method = "t.test") +
-    theme_Publication() +
-    coord_flip()
-ggsave("results/1_longitudinal_change/ordination/distance_ethnicities.pdf", width = 6, height = 5)
-pl_fig1_C <- last_plot()
+## Plots
+fmt_pval <- function(p) {
+    ifelse(p < 0.0001, "p < 0.0001", paste0("p = ", formatC(p, format = "f", digits = 3)))
+}
 
 comp <- list(c("Ghanaian", "Moroccan"), c("Ghanaian", "Turkish"))
-ggplot(data = heliusdist %>% filter(!is.na(FUtime) & EthnicityTot != "Other"), 
-       aes(x = fct_reorder(EthnicityTot, .x = FUtime, .fun = median), y = FUtime)) +
+fu_data <- heliusdist %>%
+    filter(!is.na(FUtime) & EthnicityTot != "Other") %>%
+    mutate(EthnicityTot = fct_reorder(EthnicityTot, FUtime, median))
+(pl_fig1_A <- ggplot(data = fu_data,
+       aes(x = EthnicityTot, y = FUtime)) +
     geom_violin(colour = NA, aes(fill = EthnicityTot)) +
     geom_boxplot(fill = "white", width = 0.2) +
     scale_fill_manual(values = eth_colors, guide = "none") +
     labs(y = "Follow-up time (years)", title = "Follow-up time", x = "") +
-    stat_compare_means(comparisons = comp, tip.length = 0, hide.ns = TRUE,
-                       label = "p.signif", method = "wilcox.test") +
+    stat_compare_means(aes(label = sprintf("p = %s", ..p.format..)), tip.length = 0, comparisons = comp) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.25))) +
     theme_Publication() +
-    coord_flip()
+    coord_flip())
 ggsave("results/1_longitudinal_change/ordination/futime_ethnicities.pdf", width = 6, height = 5)
-pl_fig1_futime <- last_plot()
 
-ggplot(data = heliusdist %>% filter(!is.na(FUtime) & EthnicityTot != "Other"), aes(x = FUtime, y = distance)) +
+(pl_fig1_C <- ggplot(data = heliusdist %>% filter(!is.na(FUtime) & EthnicityTot != "Other"), aes(x = FUtime, y = distance)) +
     geom_jitter(color = "royalblue", alpha = 0.3, width = 0) +
     geom_smooth(color = "black", method = "lm") +
     scale_color_manual(values = eth_colors, guide = "none") +
     labs(y = "Bray-Curtis dissimilarity over FU time", x = "FU time (years)", title = "FU time and sample distance") +
     stat_cor() +
-    theme_Publication()
+    theme_Publication())
 ggsave("results/1_longitudinal_change/ordination/braycurtis_futime.pdf", width = 4, height = 4)
-pl_fig1_A <- last_plot()
 
-ggplot(data = heliusdist %>% filter(!is.na(FUtime) & EthnicityTot != "Other"), aes(x = FUtime, y = distance)) +
+(ggplot(data = heliusdist %>% filter(!is.na(FUtime) & EthnicityTot != "Other"), aes(x = FUtime, y = distance)) +
     geom_jitter(aes(color = EthnicityTot), alpha = 0.3, width = 0) +
     geom_smooth(color = "black", method = "lm") +
     scale_color_manual(values = eth_colors, guide = "none") +
     facet_wrap(~EthnicityTot) +
     labs(y = "Bray-Curtis dissimilarity over FU time", x = "FU time (years)", title = "FU time and sample distance") +
     stat_cor(method = "pearson") +
-    theme_Publication()
+    theme_Publication())
 ggsave("results/1_longitudinal_change/ordination/braycurtis_futime_ethnicity.pdf", width = 7, height = 7)
+
+comp <- list(c("Dutch", "Moroccan"), c("South-Asian Surinamese", "Moroccan"))
+bc_data <- heliusdist %>%
+    filter(!is.na(EthnicityTot) & EthnicityTot != "Other") %>%
+    mutate(EthnicityTot = fct_reorder(EthnicityTot, distance, median))
+(pl_fig1_D <- ggplot(data = bc_data,
+       aes(x = EthnicityTot, y = distance)) +
+    geom_violin(colour = NA, aes(fill = EthnicityTot)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    labs(y = "Bray-Curtis distance", title = "Distance baseline to follow-up", x = "") +
+    stat_compare_means(aes(label = sprintf("p = %s", ..p.format..)), tip.length = 0, comparisons = comp) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.25))) +
+    theme_Publication() +
+    coord_flip())
+ggsave("results/1_longitudinal_change/ordination/distance_ethnicities.pdf", width = 6, height = 5)
+
+## Confounder-adjusted Bray-Curtis dissimilarity per ethnicity ####
+
+# Join with diet PCs (only available in clinicaldata_long_pcdiet.RDS)
+pcdiet <- readRDS("data/clinicaldata_long_pcdiet.RDS") %>%
+    filter(timepoint == "baseline") %>%
+    dplyr::select(ID, DietPC1, DietPC2)
+
+heliusdist_adj <- heliusdist %>%
+    left_join(pcdiet, by = "ID") %>%
+    filter(!is.na(EthnicityTot) & EthnicityTot != "Other") %>%
+    filter(
+        !is.na(Age) & !is.na(Sex) & !is.na(BMI) &
+        !is.na(Metformin) & !is.na(PPI) & !is.na(AntiHT) & !is.na(Statins) &
+        !is.na(DiscrMean_baseline) & !is.na(AlcCons)
+    )
+
+# Linear regression: distance ~ all confounders + ethnicity
+lm_full <- lm(distance ~ Age + Sex + BMI + 
+                  Metformin + PPI + AntiHT + Statins +
+                  DiscrMean_baseline + AlcCons + EthnicityTot,
+              data = heliusdist_adj)
+print(summary(lm_full))
+
+# Confounder-only model: residuals + grand mean = adjusted dissimilarity
+lm_confounders <- lm(distance ~ Age + Sex + BMI + 
+                         Metformin + PPI + AntiHT + Statins +
+                         DiscrMean_baseline + AlcCons,
+                     data = heliusdist_adj)
+
+heliusdist_adj <- heliusdist_adj %>%
+    mutate(
+        dist_adjusted = residuals(lm_confounders) + mean(distance, na.rm = TRUE),
+        EthnicityTot = fct_reorder(EthnicityTot, dist_adjusted, median)
+    )
+
+comp_adj <- list(c("Dutch", "Moroccan"), c("South-Asian Surinamese", "Moroccan"))
+(pl_fig1_E <- ggplot(heliusdist_adj, aes(x = EthnicityTot, y = dist_adjusted)) +
+    geom_violin(colour = NA, aes(fill = EthnicityTot)) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    labs(
+        y = "Adjusted Bray-Curtis dissimilarity",
+        title = "Confounder-adjusted",
+        x = ""
+    ) +
+    stat_compare_means(
+        aes(label = sprintf("p = %s", ..p.format..)),
+        tip.length = 0,
+        comparisons = comp_adj
+    ) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.25))) +
+    theme_Publication() +
+    coord_flip())
+ggsave("results/1_longitudinal_change/ordination/distance_ethnicities_adjusted.pdf", width = 6, height = 5)
+

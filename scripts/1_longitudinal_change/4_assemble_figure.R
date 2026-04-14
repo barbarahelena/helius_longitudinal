@@ -4,9 +4,10 @@
 ##   A — Violin: follow-up time by ethnicity
 ##   B — PCoA: community composition baseline vs follow-up
 ##   C — Scatter: Bray-Curtis dissimilarity vs follow-up time
-##   D — Violin: Bray-Curtis dissimilarity by ethnicity
-##   E — Violin: Shannon by ethnicity × timepoint
-##   F — Scatter: baseline Shannon vs Bray-Curtis dissimilarity (all ethnicities)
+##   D — Violin: Bray-Curtis dissimilarity by ethnicity (unadjusted)
+##   E — Violin: Bray-Curtis dissimilarity by ethnicity (confounder-adjusted)
+##   F — Violin: Shannon by ethnicity × timepoint
+##   G — Scatter: baseline Shannon vs Bray-Curtis dissimilarity (all ethnicities)
 
 library(ggpubr)
 
@@ -14,12 +15,12 @@ library(ggpubr)
 source("scripts/1_longitudinal_change/3_alphadiversity.R")
 source("scripts/1_longitudinal_change/2c_ordination.R")
 
-## Assemble Figure 1 ----
-top_row    <- ggarrange(pl_fig1_futime, pl_fig1_B, pl_fig1_A,
-                        ncol = 3, labels = c("A", "B", "C"))
-bottom_row <- ggarrange(pl_fig1_C, pl_fig1_D, pl_fig1_scatter,
-                        ncol = 3, labels = c("D", "E", "F"))
-fig1 <- ggarrange(top_row, bottom_row, nrow = 2, heights = c(1.0, 1.1))
+## Assemble Figure 1
+fig1 <- ggarrange(ggarrange(pl_fig1_A, pl_fig1_B, widths = c(1.3, 1)),
+                  ggarrange(pl_fig1_C, pl_fig1_D, pl_fig1_E, nrow = 1),
+                  ggarrange(pl_fig1_F, pl_fig1_G, widths = c(1.25, 1)),
+                  nrow = 3, heights = c(1, 1, 1.25),
+                  labels = c("A", "B", "C", "D", "E", "F", "G"))
 
-ggsave(fig1, filename = "results/1_longitudinal_change/figure1.pdf", width = 14, height = 15, device = "pdf")
-# ggsave(fig1, filename = "results/figure1.svg", width = 18, height = 12, device = "svg")
+ggsave(fig1, filename = "results/1_longitudinal_change/figure1.pdf", 
+          width = 13, height = 15, device = "pdf")

@@ -170,7 +170,23 @@ ggplot(data = dftot3 %>% filter(!is.na(EthnicityTot)),
     coord_flip()
 ggsave("results/1_longitudinal_change/alphadiversity/shannon_time_ethnicities.pdf", width = 8, height = 7)
 
-ggplot(data = dftot3 %>% filter(!is.na(EthnicityTot)), 
+fmt_pval <- function(p) {
+    ifelse(p < 0.0001, "p < 0.0001", paste0("p = ", formatC(p, format = "f", digits = 3)))
+}
+shannon_max <- dftot3 %>%
+    filter(!is.na(EthnicityTot)) %>%
+    group_by(EthnicityTot) %>%
+    summarize(y_max = max(shannon, na.rm = TRUE), .groups = "drop")
+shannon_pvals <- dftot3 %>%
+    filter(!is.na(EthnicityTot)) %>%
+    group_by(EthnicityTot) %>%
+    rstatix::wilcox_test(shannon ~ timepoint) %>%
+    ungroup() %>%
+    filter(p < 0.05) %>%
+    mutate(label = fmt_pval(p)) %>%
+    left_join(shannon_max, by = "EthnicityTot") %>%
+    mutate(y.position = y_max * 1.08, xmin = 1, xmax = 2)
+(pl_fig1_F <- ggplot(data = dftot3 %>% filter(!is.na(EthnicityTot)),
        aes(x = timepoint, y = shannon)) +
     geom_violin(colour = NA, aes(fill = EthnicityTot, alpha = timepoint)) +
     geom_boxplot(fill = "white", width = 0.2) +
@@ -178,13 +194,11 @@ ggplot(data = dftot3 %>% filter(!is.na(EthnicityTot)),
     scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
     labs(y = "Shannon index", title = "Shannon index", x = "") +
     facet_wrap(~EthnicityTot) +
-    stat_compare_means(tip.length = 0, hide.ns = TRUE, label.x = 1.5,
-                       label = "p.signif", method = "wilcox.test") +
+    stat_pvalue_manual(shannon_pvals, label = "label", tip.length = 0, label.size = 3) +
     scale_y_continuous(expand = expansion(mult = c(0.05, 0.15))) +
     theme_Publication() +
-    theme(strip.text = element_text(size = 8))
+    theme(strip.text = element_text(size = 8)))
 ggsave("results/1_longitudinal_change/alphadiversity/shannon_ethnicities_time.pdf", width = 7, height = 10)
-pl_fig1_D <- last_plot()
 
 #### Delta alpha diversity ####
 comp <- rev(list(c("Dutch", "South-Asian Surinamese"), c("Dutch", "Moroccan"), c("Dutch", "Turkish")))
@@ -292,7 +306,7 @@ ggplot(data = dftot3 %>% filter(timepoint == "baseline"), aes(x = shannon, y = d
 ggsave("results/1_longitudinal_change/alphadiversity/braycurtis_shannonbaseline.pdf", width = 5, height = 5)
 
 # Figure 1 panel: all ethnicities, single regression
-(pl_fig1_scatter <- dftot3 %>%
+(pl_fig1_G <- dftot3 %>%
     filter(timepoint == "baseline",
            !is.na(distance),
            EthnicityTot != "Other") %>%
