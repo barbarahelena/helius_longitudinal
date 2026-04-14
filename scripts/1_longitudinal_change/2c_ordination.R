@@ -193,14 +193,14 @@ heliusdist_adj <- heliusdist %>%
 # Linear regression: distance ~ all confounders + ethnicity
 lm_full <- lm(distance ~ Age + Sex + BMI + 
                   Metformin + PPI + AntiHT + Statins +
-                  DiscrMean_baseline + AlcCons + EthnicityTot,
+                  DiscrMean_baseline + AlcCons + FUtime + EthnicityTot,
               data = heliusdist_adj)
 print(summary(lm_full))
 
 # Confounder-only model: residuals + grand mean = adjusted dissimilarity
 lm_confounders <- lm(distance ~ Age + Sex + BMI + 
                          Metformin + PPI + AntiHT + Statins +
-                         DiscrMean_baseline + AlcCons,
+                         DiscrMean_baseline + AlcCons + FUtime,
                      data = heliusdist_adj)
 
 heliusdist_adj <- heliusdist_adj %>%
