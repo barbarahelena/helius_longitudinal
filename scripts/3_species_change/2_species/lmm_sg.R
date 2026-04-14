@@ -58,6 +58,15 @@ mean(mb, na.rm = TRUE)[1:5]
 mb <- as.data.frame(mb)
 mb$sampleID <- rownames(mb)
 
+# Statins only measured at baseline — carry forward per person so it can be
+# used as a time-invariant covariate without dropping all follow-up rows
+df <- df %>%
+    group_by(ID) %>%
+    mutate(Statins = if_else(is.na(Statins),
+                             Statins[timepoint == "baseline"][1],
+                             Statins)) %>%
+    ungroup()
+
 # Metadata
 df_tot <- left_join(mb, df, by = c("sampleID"))
 
