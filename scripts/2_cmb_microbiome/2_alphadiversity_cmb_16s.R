@@ -132,11 +132,16 @@ helius_bl <- helius_wide %>%
     dplyr::select(ID, all_of(bl_cols)) %>%
     rename_with(~ sub("_baseline$", "_bl", .), all_of(bl_cols))
 
+pcdiet <- readRDS("data/clinicaldata_long_pcdiet.RDS") %>%
+    filter(timepoint == "baseline") %>%
+    dplyr::select(ID, DietPC1, DietPC2)
+
 dftot2_ext <- dftot2 %>%
     left_join(helius_bl, by = "ID") %>%
+    left_join(pcdiet, by = "ID") %>%
     mutate(across(
         c(Age_bl, BMI_bl, Protein_bl, FattyAcids_bl, Carbohydrates_bl, Fiber_bl, Sodium_g_bl,
-          DiscrMean_bl),
+          DiscrMean_bl, DietPC1, DietPC2),
         ~ as.numeric(scale(.))
     )) %>%
     mutate(across(
@@ -174,7 +179,9 @@ shan_ext_effects <- bind_rows(
     extract_lmm_int(dftot2_ext, "shannon", "FattyAcids_bl",    "Fatty acids (per SD)",   group = "Diet"),
     extract_lmm_int(dftot2_ext, "shannon", "Carbohydrates_bl", "Carbohydrates (per SD)", group = "Diet"),
     extract_lmm_int(dftot2_ext, "shannon", "Fiber_bl",         "Fiber (per SD)",         group = "Diet"),
-    extract_lmm_int(dftot2_ext, "shannon", "Sodium_g_bl",      "Sodium (per SD)",        group = "Diet")
+    extract_lmm_int(dftot2_ext, "shannon", "Sodium_g_bl",      "Sodium (per SD)",        group = "Diet"),
+    extract_lmm_int(dftot2_ext, "shannon", "DietPC1",          "Diet PC1 (per SD)",      group = "Diet"),
+    extract_lmm_int(dftot2_ext, "shannon", "DietPC2",          "Diet PC2 (per SD)",      group = "Diet")
 ) %>%
     mutate(
         p.adj = p.adjust(p.value, method = "BH"),
@@ -188,7 +195,7 @@ shan_ext_effects <- bind_rows(
     geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.2) +
     geom_point(size = 3) +
     scale_color_manual(
-        values = c("FDR < 0.05" = "#e63946", "FDR \u2265 0.05" = "grey55"),
+        values = c("FDR < 0.05" = "#F05C3BFF", "FDR \u2265 0.05" = "grey55"),
         name = NULL
     ) +
     facet_wrap(~ group, scales = "free_y", ncol = 1) +
@@ -207,7 +214,7 @@ var_meta_shan <- data.frame(
         "Statins_bl", "Metformin_bl", "AntiHT_bl", "PPI_bl",
         "GlucLowDrugs_bl", "PsychoMed_bl", "Cortico_bl",
         "Protein_bl", "FattyAcids_bl", "Carbohydrates_bl",
-        "Fiber_bl", "Sodium_g_bl"
+        "Fiber_bl", "Sodium_g_bl", "DietPC1", "DietPC2"
     ),
     label = c(
         "Age (per SD)", "Sex (female)", "BMI (per SD)",
@@ -216,16 +223,16 @@ var_meta_shan <- data.frame(
         "Statins", "Metformin", "Antihypertensives", "PPI",
         "Glucose-lowering drugs", "Psychotropics", "Corticosteroids",
         "Protein (per SD)", "Fatty acids (per SD)", "Carbohydrates (per SD)",
-        "Fiber (per SD)", "Sodium (per SD)"
+        "Fiber (per SD)", "Sodium (per SD)", "Diet PC1 (per SD)", "Diet PC2 (per SD)"
     ),
     group = c(
-        rep("Risk factors", 7), rep("Disease", 3), rep("Medication", 7), rep("Diet", 5)
+        rep("Risk factors", 7), rep("Disease", 3), rep("Medication", 7), rep("Diet", 7)
     ),
     type = c(
         "continuous", "continuous", "continuous",
         rep("binary", 3), "continuous",
         rep("binary", 10),
-        rep("continuous", 5)
+        rep("continuous", 7)
     ),
     stringsAsFactors = FALSE
 )
@@ -274,7 +281,7 @@ pl_shan_bar <- ggplot(bar_data_shan, aes(x = pct, y = label, fill = category)) +
         hjust = 0, size = 2.8, color = "grey30"
     ) +
     scale_fill_manual(
-        values = c("Yes" = "#4a90d9", "No" = "#d0d8e4", "Non-missing" = "#4a90d9"),
+        values = c("Yes" = "#197EC0FF", "No" = "#d0d8e4", "Non-missing" = "#197EC0FF"),
         guide = "none"
     ) +
     scale_x_continuous(limits = c(0, 140), breaks = c(0, 50, 100),

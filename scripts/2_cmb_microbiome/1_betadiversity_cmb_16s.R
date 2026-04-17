@@ -13,6 +13,7 @@ library(tidyverse)
 library(ggplot2)
 library(ggpubr)
 library(ggsci)
+library(patchwork)
 
 theme_Publication <- function(base_size=14, base_family="sans") {
     library(grid)
@@ -247,13 +248,19 @@ extract_lm_effect_ext <- function(data, predictor_var, label, group) {
 # Build analysis dataset from wide clinical data + Bray-Curtis distance
 helius_wide <- readRDS("data/clinicaldata/clinicaldata_wide.RDS")
 
+pcdiet <- readRDS("data/clinicaldata_long_pcdiet.RDS") %>%
+    filter(timepoint == "baseline") %>%
+    dplyr::select(ID, DietPC1, DietPC2)
+
 heliusdist_ext <- helius_wide %>%
     left_join(heliusdist %>% dplyr::select(ID, distance), by = "ID") %>%
+    left_join(pcdiet, by = "ID") %>%
     filter(!is.na(distance)) %>%
     mutate(across(
         c(Age_baseline, BMI_baseline, DiscrMean_baseline,
           Protein_baseline, FattyAcids_baseline,
-          Carbohydrates_baseline, Fiber_baseline, Sodium_g_baseline),
+          Carbohydrates_baseline, Fiber_baseline, Sodium_g_baseline,
+          DietPC1, DietPC2),
         ~ as.numeric(scale(.))
     )) %>%
     mutate(across(
@@ -293,7 +300,9 @@ bc_ext_effects <- bind_rows(
     extract_lm_effect_ext(heliusdist_ext, "FattyAcids_baseline",    "Fatty acids (per SD)",   "Diet"),
     extract_lm_effect_ext(heliusdist_ext, "Carbohydrates_baseline", "Carbohydrates (per SD)", "Diet"),
     extract_lm_effect_ext(heliusdist_ext, "Fiber_baseline",         "Fiber (per SD)",         "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "Sodium_g_baseline",      "Sodium (per SD)",        "Diet")
+    extract_lm_effect_ext(heliusdist_ext, "Sodium_g_baseline",      "Sodium (per SD)",        "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "DietPC1",                "Diet PC1 (per SD)",      "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "DietPC2",                "Diet PC2 (per SD)",      "Diet")
 ) %>%
     mutate(
         p.adj = p.adjust(p.value, method = "BH"),
@@ -307,7 +316,7 @@ bc_ext_effects <- bind_rows(
     geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.2) +
     geom_point(size = 3) +
     scale_color_manual(
-        values = c("FDR < 0.05" = "#E18727FF", "FDR \u2265 0.05" = "grey55"),
+        values = c("FDR < 0.05" = "#F05C3BFF", "FDR \u2265 0.05" = "grey55"),
         name = NULL
     ) +
     facet_wrap(~ group, scales = "free_y", ncol = 1) +
@@ -327,7 +336,7 @@ var_meta_bc <- data.frame(
         "Statins_baseline", "Metformin_baseline", "AntiHT_baseline", "PPI_baseline",
         "GlucLowDrugs_baseline", "PsychoMed_baseline", "Cortico_baseline",
         "Protein_baseline", "FattyAcids_baseline", "Carbohydrates_baseline",
-        "Fiber_baseline", "Sodium_g_baseline"
+        "Fiber_baseline", "Sodium_g_baseline", "DietPC1", "DietPC2"
     ),
     label = c(
         "Age (per SD)", "Sex (female)", "BMI (per SD)",
@@ -336,16 +345,16 @@ var_meta_bc <- data.frame(
         "Statins", "Metformin", "Antihypertensives", "PPI",
         "Glucose-lowering drugs", "Psychotropics", "Corticosteroids",
         "Protein (per SD)", "Fatty acids (per SD)", "Carbohydrates (per SD)",
-        "Fiber (per SD)", "Sodium (per SD)"
+        "Fiber (per SD)", "Sodium (per SD)", "Diet PC1 (per SD)", "Diet PC2 (per SD)"
     ),
     group = c(
-        rep("Risk factors", 7), rep("Disease", 4), rep("Medication", 7), rep("Diet", 5)
+        rep("Risk factors", 7), rep("Disease", 4), rep("Medication", 7), rep("Diet", 7)
     ),
     type = c(
         "continuous", "continuous", "continuous",
         rep("binary", 3), "continuous",
         rep("binary", 11),
-        rep("continuous", 5)
+        rep("continuous", 7)
     ),
     stringsAsFactors = FALSE
 )
@@ -392,9 +401,9 @@ pl_bc_bar <- ggplot(bar_data_bc, aes(x = pct, y = label, fill = category)) +
         hjust = 0, size = 2.8, color = "grey30"
     ) +
     scale_fill_manual(
-        values = c("Yes" = "#6F99ADFF", "No" = "#d0d8e4", "Non-missing" = "#6F99ADFF"),
+        values = c("Yes" = "#197EC0FF", "No" = "#d0d8e4", "Non-missing" = "#197EC0FF"),
         guide = "none"
-    ) +
+    ) + 
     scale_x_continuous(limits = c(0, 140), breaks = c(0, 50, 100),
                        expand = expansion(mult = c(0, 0))) +
     facet_wrap(~ group, scales = "free_y", ncol = 1) +
@@ -484,7 +493,7 @@ est_lim <- quantile(abs(bc_eth_heatmap$estimate), 0.95, na.rm = TRUE)
     geom_point(aes(fill = ethnicity), shape = 21, color = "black", size = 2.5, stroke = 0.5, alpha = 0.9) +
     scale_fill_manual(values = eth_colors, name = NULL) +
     facet_wrap(~ group, scales = "free_y", ncol = 1) +
-    labs(x = "Estimate", y = NULL,
+    labs(x = "Estimate per ethnic group", y = NULL,
          title = "Baseline predictors of microbiota instability") +
     theme_Publication() +
     theme(
