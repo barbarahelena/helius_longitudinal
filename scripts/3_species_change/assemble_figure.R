@@ -16,12 +16,12 @@
 library(ggpubr)
 
 ## Source subscripts (run analyses and define panel objects) ----
-source("scripts/3_species_change/2_species/clinassociations_sg.R")                               # defines pl_fig3_D (heatmap)
-source("scripts/3_species_change/5_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R")  # defines pl_fig3_A, pl_fig3_B
-source("scripts/3_species_change/2_species/lmm_sg.R")                                            # defines pl_fig3_C
-source("scripts/3_species_change/4_alistipes_anno/eggnog_comparison.R")                          # defines pl_fig3_E
-source("scripts/3_species_change/4_alistipes_anno/vfdb_comparison.R")                            # defines pl_fig3_F
-source("scripts/3_species_change/3_strain_stability/strainsharing_plot.R")                       # defines pl_fig3_G, pl_fig3_H, pl_fig3_I, pl_fig3_J, pl_fig3_K
+source("scripts/3_species_change/3_species/2_heatmap.R")                                          # defines pl_fig3_D (heatmap)
+source("scripts/3_species_change/2_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R")  # defines pl_fig3_A, pl_fig3_B
+source("scripts/3_species_change/3_species/1_lmm_sg.R")                                          # defines pl_fig3_C
+source("scripts/3_species_change/4_alistipes_anno/2_eggnog_comparison.R")                        # defines pl_fig3_E
+source("scripts/3_species_change/4_alistipes_anno/3_vfdb_comparison.R")                          # defines pl_fig3_F
+source("scripts/3_species_change/5_strain_stability/strainsharing_plot.R")                       # defines pl_fig3_G, pl_fig3_H, pl_fig3_I, pl_fig3_J, pl_fig3_K
 
 ## Assemble Figure 3 ----
 top_row    <- ggarrange(pl_fig3_A, pl_fig3_B, pl_fig3_C,
