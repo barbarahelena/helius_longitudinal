@@ -593,7 +593,7 @@ ETH_DUTCH  <- levels(prevalence_clin$EthnicityTot)[1]
 ETH_SAS    <- levels(prevalence_clin$EthnicityTot)[2]
 eth_colors <- c("#2166AC", "#E6B800")
 names(eth_colors) <- c(ETH_DUTCH, ETH_SAS)
-tp_colors  <- pal_lancet()(2)
+tp_colors  <- pal_simpsons()(8)[7:8]
 names(tp_colors) <- c("baseline", "follow-up")
 
 ## ── Panel C: Prevalence Volcano — Baseline ────────────────────────────────────

@@ -466,7 +466,7 @@ ggsave("results/5_arg/longitudinal/significant_arg_timepoint.pdf", plots,
 
 ## ── Figure 5 panels: shared aesthetics ───────────────────────────────────────
 BASE_SIZE  <- 11
-tp_colors  <- pal_lancet()(2)
+tp_colors  <- pal_simpsons()(8)[7:8]
 names(tp_colors) <- c("baseline", "follow-up")
 ETH_DUTCH  <- levels(arg_burden_clin$EthnicityTot)[1]
 ETH_SAS    <- levels(arg_burden_clin$EthnicityTot)[2]
