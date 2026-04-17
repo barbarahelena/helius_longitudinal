@@ -131,8 +131,8 @@ fu_data <- heliusdist %>%
     geom_boxplot(fill = "white", width = 0.2) +
     scale_fill_manual(values = eth_colors, guide = "none") +
     labs(y = "Follow-up time (years)", title = "Follow-up time", x = "") +
-    stat_compare_means(aes(label = sprintf("p = %s", ..p.format..)), tip.length = 0, comparisons = comp) +
-    scale_y_continuous(expand = expansion(mult = c(0.05, 0.25))) +
+    stat_compare_means(label = "p.format", tip.length = 0, comparisons = comp) +
+    scale_y_continuous(expand = expansion(mult = c(0.05, 0.05)), breaks = 4:12) +
     theme_Publication() +
     coord_flip())
 ggsave("results/1_longitudinal_change/ordination/futime_ethnicities.pdf", width = 6, height = 5)
