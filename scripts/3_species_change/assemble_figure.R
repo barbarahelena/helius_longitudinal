@@ -34,13 +34,11 @@ mid_row    <- ggarrange(pl_fig3_D,
                         labels = c("D", "E"))
 
 scatter_row <- ggarrange(pl_fig3_G, pl_fig3_H, pl_fig3_I, pl_fig3_J,
-                         ncol = 2, nrow = 2, labels = c("G", "H", "I", "J"))
-bottom_row  <- ggarrange(scatter_row, pl_fig3_K,
-                         ncol = 2, widths = c(1.5, 1.8), labels = c("", "K"))
+                         nrow = 1, labels = c("G", "H", "I", "J"))
 
-fig3 <- ggarrange(top_row, mid_row, bottom_row,
-                  nrow = 3, heights = c(0.6, 1.0, 1.0))
+fig3 <- ggarrange(top_row, mid_row, scatter_row,
+                  nrow = 3, heights = c(0.6, 0.7, 0.5))
 
 dir.create("results/3_species_change", showWarnings = FALSE, recursive = TRUE)
 ggsave(fig3, filename = "results/3_species_change/figure3.pdf",
-       width = 14, height = 18, device = cairo_pdf)
+       width = 15, height = 18, device = cairo_pdf)
