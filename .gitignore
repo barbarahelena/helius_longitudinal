@@ -73,3 +73,6 @@ results/
 
 # vscode
 .vscode/*
+
+# metaphlan db
+db/
