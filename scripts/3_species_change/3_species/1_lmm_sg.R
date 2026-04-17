@@ -45,9 +45,9 @@ df <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 mb <- readRDS("data/shotgun/shotgun_abundance.RDS")
 otu <- mb[which(rownames(mb) %in% df$sampleID),]
 mb1 <- otu[str_detect(rownames(otu), "HELIBA"),]
-tk1 <- apply(mb1[,2:ncol(mb1)], 2, function(x) sum(x > 0.2) > (0.25*length(x)))
+tk1 <- apply(mb1[,2:ncol(mb1)], 2, function(x) sum(x > 0.1) > (0.2*length(x)))
 mb2 <- otu[str_detect(rownames(otu), "HELIFU"),]
-tk2 <- apply(mb2[,2:ncol(mb2)], 2, function(x) sum(x > 0.2) > (0.25*length(x)))
+tk2 <- apply(mb2[,2:ncol(mb2)], 2, function(x) sum(x > 0.1) > (0.2*length(x)))
 tk <- Reduce(`+`,list(tk1,tk2)) > 0
 summary(tk)
 mb <- mb[,tk==TRUE]
