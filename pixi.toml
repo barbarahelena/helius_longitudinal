@@ -28,31 +28,31 @@ sc-ordination      = "Rscript scripts/3_species_change/1_comparison_16s/ordinati
 sc-alphadiv        = "Rscript scripts/3_species_change/1_comparison_16s/alphadiversity_sg.R"
 sc-comparison      = { depends-on = ["sc-ordination", "sc-alphadiv"] }
 
-# 2 — Species-level LMMs + clinical associations
-sc-lmm-sg          = "Rscript scripts/3_species_change/2_species/lmm_sg.R"
-sc-lmm-16s         = "Rscript scripts/3_species_change/2_species/lmm_16s.R"
-sc-clinassoc-sg    = "Rscript scripts/3_species_change/2_species/clinassociations_sg.R"
-sc-clinassoc-16s   = "Rscript scripts/3_species_change/2_species/clinassociations_16s.R"
+# 2 — ML ethnicity models
+ml-prep            = "Rscript scripts/3_species_change/2_mlmodels/1_ml_prep/ml_prep_shotgun_timeeth.R"
+ml-run             = { cmd = "bash scripts/3_species_change/2_mlmodels/2_ml_model/time_eth_shotgun.sh"}
+ml-process         = "Rscript scripts/3_species_change/2_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R"
+ml-ethnicity       = { depends-on = ["ml-prep", "ml-run", "ml-process"] }
+
+# 3 — Species-level LMMs + clinical associations
+sc-lmm-sg          = "Rscript scripts/3_species_change/3_species/1_lmm_sg.R"
+sc-lmm-16s         = "Rscript scripts/3_species_change/3_species/lmm_16s.R"
+sc-clinassoc-sg    = "Rscript scripts/3_species_change/3_species/2_heatmap.R"
+sc-clinassoc-16s   = "Rscript scripts/3_species_change/3_species/clinassociations_16s.R"
 sc-species         = { depends-on = ["sc-lmm-sg", "sc-lmm-16s", "sc-clinassoc-sg", "sc-clinassoc-16s"] }
 
-# 3 — Strain stability
-sc-strainsharing   = "Rscript scripts/3_species_change/3_strain_stability/strainsharing.R"
-
 # 4 — Alistipes annotation
-sc-alistipes-eggnog  = "Rscript scripts/3_species_change/4_alistipes_anno/eggnog_comparison.R"
-sc-alistipes-vfdb    = "Rscript scripts/3_species_change/4_alistipes_anno/vfdb_comparison.R"
+sc-alistipes-eggnog  = "Rscript scripts/3_species_change/4_alistipes_anno/2_eggnog_comparison.R"
+sc-alistipes-vfdb    = "Rscript scripts/3_species_change/4_alistipes_anno/3_vfdb_comparison.R"
 sc-alistipes         = { depends-on = ["sc-alistipes-eggnog", "sc-alistipes-vfdb"] }
 
-# 4b — Odoribacter annotation
-sc-odorib-eggnog   = "Rscript scripts/3_species_change/4_odoribacter_anno/eggnog_comparison.R"
-sc-odorib-vfdb     = "Rscript scripts/3_species_change/4_odoribacter_anno/vfdb_comparison.R"
+# 4b — Odoribacter annotation (archived)
+sc-odorib-eggnog   = "Rscript scripts/3_species_change/archive/4_odoribacter_anno/eggnog_comparison.R"
+sc-odorib-vfdb     = "Rscript scripts/3_species_change/archive/4_odoribacter_anno/vfdb_comparison.R"
 sc-odoribacter     = { depends-on = ["sc-odorib-eggnog", "sc-odorib-vfdb"] }
 
-# 5 — ML ethnicity models
-ml-prep            = "Rscript scripts/3_species_change/5_mlmodels/1_ml_prep/ml_prep_shotgun_timeeth.R"
-ml-run             = { cmd = "bash scripts/3_species_change/5_mlmodels/2_ml_model/time_eth_shotgun.sh"}
-ml-process         = "Rscript scripts/3_species_change/5_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R"
-ml-ethnicity       = { depends-on = ["ml-prep", "ml-run", "ml-process"] }
+# 5 — Strain stability
+sc-strainsharing   = "Rscript scripts/3_species_change/5_strain_stability/strainsharing_plot.R"
 
 # Figure assembly
 sc-assemble        = "Rscript scripts/3_species_change/assemble_figure.R"
