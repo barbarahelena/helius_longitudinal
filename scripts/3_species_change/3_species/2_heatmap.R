@@ -58,7 +58,7 @@
   mb <- as.data.frame(mb)
   mb$sampleID <- rownames(mb)
   head(mb)
-  for (a in 1:(ncol(mb)-2)){
+  for (a in 1:(ncol(mb)-1)){
     microbe <- names(mb)[a]
     mb1 <- mb |> dplyr::select(sampleID, a) |>
                 mutate(timepoint = case_when(str_detect(sampleID, "HELIBA") ~ "baseline",
@@ -172,12 +172,12 @@
   }
 
   # Initialize matrices
-  cor_mat <- matrix(nrow = ncol(mb)-2, ncol = 4)
-  pval_mat <- matrix(nrow = ncol(mb)-2, ncol = 4)
-  rownames(cor_mat) <- rownames(pval_mat) <- names(mb)[1:(ncol(mb)-2)]
-  colnames(cor_mat) <- colnames(pval_mat) <- c("baseline_SBP", "baseline_BMI", "baseline_Trig", "baseline_HbA1c")
+  cor_mat <- matrix(nrow = ncol(mb)-1, ncol = 6)
+  pval_mat <- matrix(nrow = ncol(mb)-1, ncol = 6)
+  rownames(cor_mat) <- rownames(pval_mat) <- names(mb)[1:(ncol(mb)-1)]
+  colnames(cor_mat) <- colnames(pval_mat) <- c("baseline_SBP", "baseline_DBP", "baseline_BMI", "baseline_Trig", "baseline_LDL", "baseline_HbA1c")
   mb <- mb[rownames(mb) != "HELIFU_103370",]
-  for (a in 1:(ncol(mb)-2)){
+  for (a in 1:(ncol(mb)-1)){
     microbe <- names(mb)[a]
     
     mb1 <- mb |>
@@ -197,9 +197,11 @@
     if(any(is.na(tot[[2]]))) print("There are NAs!")
 
     vars <- list(
-      baseline_SBP = cor_pval(tot$baseline, tot$SBP_delta),
-      baseline_BMI = cor_pval(tot$baseline, tot$BMI_delta),
-      baseline_Trig = cor_pval(tot$baseline, tot$Trig_delta),
+      baseline_SBP   = cor_pval(tot$baseline, tot$SBP_delta),
+      baseline_DBP   = cor_pval(tot$baseline, tot$DBP_delta),
+      baseline_BMI   = cor_pval(tot$baseline, tot$BMI_delta),
+      baseline_Trig  = cor_pval(tot$baseline, tot$Trig_delta),
+      baseline_LDL   = cor_pval(tot$baseline, tot$LDL_delta),
       baseline_HbA1c = cor_pval(tot$baseline, tot$HbA1c_delta)
     )
     
@@ -212,7 +214,7 @@
     c(pal_nejm()(6)[6], "white", pal_nejm()(3)[3])
   )
 
-  colnames(cor_mat) <- c("ΔSBP", "ΔBMI", "ΔTriglycerides", "ΔHbA1c")
+  colnames(cor_mat) <- c("ΔSBP", "ΔDBP", "ΔBMI", "ΔTriglycerides", "ΔLDL", "ΔHbA1c")
 
   # Heatmap
   heatmap_bugs <- Heatmap(
@@ -281,15 +283,15 @@
   ethnicities <- c("Dutch", "South-Asian Surinamese")
 
   cor_list  <- setNames(lapply(ethnicities, function(e) {
-    m <- matrix(nrow = ncol(mb)-2, ncol = 4)
-    rownames(m) <- names(mb)[1:(ncol(mb)-2)]
-    colnames(m) <- c("baseline_SBP", "baseline_BMI", "baseline_Trig", "baseline_HbA1c")
+    m <- matrix(nrow = ncol(mb)-1, ncol = 6)
+    rownames(m) <- names(mb)[1:(ncol(mb)-1)]
+    colnames(m) <- c("baseline_SBP", "baseline_DBP", "baseline_BMI", "baseline_Trig", "baseline_LDL", "baseline_HbA1c")
     m
   }), ethnicities)
 
   pval_list <- cor_list  # same structure
 
-  for (a in 1:(ncol(mb)-2)) {
+  for (a in 1:(ncol(mb)-1)) {
     microbe <- names(mb)[a]
 
     mb1 <- mb |>
@@ -312,8 +314,10 @@
 
       vars <- list(
         baseline_SBP   = cor_pval(tot_eth$baseline, tot_eth$SBP_delta),
+        baseline_DBP   = cor_pval(tot_eth$baseline, tot_eth$DBP_delta),
         baseline_BMI   = cor_pval(tot_eth$baseline, tot_eth$BMI_delta),
         baseline_Trig  = cor_pval(tot_eth$baseline, tot_eth$Trig_delta),
+        baseline_LDL   = cor_pval(tot_eth$baseline, tot_eth$LDL_delta),
         baseline_HbA1c = cor_pval(tot_eth$baseline, tot_eth$HbA1c_delta)
       )
 
@@ -324,8 +328,8 @@
 
   # Rename columns for display
   for (eth in ethnicities) {
-    colnames(cor_list[[eth]])  <- c("ΔSBP", "ΔBMI", "ΔTriglycerides", "ΔHbA1c")
-    colnames(pval_list[[eth]]) <- c("ΔSBP", "ΔBMI", "ΔTriglycerides", "ΔHbA1c")
+    colnames(cor_list[[eth]])  <- c("ΔSBP", "ΔDBP", "ΔBMI", "ΔTriglycerides", "ΔLDL", "ΔHbA1c")
+    colnames(pval_list[[eth]]) <- c("ΔSBP", "ΔDBP", "ΔBMI", "ΔTriglycerides", "ΔLDL", "ΔHbA1c")
   }
 
   make_strat_heatmap <- function(eth, show_legend = FALSE) {
@@ -410,6 +414,6 @@
       labs(x = "A. putredinis (log10)", y = "Delta HbA1c", title = "HbA1c") +
       theme_Publication()
 
-  (pl_fig3_C <- ggarrange(p_bmi, p_trig, p_hba1c, ncol = 3))
-  ggsave(pl_fig3_C, filename = "results/3_species_change/3_species/alistipes_clinical_scatter.pdf",
+  (pl_corr <- ggarrange(p_bmi, p_trig, p_hba1c, ncol = 3))
+  ggsave(pl_corr, filename = "results/3_species_change/3_species/alistipes_clinical_scatter.pdf",
         width = 12, height = 4.5)
