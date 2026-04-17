@@ -186,7 +186,7 @@ shannon_pvals <- dftot3 %>%
     mutate(label = fmt_pval(p)) %>%
     left_join(shannon_max, by = "EthnicityTot") %>%
     mutate(y.position = y_max * 1.08, xmin = 1, xmax = 2)
-(pl_fig1_F <- ggplot(data = dftot3 %>% filter(!is.na(EthnicityTot)),
+(pl_fig1_E <- ggplot(data = dftot3 %>% filter(!is.na(EthnicityTot)),
        aes(x = timepoint, y = shannon)) +
     geom_violin(colour = NA, aes(fill = EthnicityTot, alpha = timepoint)) +
     geom_boxplot(fill = "white", width = 0.2) +
@@ -306,12 +306,9 @@ ggplot(data = dftot3 %>% filter(timepoint == "baseline"), aes(x = shannon, y = d
 ggsave("results/1_longitudinal_change/alphadiversity/braycurtis_shannonbaseline.pdf", width = 5, height = 5)
 
 # Figure 1 panel: all ethnicities, single regression
-(pl_fig1_G <- dftot3 %>%
-    filter(timepoint == "baseline",
-           !is.na(distance),
-           EthnicityTot != "Other") %>%
+(pl_fig1_F <- dftot3 %>% filter(timepoint == "baseline", !is.na(distance), EthnicityTot != "Other") %>%
     ggplot(aes(x = shannon, y = distance)) +
-    geom_point(alpha = 0.35, size = 1.5, color = "royalblue") +
+    geom_point(alpha = 0.35, size = 1.5, color = "#197EC0FF") +
     geom_smooth(method = "lm", se = TRUE, alpha = 0.15, linewidth = 0.9, color = "black") +
     stat_cor(size = 5) +
     labs(x = "Baseline Shannon diversity",
