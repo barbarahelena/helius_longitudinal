@@ -56,6 +56,7 @@ data/
 
 # script archive
 scripts/archive
+scripts/*/archive
 
 # renv
 renv/*
