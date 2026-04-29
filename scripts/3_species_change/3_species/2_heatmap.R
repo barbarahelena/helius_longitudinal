@@ -209,6 +209,12 @@
     pval_mat[microbe, ] <- sapply(vars, function(v) v[["p.value"]])
   }
 
+  pval_mat_adj <- matrix(
+    p.adjust(as.vector(pval_mat), method = "BH"),
+    nrow = nrow(pval_mat), ncol = ncol(pval_mat),
+    dimnames = dimnames(pval_mat)
+  )
+
   col_fun <- circlize::colorRamp2(
     c(-0.3, 0, 0.3),
     c(pal_nejm()(6)[6], "white", pal_nejm()(3)[3])
@@ -235,7 +241,7 @@
     column_names_rot = 45,
     show_heatmap_legend = FALSE,
     cell_fun = function(j, i, x, y, width, height, fill) {
-      pval <- pval_mat[i, j]
+      pval <- pval_mat_adj[i, j]
       if (!is.na(pval)) {
         sig <- ""
         if (pval < 0.001) sig <- "***"
@@ -258,7 +264,7 @@
 
   lgd_sig <- Legend(
     pch = c("*", "**", "***"), type = "points",
-    labels = c("p < 0.05", "p < 0.01", "p < 0.001"),
+    labels = c("q < 0.05", "q < 0.01", "q < 0.001"),
     legend_gp = gpar(fontsize = 10)
   )
 
@@ -326,15 +332,26 @@
     }
   }
 
+  # FDR adjustment per ethnicity
+  pval_list_adj <- setNames(lapply(ethnicities, function(eth) {
+    pm <- pval_list[[eth]]
+    matrix(
+      p.adjust(as.vector(pm), method = "BH"),
+      nrow = nrow(pm), ncol = ncol(pm),
+      dimnames = dimnames(pm)
+    )
+  }), ethnicities)
+
   # Rename columns for display
   for (eth in ethnicities) {
-    colnames(cor_list[[eth]])  <- c("ΔSBP", "ΔDBP", "ΔBMI", "ΔTriglycerides", "ΔLDL", "ΔHbA1c")
-    colnames(pval_list[[eth]]) <- c("ΔSBP", "ΔDBP", "ΔBMI", "ΔTriglycerides", "ΔLDL", "ΔHbA1c")
+    colnames(cor_list[[eth]])       <- c("ΔSBP", "ΔDBP", "ΔBMI", "ΔTriglycerides", "ΔLDL", "ΔHbA1c")
+    colnames(pval_list[[eth]])      <- c("ΔSBP", "ΔDBP", "ΔBMI", "ΔTriglycerides", "ΔLDL", "ΔHbA1c")
+    colnames(pval_list_adj[[eth]])  <- c("ΔSBP", "ΔDBP", "ΔBMI", "ΔTriglycerides", "ΔLDL", "ΔHbA1c")
   }
 
   make_strat_heatmap <- function(eth, show_legend = FALSE) {
     cm <- cor_list[[eth]]
-    pm <- pval_list[[eth]]
+    pm <- pval_list_adj[[eth]]
     Heatmap(
       as.matrix(cm),
       name = paste0("Spearman\nCorrelation (", eth, ")"),
