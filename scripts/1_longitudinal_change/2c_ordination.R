@@ -271,3 +271,46 @@ comp_adj <- list(c("South-Asian Surinamese", "Moroccan"), c("African Surinamese"
     theme_Publication() +
     coord_flip())
 ggsave("results/1_longitudinal_change/ordination/suppl_distance_ethnicities_adjusted.pdf", width = 6, height = 5)
+
+## Within-ethnicity spread of PCo1 and PCo2 at baseline and follow-up ####
+df_eth <- df %>%
+    filter(!is.na(EthnicityTot) & EthnicityTot != "Other") %>%
+    mutate(
+        EthnicityTot = factor(EthnicityTot, levels = names(eth_colors)),
+        timepoint = factor(timepoint, levels = c("baseline", "follow-up"), labels = c("Baseline", "Follow-up"))
+    )
+
+# PCo1 per ethnicity, split by timepoint
+(pl_pco1_eth <- ggplot(df_eth, aes(x = EthnicityTot, y = BrayPCo1)) +
+    geom_violin(aes(fill = EthnicityTot), colour = NA, alpha = 0.8) +
+    geom_boxplot(fill = "white", width = 0.2, outlier.size = 0.5) +
+    facet_wrap(~timepoint) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    labs(
+        x = "",
+        y = paste0("PCo1 (", round(ev_bray$V1[1], 1), "%)"),
+        title = "Within-ethnicity spread – PCo1"
+    ) +
+    theme_Publication() +
+    coord_flip())
+ggsave("results/1_longitudinal_change/ordination/pco1_spread_per_ethnicity.pdf", width = 8, height = 5)
+
+# PCo2 per ethnicity, split by timepoint
+(pl_pco2_eth <- ggplot(df_eth, aes(x = EthnicityTot, y = BrayPCo2)) +
+    geom_violin(aes(fill = EthnicityTot), colour = NA, alpha = 0.8) +
+    geom_boxplot(fill = "white", width = 0.2, outlier.size = 0.5) +
+    facet_wrap(~timepoint) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    labs(
+        x = "",
+        y = paste0("PCo2 (", round(ev_bray$V1[2], 1), "%)"),
+        title = "Within-ethnicity spread – PCo2"
+    ) +
+    theme_Publication() +
+    coord_flip())
+ggsave("results/1_longitudinal_change/ordination/pco2_spread_per_ethnicity.pdf", width = 8, height = 5)
+
+# Combined panel
+(pl_pco_combined <- ggarrange(pl_pco1_eth, pl_pco2_eth, nrow = 2, labels = c("A", "B")))
+ggsave("results/1_longitudinal_change/ordination/pco1_pco2_spread_per_ethnicity.pdf",
+       pl_pco_combined, width = 8, height = 9)
