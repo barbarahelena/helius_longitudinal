@@ -60,22 +60,21 @@ sc-assemble        = "Rscript scripts/3_species_change/assemble_figure.R"
 # Run full chapter 3
 sc-all             = { depends-on = ["sc-comparison", "sc-species", "sc-strainsharing", "sc-alistipes", "sc-odoribacter", "ml-ethnicity", "sc-assemble"] }
 
+# Chapter 4 — Functional change (HUMAnN)
+fc-humann-cross     = "Rscript scripts/4_functional_change/humann/1_cross_sectional_humann.R"
+fc-humann-lmm       = { cmd = "Rscript scripts/4_functional_change/humann/2_lmm_humann.R", depends-on = ["fc-humann-cross"] }
+fc-humann           = { depends-on = ["fc-humann-cross", "fc-humann-lmm"] }
+
 # Chapter 4 — Functional change (Cayman)
 fc-cayman-qc        = "Rscript scripts/4_functional_change/cayman/1_cayman_qc.R"
 fc-cayman-cross     = { cmd = "Rscript scripts/4_functional_change/cayman/2_cayman_cross_comparisons.R", depends-on = ["fc-cayman-qc"] }
-fc-cayman-lmm       = { cmd = "Rscript scripts/4_functional_change/cayman/3_cayman_longitudinal_lmm.R", depends-on = ["fc-cayman-qc"] }
+fc-cayman-lmm       = { cmd = "Rscript scripts/4_functional_change/cayman/3_cayman_longitudinal_lmm.R", depends-on = ["fc-cayman-cross"] }
 fc-cayman-ordin     = { cmd = "Rscript scripts/4_functional_change/cayman/4_cayman_ordination.R", depends-on = ["fc-cayman-qc"] }
-fc-cayman           = { depends-on = ["fc-cayman-qc", "fc-cayman-cross", "fc-cayman-lmm", "fc-cayman-ordin"] }
+fc-cayman-ratios    = { cmd = "Rscript scripts/4_functional_change/cayman/5_cayman_ratios.R", depends-on = ["fc-cayman-qc"] }
+fc-cayman           = { depends-on = ["fc-cayman-qc", "fc-cayman-cross", "fc-cayman-lmm", "fc-cayman-ordin", "fc-cayman-ratios"] }
 
-# Chapter 4 — Functional change (GutSMASH)
-fc-gutsmash-qc      = "Rscript scripts/4_functional_change/gutsmash/1_gutsmash_qc.R"
-fc-gutsmash-cross   = { cmd = "Rscript \"scripts/4_functional_change/gutsmash/2_gutsmash_cross_diff..R\"", depends-on = ["fc-gutsmash-qc"] }
-fc-gutsmash-lmm     = { cmd = "Rscript scripts/4_functional_change/gutsmash/3_gutsmash_longitudinal_lmm.R", depends-on = ["fc-gutsmash-qc"] }
-fc-gutsmash-betadiv = { cmd = "Rscript scripts/4_functional_change/gutsmash/4_gutsmash_betadiversity.R", depends-on = ["fc-gutsmash-qc"] }
-fc-gutsmash         = { depends-on = ["fc-gutsmash-qc", "fc-gutsmash-cross", "fc-gutsmash-lmm", "fc-gutsmash-betadiv"] }
-
-fc-assemble         = { cmd = "Rscript scripts/4_functional_change/assemble_figure.R", depends-on = ["fc-cayman", "fc-gutsmash"] }
-fc-all              = { depends-on = ["fc-cayman", "fc-gutsmash", "fc-assemble"] }
+fc-assemble         = { cmd = "Rscript scripts/4_functional_change/assemble_figure.R", depends-on = ["fc-humann-lmm", "fc-cayman-lmm", "fc-cayman-ratios"] }
+fc-all              = { depends-on = ["fc-humann", "fc-cayman", "fc-assemble"] }
 
 # Chapter 5 — ARG
 arg-qc              = "Rscript scripts/5_arg/1_arg_descriptive_qc.R"
@@ -122,3 +121,7 @@ r-cairo = ">=1.7_0,<2"
 r-circlize = ">=0.4.16,<0.5"
 bioconductor-complexheatmap = ">=2.26.1,<3"
 r-aplot = ">=0.2.9,<0.3"
+bioconductor-ggtree = ">=4.0.4,<5"
+r-ggnewscale = ">=0.5.2,<0.6"
+bioconductor-ggtreeextra = ">=1.20.1,<2"
+r-ggalluvial = ">=0.12.6,<0.13"
