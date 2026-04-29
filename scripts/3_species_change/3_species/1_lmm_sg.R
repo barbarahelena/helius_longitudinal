@@ -45,9 +45,9 @@ df <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 mb <- readRDS("data/shotgun/shotgun_abundance.RDS")
 otu <- mb[which(rownames(mb) %in% df$sampleID),]
 mb1 <- otu[str_detect(rownames(otu), "HELIBA"),]
-tk1 <- apply(mb1[,2:ncol(mb1)], 2, function(x) sum(x > 0.1) > (0.2*length(x)))
+tk1 <- apply(mb1[,2:ncol(mb1)], 2, function(x) sum(x > 0.1) > (0.25*length(x)))
 mb2 <- otu[str_detect(rownames(otu), "HELIFU"),]
-tk2 <- apply(mb2[,2:ncol(mb2)], 2, function(x) sum(x > 0.1) > (0.2*length(x)))
+tk2 <- apply(mb2[,2:ncol(mb2)], 2, function(x) sum(x > 0.1) > (0.25*length(x)))
 tk <- Reduce(`+`,list(tk1,tk2)) > 0
 summary(tk)
 mb <- mb[,tk==TRUE]
@@ -58,15 +58,6 @@ mean(mb, na.rm = TRUE)[1:5]
 mb <- as.data.frame(mb)
 mb$sampleID <- rownames(mb)
 
-# Statins only measured at baseline — carry forward per person so it can be
-# used as a time-invariant covariate without dropping all follow-up rows
-df <- df %>%
-    group_by(ID) %>%
-    mutate(Statins = if_else(is.na(Statins),
-                             Statins[timepoint == "baseline"][1],
-                             Statins)) %>%
-    ungroup()
-
 # Metadata
 df_tot <- left_join(mb, df, by = c("sampleID"))
 
@@ -74,13 +65,13 @@ statres <- c()
 for(i in c(1:(ncol(mb)-1))) {
     df_tot$microbe <- df_tot[,i]
     mbname <- colnames(df_tot)[i]
-    model1 <- lmer(microbe ~ Ethnicity*timepoint + (1|ID), data = df_tot)
+    model1 <- lmer(microbe ~ Ethnicity*timepoint + Age + Sex + BMI + (1|ID), data = df_tot)
     res <- summary(model1)
     confint_model1 <- confint(model1)
-    estimate <- as.numeric(format(round(res$coefficients[4,1], 3), nsmall = 3))
-    conflow <- as.numeric(format(round(confint_model1[6,1], 3), nsmall = 3))
-    confhigh <- as.numeric(format(round(confint_model1[6,2], 3), nsmall = 3))
-    pval <- format(round(res$coefficients[4,5], 3), nsmall = 3)
+    estimate <- as.numeric(format(round(res$coefficients[7,1], 3), nsmall = 3))
+    conflow <- as.numeric(format(round(confint_model1[9,1], 3), nsmall = 3))
+    confhigh <- as.numeric(format(round(confint_model1[9,2], 3), nsmall = 3))
+    pval <- format(round(res$coefficients[7,5], 3), nsmall = 3)
     pval <- as.numeric(pval)
     sig <- case_when(
         pval < 0.0001 ~ paste0("****"),
@@ -144,9 +135,9 @@ for(i in 1:nrow(maxsig)){
 dir.create("results/3_species_change/3_species/lmer", recursive = TRUE, showWarnings = FALSE)
 
 (plots <- ggarrange(plotlist = plist, common.legend = TRUE, legend = "bottom",
-          labels = LETTERS[1:11],
-          nrow = 4, ncol = 3))
-ggsave(plots, filename = "results/3_species_change/3_species/lmer/lmer_plots.pdf", width = 10, height = 13)
+          labels = LETTERS[1:8],
+          nrow = 3, ncol = 3))
+ggsave(plots, filename = "results/3_species_change/3_species/lmer/lmer_plots.pdf", width = 12, height = 13)
 write.csv2(statres, "results/3_species_change/3_species/lmer/lmm_results.csv")
 
 #### Figure 3B — Forest plot: species with significant ethnicity × timepoint interaction ####
@@ -173,6 +164,166 @@ dir_colors <- c("Dutch more increase" = pal_jco()(2)[1], "SAS more increase" = p
          y = NULL,
          title = "Species changing differently\nby ethnicity over time") +
     theme_Publication() +
-    theme(legend.position = "bottom"))
+    theme(legend.position = "bottom", plot.title = element_text(size = rel(1.2))))
+
 ggsave(pl_fig3_C, filename = "results/3_species_change/3_species/lmer/lmm_species_forest.pdf",
-       width = 5, height = 6)
+       width = 10, height = 10)
+
+#### Baseline differential abundance between ethnicities ####
+
+df_base <- df_tot %>% filter(str_detect(sampleID, "HELIBA"))
+
+statres_base <- c()
+for(i in c(1:(ncol(mb)-1))) {
+    df_base$microbe <- df_base[, i]
+    mbname <- colnames(df_tot)[i]
+    model_base <- lm(microbe ~ Ethnicity + Age + Sex + BMI, data = df_base)
+    res <- summary(model_base)
+    confint_base <- confint(model_base)
+    estimate  <- as.numeric(format(round(res$coefficients[2, 1], 3), nsmall = 3))
+    conflow   <- as.numeric(format(round(confint_base[2, 1], 3), nsmall = 3))
+    confhigh  <- as.numeric(format(round(confint_base[2, 2], 3), nsmall = 3))
+    pval      <- as.numeric(format(round(res$coefficients[2, 4], 3), nsmall = 3))
+    statres_line <- cbind(mbname, pval, estimate, conflow, confhigh)
+    statres_base <- rbind(statres_base, statres_line)
+}
+
+statres_base <- as.data.frame(statres_base) %>%
+    mutate(across(c(pval, estimate, conflow, confhigh), as.numeric)) %>%
+    arrange(pval) %>%
+    mutate(
+        qval = p.adjust(pval, method = "fdr"),
+        sigq = case_when(
+            qval < 0.0001 ~ "****",
+            qval < 0.001  ~ "***",
+            qval < 0.01   ~ "**",
+            qval <= 0.05  ~ "*",
+            qval > 0.05   ~ ""
+        )
+    )
+
+write.csv2(statres_base, "results/3_species_change/3_species/lmer/lm_baseline_ethnicity_results.csv")
+
+base_sig <- statres_base %>%
+    filter(sigq != "") %>%
+    mutate(
+        mbname    = str_replace_all(mbname, "_", " "),
+        mbname    = factor(mbname, levels = mbname[order(estimate)]),
+        direction = ifelse(estimate > 0, "Higher in SAS", "Higher in Dutch")
+    )
+
+dir_colors_base <- c("Higher in Dutch" = pal_jco()(2)[1], "Higher in SAS" = pal_jco()(2)[2])
+
+(pl_baseline_eth <- ggplot(base_sig, aes(x = estimate, y = mbname, color = direction)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+    geom_errorbar(aes(xmin = conflow, xmax = confhigh), orientation = "y", linewidth = 0.5, width = 0.2) +
+    geom_point(size = 3.5) +
+    scale_color_manual(values = dir_colors_base, name = NULL) +
+    labs(x = "Ethnicity effect (± 95% CI)",
+         y = NULL,
+         title = "Species differing at baseline\nbetween ethnicities") +
+    theme_Publication() +
+    theme(legend.position = "bottom"))
+
+ggsave(pl_baseline_eth, filename = "results/3_species_change/3_species/lmer/lm_baseline_ethnicity_forest.pdf",
+       width = 11, height = 13)
+
+#### Follow-up differential abundance between ethnicities ####
+
+df_fu <- df_tot %>% filter(str_detect(sampleID, "HELIFU"))
+
+statres_fu <- c()
+for(i in c(1:(ncol(mb)-1))) {
+    df_fu$microbe <- df_fu[, i]
+    mbname <- colnames(df_tot)[i]
+    model_fu <- lm(microbe ~ Ethnicity + Age + Sex + BMI + FUtime, data = df_fu)
+    res <- summary(model_fu)
+    confint_fu <- confint(model_fu)
+    estimate  <- as.numeric(format(round(res$coefficients[2, 1], 3), nsmall = 3))
+    conflow   <- as.numeric(format(round(confint_fu[2, 1], 3), nsmall = 3))
+    confhigh  <- as.numeric(format(round(confint_fu[2, 2], 3), nsmall = 3))
+    pval      <- as.numeric(format(round(res$coefficients[2, 4], 3), nsmall = 3))
+    statres_line <- cbind(mbname, pval, estimate, conflow, confhigh)
+    statres_fu <- rbind(statres_fu, statres_line)
+}
+
+statres_fu <- as.data.frame(statres_fu) %>%
+    mutate(across(c(pval, estimate, conflow, confhigh), as.numeric)) %>%
+    arrange(pval) %>%
+    mutate(
+        qval = p.adjust(pval, method = "fdr"),
+        sigq = case_when(
+            qval < 0.0001 ~ "****",
+            qval < 0.001  ~ "***",
+            qval < 0.01   ~ "**",
+            qval <= 0.05  ~ "*",
+            qval > 0.05   ~ ""
+        )
+    )
+
+write.csv2(statres_fu, "results/3_species_change/3_species/lmer/lm_followup_ethnicity_results.csv")
+
+fu_sig <- statres_fu %>%
+    filter(sigq != "") %>%
+    mutate(
+        mbname    = str_replace_all(mbname, "_", " "),
+        mbname    = factor(mbname, levels = mbname[order(estimate)]),
+        direction = ifelse(estimate > 0, "Higher in SAS", "Higher in Dutch")
+    )
+nrow(fu_sig)
+
+(pl_fu_eth <- ggplot(fu_sig, aes(x = estimate, y = mbname, color = direction)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+    geom_errorbar(aes(xmin = conflow, xmax = confhigh), orientation = "y", linewidth = 0.5, width = 0.2) +
+    geom_point(size = 3.5) +
+    scale_color_manual(values = dir_colors_base, name = NULL) +
+    labs(x = "Ethnicity effect (± 95% CI)",
+         y = NULL,
+         title = "Species differing at follow-up\nbetween ethnicities") +
+    theme_Publication() +
+    theme(legend.position = "bottom"))
+
+ggsave(pl_fu_eth, filename = "results/3_species_change/3_species/lmer/lm_followup_ethnicity_forest.pdf",
+       width = 11, height = 13)
+
+#### Overlap: baseline vs follow-up significant species ####
+
+base_sig_names <- statres_base %>% filter(sigq != "") %>% pull(mbname)
+fu_sig_names   <- statres_fu   %>% filter(sigq != "") %>% pull(mbname)
+
+overlap_names  <- intersect(base_sig_names, fu_sig_names)
+only_base      <- setdiff(base_sig_names, fu_sig_names)
+only_fu        <- setdiff(fu_sig_names, base_sig_names)
+
+cat("Significant at baseline only:    ", length(only_base), "\n")
+cat("Significant at follow-up only:   ", length(only_fu), "\n")
+cat("Significant at both timepoints:  ", length(overlap_names), "\n")
+cat("\nOverlapping species:\n")
+cat(paste0("  ", overlap_names), sep = "\n")
+
+overlap_df <- bind_rows(
+    statres_base %>% filter(mbname %in% overlap_names) %>% mutate(timepoint = "baseline"),
+    statres_fu   %>% filter(mbname %in% overlap_names) %>% mutate(timepoint = "follow-up")
+) %>%
+    mutate(
+        mbname    = str_replace_all(mbname, "_", " "),
+        direction = ifelse(estimate > 0, "Higher in SAS", "Higher in Dutch")
+    )
+nrow(overlap_df)
+
+write.csv2(overlap_df, "results/3_species_change/3_species/lmer/lm_overlap_baseline_followup.csv")
+
+#### LMM interaction species × baseline/follow-up cross-sectional models ####
+
+lmm_sig_names <- statres %>% filter(sigq != "") %>% pull(mbname)
+
+in_base <- intersect(lmm_sig_names, base_sig_names)
+in_fu   <- intersect(lmm_sig_names, fu_sig_names)
+in_both <- intersect(in_base, in_fu)
+in_none <- setdiff(lmm_sig_names, union(base_sig_names, fu_sig_names))
+
+cat("\nOf the", length(lmm_sig_names), "LMM interaction-significant species:\n")
+cat("  Also significant at baseline:         ", length(in_base),  "-", paste(in_base,  collapse = ", "), "\n")
+cat("  Also significant at follow-up:        ", length(in_fu),    "-", paste(in_fu,    collapse = ", "), "\n")
+cat("  Significant at both timepoints:       ", length(in_both),  "-", paste(in_both,  collapse = ", "), "\n")
+cat("  Not significant at either timepoint:  ", length(in_none),  "-", paste(in_none,  collapse = ", "), "\n")
