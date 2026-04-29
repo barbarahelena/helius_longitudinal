@@ -97,11 +97,12 @@ load_bin_clin <- function(trans, batch_files, clin_file) {
 }
 
 #### Statistics ####
-# Runs Wilcoxon (baseline + follow-up) and LMM (ethnicity main effect +
+# Runs Wilcoxon (baseline + follow-up) and optionally LMM (ethnicity main effect +
 # ethnicity × timepoint interaction) for each level of feature_col.
+# Set lmm = FALSE to skip the LMM (faster, Wilcoxon only).
 # Returns one row per feature with raw p-values and BH-adjusted FDR.
 # The result column is always named "feature"; rename downstream if needed.
-run_stats <- function(df, feature_col) {
+run_stats <- function(df, feature_col, lmm = TRUE) {
   features <- unique(df[[feature_col]])
 
   results <- map_dfr(features, function(feat) {
@@ -119,57 +120,74 @@ run_stats <- function(df, feature_col) {
     wx_fu <- tryCatch(wilcox.test(dutch_fu, sas_fu, exact = FALSE),
                       error = function(e) list(statistic = NA, p.value = NA))
 
-    lmm_res <- tryCatch({
-      mod <- lmer(
-        proportion ~ EthnicityTot * timepoint + (1 | locus_prefix),
-        data = sub_df, REML = FALSE,
-        control = lmerControl(optimizer = "bobyqa")
-      )
-      coef_tab <- summary(mod)$coefficients
+    if (lmm) {
+      lmm_res <- tryCatch({
+        mod <- lmer(
+          proportion ~ EthnicityTot * timepoint + (1 | locus_prefix),
+          data = sub_df, REML = FALSE,
+          control = lmerControl(optimizer = "bobyqa")
+        )
+        coef_tab <- summary(mod)$coefficients
 
-      eth_row <- grep("^EthnicityTot", rownames(coef_tab))
-      eth_row <- eth_row[!grepl("timepoint", rownames(coef_tab)[eth_row])]
-      if (length(eth_row) == 0) eth_row <- NA_integer_
+        eth_row <- grep("^EthnicityTot", rownames(coef_tab))
+        eth_row <- eth_row[!grepl("timepoint", rownames(coef_tab)[eth_row])]
+        if (length(eth_row) == 0) eth_row <- NA_integer_
 
-      int_row <- grep("EthnicityTot.*timepoint|timepoint.*EthnicityTot",
-                      rownames(coef_tab))
-      if (length(int_row) == 0) int_row <- NA_integer_
+        int_row <- grep("EthnicityTot.*timepoint|timepoint.*EthnicityTot",
+                        rownames(coef_tab))
+        if (length(int_row) == 0) int_row <- NA_integer_
 
-      extract <- function(r, col) if (!is.na(r)) coef_tab[r, col] else NA_real_
+        extract <- function(r, col) if (!is.na(r)) coef_tab[r, col] else NA_real_
 
-      list(
-        lmm_eth_estimate = extract(eth_row, "Estimate"),
-        lmm_eth_se       = extract(eth_row, "Std. Error"),
-        lmm_eth_pval     = extract(eth_row, "Pr(>|t|)"),
-        lmm_int_estimate = extract(int_row, "Estimate"),
-        lmm_int_se       = extract(int_row, "Std. Error"),
-        lmm_int_pval     = extract(int_row, "Pr(>|t|)")
-      )
-    }, error = function(e) {
-      list(lmm_eth_estimate = NA_real_, lmm_eth_se = NA_real_, lmm_eth_pval = NA_real_,
-           lmm_int_estimate = NA_real_, lmm_int_se = NA_real_, lmm_int_pval = NA_real_)
-    })
+        list(
+          lmm_eth_estimate = extract(eth_row, "Estimate"),
+          lmm_eth_se       = extract(eth_row, "Std. Error"),
+          lmm_eth_pval     = extract(eth_row, "Pr(>|t|)"),
+          lmm_int_estimate = extract(int_row, "Estimate"),
+          lmm_int_se       = extract(int_row, "Std. Error"),
+          lmm_int_pval     = extract(int_row, "Pr(>|t|)")
+        )
+      }, error = function(e) {
+        list(lmm_eth_estimate = NA_real_, lmm_eth_se = NA_real_, lmm_eth_pval = NA_real_,
+             lmm_int_estimate = NA_real_, lmm_int_se = NA_real_, lmm_int_pval = NA_real_)
+      })
+    }
 
-    tibble(
+    row <- tibble(
       feature              = feat,
+      n_dutch_baseline     = length(dutch_ba),
+      n_sas_baseline       = length(sas_ba),
       wilcox_baseline_stat = wx_ba$statistic,
       wilcox_baseline_p    = wx_ba$p.value,
       wilcox_fu_stat       = wx_fu$statistic,
-      wilcox_fu_p          = wx_fu$p.value,
-      lmm_eth_estimate     = lmm_res$lmm_eth_estimate,
-      lmm_eth_se           = lmm_res$lmm_eth_se,
-      lmm_eth_pval         = lmm_res$lmm_eth_pval,
-      lmm_int_estimate     = lmm_res$lmm_int_estimate,
-      lmm_int_se           = lmm_res$lmm_int_se,
-      lmm_int_pval         = lmm_res$lmm_int_pval
+      wilcox_fu_p          = wx_fu$p.value
     )
+
+    if (lmm) {
+      row <- row %>% mutate(
+        lmm_eth_estimate = lmm_res$lmm_eth_estimate,
+        lmm_eth_se       = lmm_res$lmm_eth_se,
+        lmm_eth_pval     = lmm_res$lmm_eth_pval,
+        lmm_int_estimate = lmm_res$lmm_int_estimate,
+        lmm_int_se       = lmm_res$lmm_int_se,
+        lmm_int_pval     = lmm_res$lmm_int_pval
+      )
+    }
+    row
   })
 
-  results %>%
+  fdr_cols <- results %>%
     mutate(
       wilcox_baseline_fdr = p.adjust(wilcox_baseline_p, method = "BH"),
-      wilcox_fu_fdr       = p.adjust(wilcox_fu_p,       method = "BH"),
-      lmm_eth_fdr         = p.adjust(lmm_eth_pval,      method = "BH"),
-      lmm_int_fdr         = p.adjust(lmm_int_pval,      method = "BH")
+      wilcox_fu_fdr       = p.adjust(wilcox_fu_p,       method = "BH")
     )
+
+  if (lmm) {
+    fdr_cols <- fdr_cols %>%
+      mutate(
+        lmm_eth_fdr = p.adjust(lmm_eth_pval, method = "BH"),
+        lmm_int_fdr = p.adjust(lmm_int_pval, method = "BH")
+      )
+  }
+  fdr_cols
 }
