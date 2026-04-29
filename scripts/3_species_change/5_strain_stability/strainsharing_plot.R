@@ -132,7 +132,7 @@ stat_cor_fmt <- function(...) {
 
 ## pl_fig3_H: follow-up time vs strain stability
 (pl_fig3_H <- ggplot(data = dftot %>% filter(!is.na(FUtime)), aes(x = FUtime, y = sharing_perc)) +
-    geom_jitter(color = "royalblue", alpha = 0.5, width = 0) +
+    geom_jitter(color = "#197EC0FF", alpha = 0.5, width = 0) +
     geom_smooth(color = "black", method = "lm") +
     scale_y_continuous(expand = expansion(add = c(2, 15))) +
     labs(y = "Stable strains (%)", x = "Follow-up time (years)", title = "Follow-up time and\nstrain stability") +
@@ -142,7 +142,7 @@ ggsave("results/3_species_change/5_strain_stability/futime.pdf", width = 4.5, he
 
 ## pl_fig3_I: Bray-Curtis vs strain stability
 (pl_fig3_I <- ggplot(data = dftot %>% filter(!is.na(FUtime)), aes(x = distance, y = sharing_perc)) +
-    geom_jitter(color = "royalblue", alpha = 0.5, width = 0) +
+    geom_jitter(color = "#197EC0FF", alpha = 0.5, width = 0) +
     geom_smooth(color = "black", method = "lm") +
     scale_y_continuous(expand = expansion(add = c(2, 15))) +
     labs(y = "Stable strains (%)", x = "Bray-Curtis dissimilarity",
@@ -153,7 +153,7 @@ ggsave("results/3_species_change/5_strain_stability/bray_strainsharing.pdf", wid
 
 ## pl_fig3_G: baseline Shannon vs strain stability
 (pl_fig3_G <- ggplot(data = dftot %>% filter(!is.na(shannon)), aes(x = shannon, y = sharing_perc)) +
-    geom_jitter(color = "royalblue", alpha = 0.5, width = 0) +
+    geom_jitter(color = "#197EC0FF", alpha = 0.5, width = 0) +
     geom_smooth(color = "black", method = "lm") +
     scale_y_continuous(expand = expansion(add = c(2, 15))) +
     labs(y = "Stable strains (%)", x = "Shannon index (baseline)", title = "Baseline diversity and\nstrain stability") +
