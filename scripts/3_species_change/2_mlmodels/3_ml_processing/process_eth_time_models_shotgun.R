@@ -156,3 +156,54 @@ pl_fig3_B <- roc_fu
 ggsave(ggarrange(pl_fig3_A, pl_fig3_B, nrow = 2, labels = c("A", "B")),
        filename = "results/3_species_change/2_mlmodels/fig3_eth_roc.pdf",
        width = 14, height = 12)
+
+#### Supplemental figure — ML AUROC panels ####
+suppl_ml <- ggarrange(
+  pl_fig3_A, pl_fig3_B,
+  ncol   = 2,
+  labels = c("A", "B")
+)
+ggsave(suppl_ml,
+       filename = "results/3_species_change/suppl_figure_ml_auroc.pdf",
+       width = 10, height = 5, device = cairo_pdf)
+cat("Supplemental ML AUROC figure saved to: results/3_species_change/suppl_figure_ml_auroc.pdf\n")
+
+#### Overlap: top features baseline vs follow-up ####
+
+feat_base <- rio::import(file.path(path_eth_base, "feature_importance.txt")) %>%
+    arrange(-RelFeatImp) %>%
+    filter(!FeatName %in% c("random_variable1", "random_variable2")) %>%
+    slice(1:20) %>%
+    pull(FeatName)
+
+feat_fu <- rio::import(file.path(path_eth_fu, "feature_importance.txt")) %>%
+    arrange(-RelFeatImp) %>%
+    filter(!FeatName %in% c("random_variable1", "random_variable2")) %>%
+    slice(1:20) %>%
+    pull(FeatName)
+
+overlap_feat   <- intersect(feat_base, feat_fu)
+only_base_feat <- setdiff(feat_base, feat_fu)
+only_fu_feat   <- setdiff(feat_fu, feat_base)
+
+cat("Total features baseline model:   ", length(feat_base), "\n")
+cat("Total features follow-up model:  ", length(feat_fu), "\n")
+cat("Overlapping features:            ", length(overlap_feat), "\n")
+cat("Baseline only:                   ", length(only_base_feat), "\n")
+cat("Follow-up only:                  ", length(only_fu_feat), "\n")
+cat("\nOverlapping features (ranked by mean importance across both):\n")
+
+overlap_df <- bind_rows(
+    rio::import(file.path(path_eth_base, "feature_importance.txt")) %>% mutate(timepoint = "baseline"),
+    rio::import(file.path(path_eth_fu,   "feature_importance.txt")) %>% mutate(timepoint = "follow-up")
+) %>%
+    filter(FeatName %in% overlap_feat) %>%
+    group_by(FeatName) %>%
+    mutate(mean_imp = mean(RelFeatImp)) %>%
+    ungroup() %>%
+    arrange(-mean_imp)
+
+print(overlap_df %>% dplyr::select(FeatName, timepoint, RelFeatImp, mean_imp))
+
+write.csv2(overlap_df, "results/3_species_change/2_mlmodels/ml_overlap_baseline_followup.csv",
+           row.names = FALSE)
