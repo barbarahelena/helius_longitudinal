@@ -1,0 +1,423 @@
+## Cayman Mucin/DF and GAG/DF ratios by ethnicity
+library(tidyverse)
+library(readxl)
+library(ggpubr)
+library(lme4)
+library(lmerTest)
+library(ComplexHeatmap)
+library(circlize)
+library(Cairo)
+library(ggsci)
+
+theme_Publication <- function(base_size = 14, base_family = "sans") {
+  library(grid)
+  library(ggthemes)
+  suppressWarnings(theme_foundation(base_size = base_size, base_family = base_family) +
+    theme(
+      plot.title       = element_text(face = "bold", size = rel(1.0), hjust = 0.5),
+      text             = element_text(),
+      panel.background = element_rect(colour = NA, fill = NA),
+      plot.background  = element_rect(colour = NA, fill = NA),
+      panel.border     = element_rect(colour = NA),
+      axis.title       = element_text(face = "bold", size = rel(0.8)),
+      axis.title.y     = element_text(angle = 90, vjust = 2),
+      axis.title.x     = element_text(vjust = -0.2),
+      axis.text        = element_text(size = rel(0.7)),
+      axis.line        = element_line(colour = "black"),
+      axis.ticks       = element_line(),
+      panel.grid.major = element_line(colour = "#f0f0f0"),
+      panel.grid.minor = element_blank(),
+      legend.key       = element_rect(colour = NA),
+      legend.position  = "bottom",
+      legend.key.size  = unit(0.2, "cm"),
+      legend.spacing   = unit(0, "cm"),
+      strip.background = element_rect(colour = "#f0f0f0", fill = "#f0f0f0"),
+      strip.text       = element_text(face = "bold"),
+      plot.subtitle    = element_text(size = 8, hjust = 0.5, face = "italic")
+    ))
+}
+
+ETH_DUTCH <- "Dutch"
+ETH_SAS   <- "South-Asian Surinamese"
+eth_colors <- c("#2166AC", "#E6B800")
+names(eth_colors) <- c(ETH_DUTCH, ETH_SAS)
+
+dir.create("results/4_functional_change/cayman/ratios", showWarnings = FALSE, recursive = TRUE)
+
+# --- Load data ----------------------------------------------------------------
+anno <- read_excel("data/shotgun/cayman_results/mucin_df_gag_table.xlsx") |>
+  dplyr::select(Family, FUNCTION_AT_DESTINATION_1)
+
+df_raw <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |>
+  dplyr::select(-HELIBA_103370, -HELIFU_103370)
+
+clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
+
+
+# --- Assign families to functional groups -------------------------------------
+# A family with comma-separated annotations (e.g. "DF,Mucin") belongs to all
+# listed groups.
+anno_clean <- anno |>
+  filter(!is.na(Family), !is.na(FUNCTION_AT_DESTINATION_1)) |>
+  mutate(
+    is_DF    = str_detect(FUNCTION_AT_DESTINATION_1, "\\bDF\\b"),
+    is_Mucin = str_detect(FUNCTION_AT_DESTINATION_1, "\\bMucin\\b"),
+    is_GAG   = str_detect(FUNCTION_AT_DESTINATION_1, "\\bGAG\\b")
+  )
+
+families_DF    <- anno_clean |> filter(is_DF)    |> pull(Family) |> unique()
+families_Mucin <- anno_clean |> filter(is_Mucin) |> pull(Family) |> unique()
+families_GAG   <- anno_clean |> filter(is_GAG)   |> pull(Family) |> unique()
+
+cat("DF families (n =", length(families_DF), "):", paste(families_DF, collapse = ", "), "\n")
+cat("Mucin families (n =", length(families_Mucin), "):", paste(families_Mucin, collapse = ", "), "\n")
+cat("GAG families (n =", length(families_GAG), "):", paste(families_GAG, collapse = ", "), "\n")
+
+# --- Compute per-sample group sums (CPM) --------------------------------------
+all_families <- df_raw$family
+df_mat <- df_raw |>
+  column_to_rownames("family") |>
+  as.matrix()
+
+sum_group <- function(mat, families) {
+  keep <- intersect(families, rownames(mat))
+  if (length(keep) == 0) return(rep(0, ncol(mat)))
+  if (length(keep) == 1) return(mat[keep, ])
+  colSums(mat[keep, ])
+}
+
+df_sums <- tibble(
+  sampleID = colnames(df_mat),
+  CPM_DF    = sum_group(df_mat, families_DF),
+  CPM_Mucin = sum_group(df_mat, families_Mucin),
+  CPM_GAG   = sum_group(df_mat, families_GAG)
+)
+
+df_sums <- df_sums |>
+  mutate(
+    ratio_Mucin_DF = CPM_Mucin / CPM_DF,
+    ratio_GAG_DF   = CPM_GAG   / CPM_DF,
+    log10_Mucin_DF = log10(ratio_Mucin_DF),
+    log10_GAG_DF   = log10(ratio_GAG_DF)
+  )
+
+# --- Merge with clinical data -------------------------------------------------
+dftot <- df_sums |>
+  left_join(clinical, by = "sampleID") |>
+  filter(EthnicityTot %in% c(ETH_DUTCH, ETH_SAS)) |>
+  mutate(
+    EthnicityTot = factor(EthnicityTot, levels = c(ETH_DUTCH, ETH_SAS)),
+    timepoint    = factor(timepoint, levels = c("baseline", "follow-up"))
+  ) |>
+  droplevels()
+
+# --- Wilcoxon tests per timepoint ---------------------------------------------
+wilcox_res <- dftot |>
+  group_by(timepoint) |>
+  summarise(
+    p_Mucin_DF = wilcox.test(log10_Mucin_DF ~ EthnicityTot)$p.value,
+    p_GAG_DF   = wilcox.test(log10_GAG_DF   ~ EthnicityTot)$p.value,
+    .groups = "drop"
+  ) |>
+  mutate(
+    padj_Mucin_DF = p.adjust(p_Mucin_DF, method = "fdr"),
+    padj_GAG_DF   = p.adjust(p_GAG_DF,   method = "fdr")
+  )
+print(wilcox_res)
+write.csv2(wilcox_res,
+           "results/4_functional_change/cayman/ratios/wilcoxon_ratios_by_ethnicity.csv",
+           row.names = FALSE)
+
+# --- LMMs: main effect of ethnicity + interaction with timepoint --------------
+lmm_results <- list()
+for (ratio_var in c("log10_Mucin_DF", "log10_GAG_DF")) {
+  dftot$y <- dftot[[ratio_var]]
+  tryCatch({
+    mod <- lmer(y ~ EthnicityTot * timepoint + (1 | ID), data = dftot)
+    res <- summary(mod)$coefficients
+    main_row <- grep(paste0("^EthnicityTot", ETH_SAS, "$"), rownames(res))
+    int_row  <- grep(paste0(ETH_SAS, ":timepointfollow-up"), rownames(res))
+    lmm_results[[ratio_var]] <- tibble(
+      ratio             = ratio_var,
+      estimate_main     = res[main_row, 1],
+      se_main           = res[main_row, 2],
+      pval_main         = res[main_row, 5],
+      estimate_interact = res[int_row,  1],
+      se_interact       = res[int_row,  2],
+      pval_interact     = res[int_row,  5]
+    )
+  }, error = function(e) message("LMM failed for ", ratio_var, ": ", e$message))
+}
+lmm_df <- bind_rows(lmm_results) |>
+  mutate(
+    padj_main     = p.adjust(pval_main,     method = "fdr"),
+    padj_interact = p.adjust(pval_interact, method = "fdr")
+  )
+print(lmm_df)
+write.csv2(lmm_df,
+           "results/4_functional_change/cayman/ratios/lmm_ratio_ethnicity_timepoint.csv",
+           row.names = FALSE)
+
+# Unadjusted LMM in dietary subset (n=232): GAG/DF p=0.276, Mucin/DF p=0.579 — already non-significant without any dietary adjustment.
+
+# --- Spearman correlations: baseline ratios vs baseline and follow-up outcomes -
+cont_outcomes <- c("BMI", "WHR", "SBP", "DBP", "HbA1c", "Trig", "TC", "HDL", "LDL", "Fatperc")
+
+df_baseline  <- dftot |> filter(timepoint == "baseline")
+df_followup  <- dftot |> filter(timepoint == "follow-up")
+
+# Join follow-up outcomes to baseline ratio data by ID
+df_bl_fu <- df_baseline |>
+  dplyr::select(ID, log10_Mucin_DF, log10_GAG_DF) |>
+  left_join(
+    df_followup |> dplyr::select(ID, all_of(cont_outcomes)),
+    by = "ID"
+  )
+
+cor_pval <- function(x, y) {
+  idx <- complete.cases(x, y)
+  if (sum(idx) < 3) return(c(rho = NA_real_, pval = NA_real_))
+  res <- suppressWarnings(cor.test(x[idx], y[idx], method = "spearman"))
+  c(rho = unname(res$estimate), pval = res$p.value)
+}
+
+run_spearman <- function(data, tp_label) {
+  expand.grid(
+    ratio   = c("log10_Mucin_DF", "log10_GAG_DF"),
+    outcome = cont_outcomes,
+    stringsAsFactors = FALSE
+  ) |>
+    as_tibble() |>
+    rowwise() |>
+    mutate(
+      timepoint = tp_label,
+      n    = sum(complete.cases(data[[ratio]], data[[outcome]])),
+      rho  = cor_pval(data[[ratio]], data[[outcome]])[["rho"]],
+      pval = cor_pval(data[[ratio]], data[[outcome]])[["pval"]]
+    ) |>
+    ungroup()
+}
+
+spearman_bl <- run_spearman(df_baseline, "baseline")
+spearman_fu <- run_spearman(df_bl_fu,   "follow-up")
+
+spearman_res <- bind_rows(spearman_bl, spearman_fu) |>
+  mutate(padj = p.adjust(pval, method = "fdr"))
+
+print(spearman_res)
+write.csv2(spearman_res,
+           "results/4_functional_change/cayman/ratios/spearman_baseline_outcomes.csv",
+           row.names = FALSE)
+
+# --- ComplexHeatmap of Spearman correlations ----------------------------------
+outcome_labels <- c(
+  BMI = "BMI", WHR = "WHR", SBP = "SBP", DBP = "DBP",
+  HbA1c = "HbA1c", Trig = "Triglycerides", TC = "Total Cholesterol",
+  HDL = "HDL", LDL = "LDL", Fatperc = "Body fat %"
+)
+ratio_labels <- c(log10_Mucin_DF = "Mucin/DF", log10_GAG_DF = "GAG/DF")
+
+make_matrices <- function(res, tp) {
+  r <- res |> filter(timepoint == tp)
+  cor_m <- r |>
+    dplyr::select(ratio, outcome, rho) |>
+    pivot_wider(names_from = ratio, values_from = rho) |>
+    column_to_rownames("outcome") |>
+    as.matrix()
+  cor_m <- cor_m[cont_outcomes, ]
+  rownames(cor_m) <- outcome_labels[rownames(cor_m)]
+  colnames(cor_m) <- ratio_labels[colnames(cor_m)]
+
+  pval_m <- r |>
+    dplyr::select(ratio, outcome, padj) |>
+    pivot_wider(names_from = ratio, values_from = padj) |>
+    column_to_rownames("outcome") |>
+    as.matrix()
+  pval_m <- pval_m[cont_outcomes, ]
+  rownames(pval_m) <- outcome_labels[rownames(pval_m)]
+  colnames(pval_m) <- ratio_labels[colnames(pval_m)]
+
+  list(cor = cor_m, pval = pval_m)
+}
+
+mat_bl <- make_matrices(spearman_res, "baseline")
+mat_fu <- make_matrices(spearman_res, "follow-up")
+
+col_fun <- colorRamp2(
+  c(-0.3, 0, 0.3),
+  c(pal_nejm()(6)[6], "white", pal_nejm()(3)[3])
+)
+
+make_heatmap <- function(cor_m, pval_m, title, show_row_names = TRUE) {
+  Heatmap(
+    cor_m,
+    name              = "Spearman\nCorrelation",
+    col               = col_fun,
+    rect_gp           = gpar(col = "white", lwd = 2),
+    na_col            = "grey95",
+    cluster_rows      = FALSE,
+    cluster_columns   = FALSE,
+    show_row_names    = show_row_names,
+    show_column_names = TRUE,
+    row_names_side    = "left",
+    row_names_gp      = gpar(fontsize = 10),
+    column_names_gp   = gpar(fontsize = 12, fontface = "bold"),
+    column_names_rot  = 45,
+    column_title      = title,
+    column_title_gp   = gpar(fontsize = 12, fontface = "bold"),
+    show_heatmap_legend = FALSE,
+    cell_fun = function(j, i, x, y, width, height, fill) {
+      pval <- pval_m[i, j]
+      if (!is.na(pval)) {
+        sig <- if (pval < 0.001) "***" else if (pval < 0.01) "**" else if (pval < 0.05) "*" else ""
+        if (sig != "") grid.text(sig, x, y, gp = gpar(fontsize = 14), vjust = 0.75)
+      }
+    }
+  )
+}
+
+ht_bl <- make_heatmap(mat_bl$cor, mat_bl$pval, "Baseline outcomes",  show_row_names = TRUE)
+ht_fu <- make_heatmap(mat_fu$cor, mat_fu$pval, "Follow-up outcomes", show_row_names = FALSE)
+
+# Give unique internal names to suppress ComplexHeatmap duplicate-name warning
+ht_bl@name <- "bl"
+ht_fu@name <- "fu"
+
+lgd_cor <- Legend(
+  col_fun = col_fun,
+  title   = "Spearman\nCorrelation",
+  at      = c(-0.3, -0.15, 0, 0.15, 0.3),
+  labels  = c("-0.30", "-0.15", "0", "0.15", "0.30")
+)
+lgd_sig <- Legend(
+  pch = c("*", "**", "***"), type = "points",
+  labels = c("q < 0.05", "q < 0.01", "q < 0.001"),
+  legend_gp = gpar(fontsize = 10)
+)
+lgd_packed <- packLegend(lgd_cor, lgd_sig, direction = "vertical", gap = unit(4, "mm"))
+
+CairoPDF("results/4_functional_change/cayman/ratios/heatmap_spearman_outcomes.pdf",
+         width = 7, height = 6)
+draw(ht_bl + ht_fu, annotation_legend_list = list(lgd_packed),
+     padding = unit(c(5, 30, 5, 5), "mm"))
+dev.off()
+
+# --- Stability: correlation between baseline and follow-up ratios -------------
+df_wide_ratios <- dftot |>
+  dplyr::select(ID, timepoint, log10_Mucin_DF, log10_GAG_DF) |>
+  pivot_wider(names_from = timepoint, values_from = c(log10_Mucin_DF, log10_GAG_DF))
+
+cat("\nBaseline vs follow-up Spearman correlations:\n")
+for (ratio_var in c("log10_Mucin_DF", "log10_GAG_DF")) {
+  bl_col <- paste0(ratio_var, "_baseline")
+  fu_col <- paste0(ratio_var, "_follow-up")
+  r <- cor(df_wide_ratios[[bl_col]], df_wide_ratios[[fu_col]],
+           use = "pairwise.complete.obs", method = "spearman")
+  p <- cor.test(df_wide_ratios[[bl_col]], df_wide_ratios[[fu_col]],
+                method = "spearman")$p.value
+  cat(ratio_var, ": rho =", round(r, 3), ", p =", formatC(p, format = "e", digits = 2), "\n")
+}
+
+# --- Prospective LMs: follow-up outcome ~ baseline ratio + baseline outcome ---
+# Only for ratio-outcome pairs with q<0.05 in either heatmap panel.
+# Tests whether baseline microbiome predicts future metabolic state beyond
+# where the outcome already was at baseline.
+sig_pairs <- spearman_res |>
+  filter(padj < 0.05) |>
+  distinct(ratio, outcome)
+
+# Build a wide dataset: baseline ratios + baseline outcomes + follow-up outcomes
+df_prosp <- df_baseline |>
+  dplyr::select(ID, log10_Mucin_DF, log10_GAG_DF, all_of(cont_outcomes)) |>
+  left_join(
+    df_followup |> dplyr::select(ID, all_of(cont_outcomes)),
+    by = "ID", suffix = c("_bl", "_fu")
+  )
+
+prosp_results <- list()
+for (i in seq_len(nrow(sig_pairs))) {
+  ratio_var <- sig_pairs$ratio[i]
+  outcome   <- sig_pairs$outcome[i]
+  bl_col    <- paste0(outcome, "_bl")
+  fu_col    <- paste0(outcome, "_fu")
+  tryCatch({
+    mod <- lm(reformulate(c(ratio_var, bl_col), fu_col), data = df_prosp)
+    res <- summary(mod)$coefficients
+    ci  <- confint(mod)
+    prosp_results[[paste(ratio_var, outcome)]] <- tibble(
+      ratio    = ratio_var,
+      outcome  = outcome,
+      n        = nobs(mod),
+      estimate = res[ratio_var, 1],
+      se       = res[ratio_var, 2],
+      conflow  = ci[ratio_var, 1],
+      confhigh = ci[ratio_var, 2],
+      pval     = res[ratio_var, 4]
+    )
+  }, error = function(e) message("LM failed for ", ratio_var, " ", outcome, ": ", e$message))
+}
+prosp_df <- bind_rows(prosp_results) |>
+  mutate(padj = p.adjust(pval, method = "fdr"))
+print(prosp_df)
+write.csv2(prosp_df,
+           "results/4_functional_change/cayman/ratios/lm_prospective_outcomes.csv",
+           row.names = FALSE)
+
+# --- Helper: p-value label for subtitle ---------------------------------------
+plab <- function(p) {
+  if (is.na(p)) return("NA")
+  if (p < 0.001) return(formatC(p, format = "e", digits = 2))
+  formatC(p, format = "f", digits = 3)
+}
+
+# --- Plot: Mucin/DF ratio by ethnicity ----------------------------------------
+tp_labels <- c(baseline = "Baseline", "follow-up" = "Follow-up")
+
+p_mucin <- ggplot(dftot, aes(x = EthnicityTot, y = log10_Mucin_DF, fill = EthnicityTot)) +
+  geom_violin(colour = NA, alpha = 0.7) +
+  geom_boxplot(fill = "white", width = 0.15, outlier.shape = NA) +
+  facet_wrap(~timepoint, labeller = labeller(timepoint = tp_labels)) +
+  scale_fill_manual(values = eth_colors, guide = "none") +
+  theme_Publication() +
+  labs(
+    x        = "",
+    y        = "Mucin / DF (log10 ratio)",
+    title    = "Mucin-to-DF ratio",
+    subtitle = paste0(
+      "Baseline: p=", plab(wilcox_res$p_Mucin_DF[wilcox_res$timepoint == "baseline"]),
+      "  Follow-up: p=", plab(wilcox_res$p_Mucin_DF[wilcox_res$timepoint == "follow-up"])
+    )
+  ) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+# --- Plot: GAG/DF ratio by ethnicity ------------------------------------------
+p_gag <- ggplot(dftot, aes(x = EthnicityTot, y = log10_GAG_DF, fill = EthnicityTot)) +
+  geom_violin(colour = NA, alpha = 0.7) +
+  geom_boxplot(fill = "white", width = 0.15, outlier.shape = NA) +
+  facet_wrap(~timepoint, labeller = labeller(timepoint = tp_labels)) +
+  scale_fill_manual(values = eth_colors, guide = "none") +
+  theme_Publication() +
+  labs(
+    x        = "",
+    y        = "GAG / DF (log10 ratio)",
+    title    = "GAG-to-DF ratio",
+    subtitle = paste0(
+      "Baseline: p=", plab(wilcox_res$p_GAG_DF[wilcox_res$timepoint == "baseline"]),
+      "  Follow-up: p=", plab(wilcox_res$p_GAG_DF[wilcox_res$timepoint == "follow-up"])
+    )
+  ) +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+# --- Assemble and save --------------------------------------------------------
+fig_ratios <- ggarrange(p_mucin, p_gag, nrow = 1, ncol = 2, labels = c("A", "B"))
+
+ggsave(
+  "results/4_functional_change/cayman/ratios/cayman_ratios_ethnicity.pdf",
+  fig_ratios, width = 10, height = 5
+)
+ggsave(
+  "results/4_functional_change/cayman/ratios/cayman_ratios_ethnicity.png",
+  fig_ratios, width = 10, height = 5, dpi = 300
+)
+
+cat("Done. Figures saved to results/4_functional_change/cayman/ratios/\n")
