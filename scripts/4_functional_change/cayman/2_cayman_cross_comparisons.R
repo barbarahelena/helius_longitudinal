@@ -29,7 +29,8 @@ theme_Publication <- function(base_size=14, base_family="sans") {
            strip.text = element_text(face="bold")))
 }
 
-df_raw <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |> select(-HELIBA_103370, -HELIFU_103370)
+df_raw <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |> 
+  dplyr::select(-HELIBA_103370, -HELIFU_103370)
 head(df_raw)[1:5,1:5]
 rownames(df_raw) <- df_raw$family
 df_raw$family <- NULL
@@ -40,7 +41,7 @@ head(df)[1:5,1:5]
 df$sampleID <- rownames(df)
 fam <- ncol(df)
 
-clinical <- readRDS("data/clinicaldata_long.RDS")
+clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 stats <- rio::import("data/shotgun/cayman_results/sample_statistics.tsv") |>
   rename(sampleID = sample) |>
   dplyr::select(sampleID, total_reads)
@@ -150,7 +151,7 @@ if (any(df_tot$timepoint == "baseline")) {
     labs(x = "log10(Abundance) Difference (South-Asian Surinamese - Dutch)",
          y = "-log10(p-value)",
          title = "Baseline Cayman Abundance Differences Between Ethnicities", color = "")
-  ggsave(file.path(cross_dir, "baseline_abundance_volcano.pdf"), p_baseline_volcano, width = 7, height = 7)
+  ggsave(file.path(cross_dir, "baseline_abundance_volcano.pdf"), p_baseline_volcano, width = 7, height = 7, device = cairo_pdf)
 }
 
 # Follow-up analysis
@@ -199,8 +200,37 @@ if (any(df_tot$timepoint == "follow-up")) {
     labs(x = "log10(Abundance) Difference (South-Asian Surinamese - Dutch)",
          y = "-log10(p-value)",
          title = "Follow-up Cayman Abundance Differences Between Ethnicities", color = "")
-  ggsave(file.path(cross_dir, "followup_abundance_volcano.pdf"), p_followup_volcano, width = 7, height = 7)
+  ggsave(file.path(cross_dir, "followup_abundance_volcano.pdf"), p_followup_volcano, width = 7, height = 7, device = cairo_pdf)
 }
+
+# ---------------------------------------------------------------------------
+# Save unified cross-sectional results table (for LMM overlap analysis)
+# ---------------------------------------------------------------------------
+cs_combined <- statres_baseline |>
+    dplyr::select(gene_family, padj_baseline = padj,
+                  cs_baseline_direction = estimate) |>
+    mutate(cs_baseline_direction = ifelse(cs_baseline_direction > 0, "SAS higher", "Dutch higher"),
+           sig_baseline = padj_baseline < 0.05) |>
+    full_join(
+        statres_followup |>
+            dplyr::select(gene_family, padj_followup = padj,
+                          cs_followup_direction = estimate) |>
+            mutate(cs_followup_direction = ifelse(cs_followup_direction > 0, "SAS higher", "Dutch higher"),
+                   sig_followup = padj_followup < 0.05),
+        by = "gene_family"
+    )
+
+cat("\nOf", length(gene_families), "gene families,",
+    sum(cs_combined$sig_baseline | cs_combined$sig_followup, na.rm = TRUE),
+    "show a significant ethnicity difference at baseline or follow-up (FDR < 0.05)\n")
+cat("  Baseline: ", sum(cs_combined$sig_baseline, na.rm = TRUE), "significant\n")
+cat("  Follow-up:", sum(cs_combined$sig_followup, na.rm = TRUE), "significant\n")
+cat("  Overlap:  ", sum(cs_combined$sig_baseline & cs_combined$sig_followup, na.rm = TRUE),
+    "significant at both\n")
+
+write.csv2(cs_combined,
+           file.path(cross_dir, "crosssectional_results_combined.csv"),
+           row.names = FALSE)
 
 # --- ADJUSTED MODELS: CAZy ~ EthnicityTot + Age + Sex + BMI + DM + PPI + total_reads ---
 # Merge total_reads into df_tot

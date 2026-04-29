@@ -37,7 +37,7 @@ rownames(df_raw) <- df_raw$family
 df_raw$family <- NULL
 caymat <- t(as.matrix(df_raw))  # samples in rows, families in columns
 caymat <- log10(caymat + 0.1)
-clinical <- readRDS("data/clinicaldata_long.RDS")
+clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 
 #### Output folder ####
 resultsfolder <- "results/4_functional_change/cayman"
@@ -221,3 +221,122 @@ bc_results <- data.frame(
 ) %>%
   mutate(padj = p.adjust(pval, method = "fdr"))
 write.csv2(bc_results, "results/4_functional_change/cayman/lm_cazyBC_mbBC_ethnicity.csv", row.names = FALSE)
+
+#### Canberra distance ####
+print('Canberra distance CAZy composition')
+canberra <- vegan::vegdist(caymat, method = 'canberra')
+pcoord_can <- ape::pcoa(canberra, correction = "cailliez")
+expl_variance_can <- pcoord_can$values$Rel_corr_eig * 100
+dcan <- pcoord_can$vectors[, c('Axis.1', 'Axis.2')]
+dcan <- as.data.frame(dcan)
+dcan$sampleID <- rownames(dcan)
+df_can <- left_join(dcan, clinical, by = 'sampleID') %>%
+        select(CanberraPCo1 = `Axis.1`, CanberraPCo2 = `Axis.2`, everything(.))
+
+#### PERMANOVA (Canberra) ####
+set.seed(14)
+dfcanova <- df_can[match(attributes(canberra)[["Labels"]], df_can$sampleID),]
+all(dfcanova$sampleID == attributes(canberra)[["Labels"]]) # TRUE
+res1_can <- adonis2(canberra ~ timepoint * EthnicityTot, data = dfcanova, by = "term")
+print(res1_can)
+
+#### PCoA plot - timepoint (Canberra) ####
+(canberra_tp <- df_can %>%
+    ggplot(aes(CanberraPCo1, CanberraPCo2)) +
+    stat_ellipse(geom = "polygon", aes(color = fct_rev(timepoint), fill = fct_rev(timepoint)), type = "norm",
+                 alpha = 0.1) +
+    geom_point(aes(color = fct_rev(timepoint)), size = 1, alpha = 0.5) +
+    ggtitle("PCoA Canberra distance (CAZy families)") +
+    xlab(paste0('PCo1 (', round(expl_variance_can[[1]], digits = 1),'%)')) +
+    ylab(paste0('PCo2 (', round(expl_variance_can[[2]], digits = 1),'%)')) +
+    scale_color_manual(values = pal_simpsons()(2)) +
+    scale_fill_manual(values = pal_simpsons()(2), guide = "none") +
+    scale_alpha_manual(guide = "none") +
+    theme_Publication() +
+    labs(color = "", alpha = "") +
+    annotate("text", x= Inf, y = Inf, hjust = 1, vjust = 1,
+             label = str_c("PERMANOVA: p = ", res1_can$`Pr(>F)`[1], ", R2 = ",
+                           format(round(res1_can$R2[1],3), nsmall = 3))
+             ))
+ggsave(canberra_tp, filename = "results/4_functional_change/cayman/PCoA_Canberra_cayman.pdf", device = "pdf", width = 8, height = 8)
+
+#### PCoA plot - ethnicity baseline (Canberra) ####
+can_mat <- as.matrix(canberra)
+idx_bl_can <- which(dfcanova$timepoint == "baseline" & !is.na(dfcanova$EthnicityTot))
+can_bl <- as.dist(can_mat[idx_bl_can, idx_bl_can])
+res_eth_can_bl <- adonis2(can_bl ~ EthnicityTot, data = dfcanova[idx_bl_can, ], by = "term")
+print(res_eth_can_bl)
+
+(ethcan_bl <- df_can %>% filter(!is.na(EthnicityTot)) %>% filter(timepoint == "baseline") %>%
+    ggplot(aes(CanberraPCo1, CanberraPCo2)) +
+    stat_ellipse(geom = "polygon", aes(color = fct_rev(EthnicityTot), fill = fct_rev(EthnicityTot)), type = "norm",
+                 alpha = 0.1) +
+    geom_point(aes(color = fct_rev(EthnicityTot)), size = 1, alpha = 0.5) +
+    ggtitle("PCoA Canberra (CAZy) - Baseline by Ethnicity") +
+    xlab(paste0('PCo1 (', round(expl_variance_can[[1]], digits = 1),'%)')) +
+    ylab(paste0('PCo2 (', round(expl_variance_can[[2]], digits = 1),'%)')) +
+    scale_color_manual(values = pal_simpsons()(2)) +
+    scale_fill_manual(values = pal_simpsons()(2), guide = "none") +
+    theme_Publication() +
+    labs(color = "", alpha = "") +
+    annotate("text", x= Inf, y = Inf, hjust = 1, vjust = 1,
+             label = str_c("PERMANOVA: p = ", res_eth_can_bl$`Pr(>F)`[1], ", r2 = ",
+                           format(round(res_eth_can_bl$R2[1],3), nsmall = 3))
+             ))
+ggsave(ethcan_bl, filename = "results/4_functional_change/cayman/PCoA_Canberra_cayman_ethnicity.pdf", device = "pdf", width = 8, height = 8)
+
+#### PCoA plot - ethnicity FU (Canberra) ####
+idx_fu_can <- which(dfcanova$timepoint == "follow-up" & !is.na(dfcanova$EthnicityTot))
+can_fu <- as.dist(can_mat[idx_fu_can, idx_fu_can])
+res_eth_can_fu <- adonis2(can_fu ~ EthnicityTot, data = dfcanova[idx_fu_can, ], by = "term")
+print(res_eth_can_fu)
+
+(ethcan_fu <- df_can %>% filter(!is.na(EthnicityTot)) %>% filter(timepoint == "follow-up") %>%
+    ggplot(aes(CanberraPCo1, CanberraPCo2)) +
+    stat_ellipse(geom = "polygon", aes(color = fct_rev(EthnicityTot), fill = fct_rev(EthnicityTot)), type = "norm",
+                 alpha = 0.1) +
+    geom_point(aes(color = fct_rev(EthnicityTot)), size = 1, alpha = 0.5) +
+    ggtitle("PCoA Canberra (CAZy) - Follow-up by Ethnicity") +
+    xlab(paste0('PCo1 (', round(expl_variance_can[[1]], digits = 1),'%)')) +
+    ylab(paste0('PCo2 (', round(expl_variance_can[[2]], digits = 1),'%)')) +
+    scale_color_manual(values = pal_simpsons()(2)) +
+    scale_fill_manual(values = pal_simpsons()(2), guide = "none") +
+    theme_Publication() +
+    labs(color = "", alpha = "") +
+    annotate("text", x= Inf, y = Inf, hjust = 1, vjust = 1,
+             label = str_c("PERMANOVA: p = ", res_eth_can_fu$`Pr(>F)`[1], ", r2 = ",
+                           format(round(res_eth_can_fu$R2[1],3), nsmall = 3))
+             ))
+ggsave(ethcan_fu, filename = "results/4_functional_change/cayman/PCoA_Canberra_cayman_ethnicity_FU.pdf", device = "pdf", width = 8, height = 8)
+
+#### Canberra distance between baseline and follow-up per individual ####
+canmat <- as.matrix(canberra)
+all_combinations_can <- t(combn(unique(rownames(canmat)), 2, simplify = TRUE))
+data_long_can <- data.frame(
+    sampleID1 = all_combinations_can[, 1],
+    sampleID2 = all_combinations_can[, 2]
+)
+data_long_can <- data_long_can %>%
+    filter(str_remove(sampleID1, "HELIBA_") == str_remove(sampleID2, "HELIFU_")) %>%
+    mutate(
+        ID = str_c("S", str_remove(sampleID1, "HELIBA_"))
+    )
+for(a in 1:nrow(data_long_can)){
+    distcan = canmat[paste0(data_long_can$sampleID1[a]), paste0(data_long_can$sampleID2[a])]
+    data_long_can$distance[a] <- distcan
+}
+heliusdist_can <- inner_join(data_long_can, clinical, by = "ID") %>% filter(timepoint == "baseline")
+saveRDS(heliusdist_can, "data/shotgun/cayman_canberradistance_delta.RDS")
+
+#### Distance by ethnicity (Canberra) ####
+ggplot(data = heliusdist_can %>% filter(!is.na(EthnicityTot)),
+       aes(x = fct_reorder(fct_rev(EthnicityTot), .x = distance, .fun = median), y = distance)) +
+    geom_violin(colour = NA, aes(fill = fct_rev(EthnicityTot))) +
+    geom_boxplot(fill = "white", width = 0.2) +
+    scale_fill_simpsons(guide = "none") +
+    labs(y = "Canberra distance", title = "CAZy Canberra distance baseline to follow-up", x = "") +
+    stat_compare_means(tip.length = 0, hide.ns = TRUE,
+                       label = "p.signif", method = "t.test") +
+    theme_Publication() +
+    coord_flip()
+ggsave("results/4_functional_change/cayman/cayman_canberradistance_ethnicities.pdf", width = 6, height = 4)
