@@ -351,7 +351,7 @@ var_meta_bc <- data.frame(
         rep("Risk factors", 7), rep("Disease", 4), rep("Medication", 7), rep("Diet", 7)
     ),
     type = c(
-        "continuous", "continuous", "continuous",
+        "continuous", "binary", "continuous",
         rep("binary", 3), "continuous",
         rep("binary", 11),
         rep("continuous", 7)
@@ -365,8 +365,9 @@ bar_data_bc <- purrr::map_dfr(seq_len(nrow(var_meta_bc)), function(i) {
     col <- var_meta_bc$predictor[i]
     x <- heliusdist_ext[[col]]
     if (var_meta_bc$type[i] == "binary") {
-        n_yes <- sum(x == "Yes", na.rm = TRUE)
-        n_no  <- sum(x == "No",  na.rm = TRUE)
+        lvls  <- if (is.factor(x)) levels(x) else c("No", "Yes")
+        n_no  <- sum(x == lvls[1], na.rm = TRUE)
+        n_yes <- sum(x == lvls[2], na.rm = TRUE)
         n_tot <- n_yes + n_no
         data.frame(
             label    = var_meta_bc$label[i],
@@ -425,7 +426,7 @@ extract_lm_eth <- function(data, predictor_var, label, group) {
             filter(EthnicityTot == eth, !is.na(.data[[predictor_var]])) %>%
             mutate(predictor = .data[[predictor_var]])
         if (nrow(sub) < 10) return(NULL)
-        if (is.factor(sub$predictor) && sum(sub$predictor == "Yes") < 5) return(NULL)
+        if (is.factor(sub$predictor) && "Yes" %in% levels(sub$predictor) && sum(sub$predictor == "Yes") < 5) return(NULL)
         m  <- lm(distance ~ predictor, data = sub)
         cf <- coef(summary(m))
         ci <- confint(m)
