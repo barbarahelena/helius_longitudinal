@@ -1,44 +1,61 @@
 ## Figure 3 — Species-level dynamics (shotgun, Dutch vs SAS)
 ##
 ## Panels:
-##   A — ROC ethnicity prediction at baseline
-##   B — ROC ethnicity prediction at follow-up
-##   C — LMM forest plot: species with significant ethnicity x timepoint interaction
-##   D — Heatmap: species-clinical variable associations
-##   E — KEGG pathways boxplots, Alistipes putredinis, baseline only
-##   F — VFDB category boxplots, Alistipes putredinis, baseline only
-##   G — Strain stability vs Shannon index (baseline)
-##   H — Strain stability vs follow-up time
+##   A — LMM forest plot: species with significant ethnicity x timepoint interaction
+##   B — Ethnicity composition per clade (barplot)
+##   C — Baseline abundance per clade, Dutch vs SAS (boxplot)
+##   D — VFDB boxplot 1
+##   E — VFDB boxplot 2
+##   F — Alistipes phylogenetic tree (full width)
+##   G — Strain stability vs follow-up time
+##   H — Strain stability vs Shannon index (baseline)
 ##   I — Strain stability vs Bray-Curtis dissimilarity
 ##   J — Strain sharing percentage comparison between Dutch and SAS
-##   K — Strain sharing connected dot plot + abundance density + n subjects
+##
+## ML AUROC panels (formerly A & B) moved to suppl_figure_ml_auroc.pdf
 
 library(ggpubr)
 
 ## Source subscripts (run analyses and define panel objects) ----
-source("scripts/3_species_change/2_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R")  # defines pl_fig3_A, pl_fig3_B
-source("scripts/3_species_change/3_species/1_lmm_sg.R")                                          # defines pl_fig3_C
-source("scripts/3_species_change/3_species/2_heatmap.R")                                         # defines pl_fig3_D (heatmap)
-source("scripts/3_species_change/4_alistipes_anno/2_eggnog_comparison.R")                        # defines pl_fig3_E
-source("scripts/3_species_change/4_alistipes_anno/3_vfdb_comparison.R")                          # defines pl_fig3_F
-source("scripts/3_species_change/5_strain_stability/strainsharing_plot.R")                       # defines pl_fig3_G, pl_fig3_H, pl_fig3_I, pl_fig3_J, pl_fig3_K
+# source("scripts/3_species_change/2_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R")  # produces suppl_figure_ml_auroc.pdf
+source("scripts/3_species_change/3_species/1_lmm_sg.R")                                          # defines pl_fig3_C                                        # defines pl_fig3_D (heatmap)
+source("scripts/3_species_change/4_alistipes_anno/3_draw_tree.R")                                 # defines p1 (tree), p_eth (barplot), feat_plots (boxplots)
+source("scripts/3_species_change/5_strain_stability/strainsharing_plot.R")                        # defines pl_fig3_G, pl_fig3_H, pl_fig3_I, pl_fig3_J, pl_fig3_K
 
 ## Assemble Figure 3 ----
-top_row    <- ggarrange(pl_fig3_A, pl_fig3_B, pl_fig3_C,
-                        ncol = 3, widths = c(1.0, 1.0, 1.6),
-                        labels = c("A", "B", "C"))
-mid_row    <- ggarrange(pl_fig3_D, 
-                        ggarrange(pl_fig3_E, ggarrange(pl_fig3_F, NULL, labels = c("F", "")),
-                            nrow = 2),
-                        ncol = 2, widths = c(2.0, 2.0),
-                        labels = c("D", "E"))
+# Stack ethnicity bar + abundance boxplot into one column
+eth_abund_col <- ggarrange(
+  p_eth, p_abund_clade,
+  nrow   = 2,
+  labels = c("B", "C"),
+  common.legend = TRUE,
+  legend = "bottom"
+)
 
-scatter_row <- ggarrange(pl_fig3_H, pl_fig3_G, pl_fig3_I, pl_fig3_J,
-                         nrow = 1, labels = c("G", "H", "I", "J"))
+# Row 1: LMM forest plot | [eth bar / abundance] | VF boxplot 1 | VF boxplot 2
+top_row <- ggarrange(
+  pl_fig3_C, eth_abund_col, feat_plots[[1]], feat_plots[[2]],
+  ncol   = 4,
+  widths = c(1.5, 1, 1, 1),
+  labels = c("A", "", "D", "E")
+)
 
-fig3 <- ggarrange(top_row, mid_row, scatter_row,
-                  nrow = 3, heights = c(0.6, 0.7, 0.5))
+# Row 2: tree alone, full width
+tree_row <- ggarrange(p1, labels = "F")
+
+# Row 3: strain stability panels
+bottom_row <- ggarrange(
+  pl_fig3_H, pl_fig3_G, pl_fig3_I, pl_fig3_J,
+  nrow   = 1,
+  labels = LETTERS[7:10]
+)
+
+fig3 <- ggarrange(
+  top_row, tree_row, bottom_row,
+  nrow    = 3,
+  heights = c(0.5, 1.6, 0.5)
+)
 
 dir.create("results/3_species_change", showWarnings = FALSE, recursive = TRUE)
 ggsave(fig3, filename = "results/3_species_change/figure3.pdf",
-       width = 15, height = 18, device = cairo_pdf)
+       width = 18, height = 26, device = cairo_pdf)
