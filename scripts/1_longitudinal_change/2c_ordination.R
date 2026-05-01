@@ -95,6 +95,127 @@ print(res1)
 
 ggsave(pl_fig1_B, filename = "results/1_longitudinal_change/ordination/PCoA_BrayCurtis.pdf", width = 8, height = 8)
 
+#### Bray-Curtis distance – ethnicity per timepoint ####
+print('PERMANOVA for ethnicity per timepoint..')
+set.seed(1234)
+res2_list <- lapply(c("baseline", "follow-up"), function(tp) {
+    dftp <- dfanova %>% filter(timepoint == tp & !is.na(EthnicityTot) & EthnicityTot != "Other")
+    bray_tp <- as.dist(as.matrix(bray)[dftp$sampleID, dftp$sampleID])
+    adonis2(bray_tp ~ EthnicityTot, data = dftp)
+})
+names(res2_list) <- c("baseline", "follow-up")
+print(res2_list)
+
+fmt_pval_eth <- function(p) ifelse(p < 0.001, "< 0.001", format(round(p, 3), nsmall = 3))
+annot_eth <- tibble(
+    timepoint = c("baseline", "follow-up"),
+    label = c(
+        paste0("PERMANOVA: R² = ", format(round(res2_list[["baseline"]]$R2[1], 3), nsmall = 3),
+               ", p ", fmt_pval_eth(res2_list[["baseline"]]$`Pr(>F)`[1])),
+        paste0("PERMANOVA: R² = ", format(round(res2_list[["follow-up"]]$R2[1], 3), nsmall = 3),
+               ", p ", fmt_pval_eth(res2_list[["follow-up"]]$`Pr(>F)`[1]))
+    )
+)
+
+(pl_bray_eth <- df %>%
+    filter(!is.na(EthnicityTot) & EthnicityTot != "Other") %>%
+    ggplot(aes(BrayPCo1, BrayPCo2)) +
+    stat_ellipse(geom = "polygon", aes(color = EthnicityTot, fill = EthnicityTot), type = "norm", alpha = 0.1) +
+    geom_point(aes(color = EthnicityTot), size = 1, alpha = 0.5) +
+    facet_wrap(~timepoint) +
+    xlab(paste0("PCo1 (", round(ev_bray$V1[1], 1), "%)")) +
+    ylab(paste0("PCo2 (", round(ev_bray$V1[2], 1), "%)")) +
+    scale_color_manual(values = eth_colors) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    labs(color = "", title = "Microbiota composition by ethnicity") +
+    theme_Publication() +
+    geom_text(data = annot_eth, aes(x = Inf, y = Inf, label = label),
+              hjust = 1, vjust = 1, size = 3, inherit.aes = FALSE))
+
+ggsave(pl_bray_eth, filename = "results/1_longitudinal_change/ordination/PCoA_BrayCurtis_ethnicity.pdf", width = 12, height = 6)
+
+#### Pairwise PERMANOVA per timepoint ####
+print('Pairwise PERMANOVA for ethnicity per timepoint..')
+braymat_full <- as.matrix(bray)
+eth_levels <- names(eth_colors)
+eth_pairs  <- combn(eth_levels, 2, simplify = FALSE)
+
+pairwise_permanova <- bind_rows(lapply(c("baseline", "follow-up"), function(tp) {
+    bind_rows(lapply(eth_pairs, function(pair) {
+        dftp <- dfanova %>%
+            filter(timepoint == tp & EthnicityTot %in% pair)
+        if (nrow(dftp) < 4) return(NULL)
+        bray_tp <- as.dist(braymat_full[dftp$sampleID, dftp$sampleID])
+        res <- adonis2(bray_tp ~ EthnicityTot, data = dftp, permutations = 99999)
+        tibble(
+            timepoint = tp,
+            group1    = pair[1],
+            group2    = pair[2],
+            R2        = res$R2[1],
+            pval      = res$`Pr(>F)`[1]
+        )
+    }))
+})) %>%
+    group_by(timepoint) %>%
+    mutate(padj = p.adjust(pval, method = "BH")) %>%
+    ungroup()
+
+print(pairwise_permanova)
+write.csv(pairwise_permanova,
+          "results/1_longitudinal_change/ordination/pairwise_permanova_ethnicity.csv",
+          row.names = FALSE)
+
+# Heatmap of R² per pair, faceted by timepoint
+pw_plot_data <- pairwise_permanova %>%
+    mutate(
+        sig_label = case_when(padj < 0.001 ~ "***", padj < 0.01 ~ "**", padj < 0.05 ~ "*", TRUE ~ ""),
+        group1 = factor(group1, levels = eth_levels),
+        group2 = factor(group2, levels = eth_levels),
+        timepoint = factor(timepoint, levels = c("baseline", "follow-up"),
+                           labels = c("Baseline", "Follow-up"))
+    )
+
+(pl_pairwise_heatmap <- ggplot(pw_plot_data, aes(x = group1, y = group2, fill = R2)) +
+    geom_tile(color = "white") +
+    geom_text(aes(label = paste0(sprintf("%.3f", R2), "\n", sig_label)), size = 3) +
+    facet_wrap(~timepoint) +
+    scale_fill_gradient(low = "white", high = "#197EC0FF", limits = c(0, NA), name = "R²",
+                        guide = guide_colorbar(barheight = unit(6, "cm"), barwidth = unit(0.4, "cm"))) +
+    labs(x = "", y = "", title = "Pairwise PERMANOVA R² by ethnicity") +
+    theme_Publication() +
+    theme(axis.text.x = element_text(angle = 45, hjust = 1)))
+
+ggsave(pl_pairwise_heatmap,
+       filename = "results/1_longitudinal_change/ordination/pairwise_permanova_heatmap.pdf",
+       width = 12, height = 6)
+
+# Delta R²: which pairs diverged or converged between timepoints?
+pw_delta <- pairwise_permanova %>%
+    dplyr::select(timepoint, group1, group2, R2) %>%
+    pivot_wider(names_from = timepoint, values_from = R2) %>%
+    mutate(
+        delta_R2 = `follow-up` - baseline,
+        direction = ifelse(delta_R2 > 0, "diverging", "converging"),
+        pair = paste(group1, "–", group2)
+    ) %>%
+    arrange(desc(abs(delta_R2)))
+
+print(pw_delta)
+
+(pl_delta_R2 <- ggplot(pw_delta, aes(x = reorder(pair, delta_R2), y = delta_R2, fill = direction)) +
+    geom_col() +
+    geom_hline(yintercept = 0, linewidth = 0.4) +
+    scale_fill_manual(values = c("diverging" = "#F05C3BFF", "converging" = "#197EC0FF")) +
+    labs(x = "", y = expression(Delta ~ R^2 ~ "(follow-up – baseline)"),
+         title = "Change in between-ethnicity difference",
+         fill = "") +
+    theme_Publication() +
+    coord_flip())
+
+ggsave(pl_delta_R2,
+       filename = "results/1_longitudinal_change/ordination/pairwise_permanova_deltaR2.pdf",
+       width = 7, height = 6)
+
 ## Distance between datapoints
 braymat <- as.matrix(bray)
 # Generate all possible combinations of IDs
@@ -314,3 +435,10 @@ ggsave("results/1_longitudinal_change/ordination/pco2_spread_per_ethnicity.pdf",
 (pl_pco_combined <- ggarrange(pl_pco1_eth, pl_pco2_eth, nrow = 2, labels = c("A", "B")))
 ggsave("results/1_longitudinal_change/ordination/pco1_pco2_spread_per_ethnicity.pdf",
        pl_pco_combined, width = 8, height = 9)
+
+#### Supplementary Figure 1 ####
+bottom_row <- ggarrange(pl, pl_suppl_diet, ncol = 2, labels = c("B", "C"))
+(suppl_fig1 <- ggarrange(pl_delta_R2, bottom_row, nrow = 2, labels = c("A", "")))
+ggsave(suppl_fig1,
+       filename = "results/1_longitudinal_change/ordination/suppl_fig1.pdf",
+       width = 12, height = 12)
