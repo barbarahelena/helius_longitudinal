@@ -73,7 +73,7 @@ fc-cayman-ordin     = { cmd = "Rscript scripts/4_functional_change/cayman/4_caym
 fc-cayman-ratios    = { cmd = "Rscript scripts/4_functional_change/cayman/5_cayman_ratios.R", depends-on = ["fc-cayman-qc"] }
 fc-cayman           = { depends-on = ["fc-cayman-qc", "fc-cayman-cross", "fc-cayman-lmm", "fc-cayman-ordin", "fc-cayman-ratios"] }
 
-fc-assemble         = { cmd = "Rscript scripts/4_functional_change/assemble_figure.R", depends-on = ["fc-humann-lmm", "fc-cayman-lmm", "fc-cayman-ratios"] }
+fc-assemble         = { cmd = "Rscript scripts/4_functional_change/assemble_figure.R", depends-on = ["fc-humann-lmm", "fc-cayman-lmm", "fc-cayman-ordin", "fc-cayman-ratios"] }
 fc-all              = { depends-on = ["fc-humann", "fc-cayman", "fc-assemble"] }
 
 # Chapter 5 — ARG
