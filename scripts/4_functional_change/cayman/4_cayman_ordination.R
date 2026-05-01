@@ -276,7 +276,7 @@ print(res_eth_can_bl)
     stat_ellipse(geom = "polygon", aes(color = fct_rev(EthnicityTot), fill = fct_rev(EthnicityTot)), type = "norm",
                  alpha = 0.1) +
     geom_point(aes(color = fct_rev(EthnicityTot)), size = 1, alpha = 0.5) +
-    ggtitle("PCoA Canberra (CAZy) - Baseline by Ethnicity") +
+    ggtitle("PCoA Canberra (CAZy) - Baseline") +
     xlab(paste0('PCo1 (', round(expl_variance_can[[1]], digits = 1),'%)')) +
     ylab(paste0('PCo2 (', round(expl_variance_can[[2]], digits = 1),'%)')) +
     scale_color_manual(values = pal_simpsons()(2)) +
@@ -300,7 +300,7 @@ print(res_eth_can_fu)
     stat_ellipse(geom = "polygon", aes(color = fct_rev(EthnicityTot), fill = fct_rev(EthnicityTot)), type = "norm",
                  alpha = 0.1) +
     geom_point(aes(color = fct_rev(EthnicityTot)), size = 1, alpha = 0.5) +
-    ggtitle("PCoA Canberra (CAZy) - Follow-up by Ethnicity") +
+    ggtitle("PCoA Canberra (CAZy) - Follow-up") +
     xlab(paste0('PCo1 (', round(expl_variance_can[[1]], digits = 1),'%)')) +
     ylab(paste0('PCo2 (', round(expl_variance_can[[2]], digits = 1),'%)')) +
     scale_color_manual(values = pal_simpsons()(2)) +
