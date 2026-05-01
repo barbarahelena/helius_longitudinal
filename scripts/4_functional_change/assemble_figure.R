@@ -4,19 +4,20 @@
 ##   A  HUMAnN forest + cross-sectional heatmap (FDR < 0.05)
 ##   B  HUMAnN violin: Gluconeogenesis III
 ##   C  HUMAnN violin: L-lysine biosynthesis II
-##   D  CAZyme forest + cross-sectional heatmap (FDR < 0.05)
-##   E  CAZyme violin: GH13_16
-##   F  CAZyme violin: GH5_26
-##   G  GAG-to-DF ratio
+##   D  CAZyme Canberra PCoA — baseline by ethnicity
+##   (–) CAZyme Canberra PCoA — follow-up by ethnicity
+##   E  CAZyme forest + cross-sectional heatmap (FDR < 0.05)
+##   F  CAZyme violin: GH13_16
+##   G  CAZyme violin: GH5_26
+##   H  GAG-to-DF ratio
 
 library(ggpubr)
 library(tidyverse)
 library(ggsci)
 
 ## ── Helper: render an aplot composite to a ggplot panel ───────────────────────
-## aplot::insert_right() returns an object that aligns axes via patchwork/grid.
-## grid.grabExpr captures the rendered output as a vector grob; as_ggplot wraps
-## it so ggarrange can treat it as a single panel.
+## aplot::insert_right() aligns axes via patchwork/grid; grid.grabExpr captures
+## the rendered output as a vector grob; as_ggplot wraps it for ggarrange.
 
 aplot_to_gg <- function(ap) {
   if (is.null(ap)) return(ggplot() + theme_void())
@@ -50,17 +51,23 @@ source("scripts/4_functional_change/cayman/3_cayman_longitudinal_lmm.R")
 pl_cazyme_combined <- if (exists("pl_combined")) pl_combined else NULL
 # make_boxviolin (CAZyme version), dftot_adj, statres_adj remain in environment
 
-## ── 3. Source CAZyme ratios — build GAG violin immediately ────────────────────
+## ── 3. Source CAZyme ordination — snapshot Canberra PCoA panels ───────────────
+
+source("scripts/4_functional_change/cayman/4_cayman_ordination.R")
+
+pl_can_bl <- if (exists("ethcan_bl")) ethcan_bl else ggplot() + theme_void()
+pl_can_fu <- if (exists("ethcan_fu")) ethcan_fu else ggplot() + theme_void()
+
+## ── 4. Source CAZyme ratios — build GAG violin immediately ────────────────────
 
 source("scripts/4_functional_change/cayman/5_cayman_ratios.R")
-# dftot (ratios), wilcox_res, eth_colors now in environment
+# dftot (ratios), wilcox_res now in environment
 
 plab_gag_bl <- formatC(wilcox_res$p_GAG_DF[wilcox_res$timepoint == "baseline"],
                         format = "e", digits = 2)
 plab_gag_fu <- formatC(wilcox_res$p_GAG_DF[wilcox_res$timepoint == "follow-up"],
                         format = "e", digits = 2)
 
-# Rebuild with x = timepoint, facet = EthnicityTot to match violin convention
 p_gag_vln <- ggplot(dftot, aes(x = timepoint, y = log10_GAG_DF, fill = EthnicityTot)) +
   geom_violin(colour = NA, aes(alpha = timepoint)) +
   geom_boxplot(fill = "white", width = 0.2, outlier.shape = NA) +
@@ -73,12 +80,12 @@ p_gag_vln <- ggplot(dftot, aes(x = timepoint, y = log10_GAG_DF, fill = Ethnicity
        title    = "GAG-to-DF ratio",
        subtitle = paste0("Baseline p=", plab_gag_bl, "  Follow-up p=", plab_gag_fu))
 
-## ── 4. Convert aplot composites → ggplot panels ───────────────────────────────
+## ── 5. Convert aplot composites → ggplot panels ───────────────────────────────
 
 pl_A <- aplot_to_gg(pl_humann_combined)
-pl_D <- aplot_to_gg(pl_cazyme_combined)
+pl_E <- aplot_to_gg(pl_cazyme_combined)
 
-## ── 5. Build named HUMAnN violin panels (B, C) ────────────────────────────────
+## ── 6. Build named HUMAnN violin panels (B, C) ────────────────────────────────
 
 find_col <- function(partial, cols) {
   m <- grep(partial, cols, value = TRUE, ignore.case = TRUE)
@@ -111,7 +118,7 @@ make_humann_vln <- function(partial_name) {
 pl_B <- make_humann_vln("Gluconeogenesis III")
 pl_C <- make_humann_vln("L-lysine biosynthesis II")
 
-## ── 6. Build named CAZyme violin panels (E, F) ────────────────────────────────
+## ── 7. Build named CAZyme violin panels (F, G) ────────────────────────────────
 
 get_cazyme_pval <- function(fam) {
   row <- statres_adj[statres_adj$family == fam, ]
@@ -124,13 +131,12 @@ make_cazyme_vln <- function(fam_name) {
     theme(plot.title = element_text(face = "bold", size = rel(0.9), hjust = 0.5))
 }
 
-pl_E <- make_cazyme_vln("GH13_16")
-pl_F <- make_cazyme_vln("GH5_26")
+pl_F <- make_cazyme_vln("GH13_16")
+pl_G <- make_cazyme_vln("GH5_26")
 
-## ── 7. Assemble rows ──────────────────────────────────────────────────────────
-# Forest composites (A, D) take ~50 % of row width; each violin gets ~25 %.
-# GAG row has a NULL spacer matching the forest column so G sits under E–F.
+## ── 8. Assemble rows ──────────────────────────────────────────────────────────
 
+# Row 1 — HUMAnN: forest+heatmap (wide) + two pathway violins
 humann_row <- ggarrange(
   pl_A, pl_B, pl_C,
   ncol   = 3,
@@ -138,38 +144,39 @@ humann_row <- ggarrange(
   widths = c(2, 1, 1)
 )
 
-cazyme_row <- ggarrange(
-  pl_D, pl_E, pl_F,
+# Row 2 — CAZyme ordination: two Canberra PCoAs (D) + forest+heatmap (E)
+cazyme_ordin_row <- ggarrange(
+  pl_can_bl, pl_can_fu, pl_E,
   ncol   = 3,
-  labels = c("D", "E", "F"),
-  widths = c(2, 1, 1)
+  labels = c("D", "", "E"),
+  widths = c(1, 1, 2)
 )
 
-gag_row <- ggarrange(
-  NULL, p_gag_vln,
-  ncol   = 2,
-  labels = c("", "G"),
-  widths = c(2, 2)
+# Row 3 — CAZyme details: two family violins (F, G) + GAG ratio (H)
+cazyme_vln_row <- ggarrange(
+  pl_F, pl_G, p_gag_vln,
+  ncol   = 3,
+  labels = c("F", "G", "H"),
+  widths = c(1, 1, 1)
 )
 
-## ── 8. Final assembly ─────────────────────────────────────────────────────────
-# CAZyme row is taller: forest up to 20 entries vs ~12 for HUMAnN.
+## ── 9. Final assembly ─────────────────────────────────────────────────────────
 
 fig4 <- ggarrange(
   humann_row,
-  cazyme_row,
-  gag_row,
+  cazyme_ordin_row,
+  cazyme_vln_row,
   nrow    = 3,
-  heights = c(1.2, 1.5, 0.8)
+  heights = c(1.2, 1.2, 1.0)
 )
 
-## ── 9. Save ───────────────────────────────────────────────────────────────────
+## ── 10. Save ──────────────────────────────────────────────────────────────────
 
 dir.create("results/4_functional_change", showWarnings = FALSE, recursive = TRUE)
 ggsave(
   fig4,
   filename = "results/4_functional_change/figure4.pdf",
-  width    = 14,
+  width    = 18,
   height   = 15,
   device   = cairo_pdf
 )
