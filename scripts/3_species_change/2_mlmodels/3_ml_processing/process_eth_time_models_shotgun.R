@@ -112,21 +112,21 @@ path_true <- latest_output("results/3_species_change/2_mlmodels/eth_base", "outp
 data_path <- "results/3_species_change/2_mlmodels/eth_base/input_data"
 labels <- c("SAS", "Dutch")
 
-pl2 <- plot_feature_importance_shotgun(path_true, 20)
+pl2 <- plot_feature_importance_shotgun(path_true, 30)
 svg_grob <- ggdraw() + draw_image(image_read_pdf(file.path(path_true, "Plot_AUC.pdf"), density = 200))
 pl3 <- plot_features_top_shotgun(data_path, path_true, top_n=5, nrow = 1, labels)
 plarr1 <- ggarrange(svg_grob, pl2, pl3,
                     nrow = 3, labels = c("A", "B", "C"),
                     heights = c(1.2,1.3,0.8))
 ggsave(plarr1, filename = "results/3_species_change/2_mlmodels/shotgun_ethnicity_baseline.pdf",
-       width = 14, height = 18)
+       width = 14, height = 25)
 
 ## Follow-up
 path_true <- latest_output("results/3_species_change/2_mlmodels/eth_fu", "output_XGB")
 data_path <- "results/3_species_change/2_mlmodels/eth_fu/input_data"
 labels <- c("SAS", "Dutch")
 
-pl2 <- plot_feature_importance_shotgun(path_true, 20)
+pl2 <- plot_feature_importance_shotgun(path_true, 30)
 svg_grob <- ggdraw() + draw_image(image_read_pdf(file.path(path_true, "Plot_AUC.pdf"), density = 200))
 pl3 <- plot_features_top_shotgun(data_path, path_true, top_n=5, nrow = 1, labels)
 plarr1 <- ggarrange(svg_grob, pl2, pl3,
@@ -155,7 +155,7 @@ pl_fig3_A <- roc_base
 pl_fig3_B <- roc_fu
 ggsave(ggarrange(pl_fig3_A, pl_fig3_B, nrow = 2, labels = c("A", "B")),
        filename = "results/3_species_change/2_mlmodels/fig3_eth_roc.pdf",
-       width = 14, height = 12)
+       width = 14, height = 25)
 
 #### Supplemental figure — ML AUROC panels ####
 suppl_ml <- ggarrange(
@@ -173,13 +173,13 @@ cat("Supplemental ML AUROC figure saved to: results/3_species_change/suppl_figur
 feat_base <- rio::import(file.path(path_eth_base, "feature_importance.txt")) %>%
     arrange(-RelFeatImp) %>%
     filter(!FeatName %in% c("random_variable1", "random_variable2")) %>%
-    slice(1:20) %>%
+    slice(1:30) %>%
     pull(FeatName)
 
 feat_fu <- rio::import(file.path(path_eth_fu, "feature_importance.txt")) %>%
     arrange(-RelFeatImp) %>%
     filter(!FeatName %in% c("random_variable1", "random_variable2")) %>%
-    slice(1:20) %>%
+    slice(1:30) %>%
     pull(FeatName)
 
 overlap_feat   <- intersect(feat_base, feat_fu)
