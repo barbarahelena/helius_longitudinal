@@ -103,10 +103,10 @@ write.csv2(statres_adj,
 make_boxviolin <- function(df, family_name, pval, y_label) {
   df$mb      <- log10(df[[family_name]] + 1)
   pval_label <- formatC(pval, format = "e", digits = 2)
-  ggplot(df, aes(x = timepoint, y = mb, fill = EthnicityTot)) +
+  ggplot(df, aes(x = EthnicityTot, y = mb, fill = EthnicityTot)) +
     geom_violin(colour = NA, aes(alpha = timepoint)) +
     geom_boxplot(fill = "white", width = 0.2, outlier.shape = NA) +
-    facet_wrap(~EthnicityTot) +
+    facet_wrap(~timepoint) +
     scale_fill_jco(guide = "none") +
     scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
     theme_Publication() +
