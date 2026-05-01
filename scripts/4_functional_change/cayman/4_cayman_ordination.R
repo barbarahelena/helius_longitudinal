@@ -32,7 +32,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 }
 
 #### Load data ####
-df_raw <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |> select(-HELIBA_103370, -HELIFU_103370)
+df_raw <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |> dplyr::select(-HELIBA_103370, -HELIFU_103370)
 rownames(df_raw) <- df_raw$family
 df_raw$family <- NULL
 caymat <- t(as.matrix(df_raw))  # samples in rows, families in columns
@@ -53,7 +53,7 @@ dbray <- pcoord$vectors[, c('Axis.1', 'Axis.2')]
 dbray <- as.data.frame(dbray)
 dbray$sampleID <- rownames(dbray)
 df <- left_join(dbray, clinical, by = 'sampleID') %>%
-        select(BrayPCo1 = `Axis.1`, BrayPCo2 = `Axis.2`, everything(.))
+        dplyr::select(BrayPCo1 = `Axis.1`, BrayPCo2 = `Axis.2`, everything(.))
 
 #### PERMANOVA ####
 set.seed(14)
@@ -167,60 +167,64 @@ ggplot(data = heliusdist %>% filter(!is.na(EthnicityTot)),
 ggsave("results/4_functional_change/cayman/cayman_distance_ethnicities.pdf", width = 6, height = 4)
 
 #### Correlation CAZy vs MB (shotgun) Bray-Curtis dissimilarity ----
-mb_dist <- readRDS("data/shotgun/braydistance_delta.RDS") %>%
-  dplyr::select(ID, mb_distance = distance)
+tryCatch({
+  mb_dist <- readRDS("data/shotgun/braydistance_delta.RDS") %>%
+    dplyr::select(ID, mb_distance = distance)
 
-cazy_mb_dist <- heliusdist %>%
-  dplyr::select(ID, cazy_distance = distance, EthnicityTot) %>%
-  inner_join(mb_dist, by = "ID")
+  cazy_mb_dist <- heliusdist %>%
+    dplyr::select(ID, cazy_distance = distance, EthnicityTot) %>%
+    inner_join(mb_dist, by = "ID")
 
-# Spearman correlation
-cor_res <- cor.test(cazy_mb_dist$cazy_distance, cazy_mb_dist$mb_distance, method = "spearman")
-subtitle_cor <- paste0("Spearman rho = ", round(cor_res$estimate, 3),
-                       ", p = ", formatC(cor_res$p.value, format = "e", digits = 2))
+  # Spearman correlation
+  cor_res <- cor.test(cazy_mb_dist$cazy_distance, cazy_mb_dist$mb_distance, method = "spearman")
+  subtitle_cor <- paste0("Spearman rho = ", round(cor_res$estimate, 3),
+                         ", p = ", formatC(cor_res$p.value, format = "e", digits = 2))
 
-# Unstratified
-(pl_cor <- ggplot(cazy_mb_dist, aes(x = mb_distance, y = cazy_distance)) +
-  geom_point(color = "royalblue", alpha = 0.4, size = 1) +
-  geom_smooth(method = "lm", color = "black") +
-  theme_Publication() +
-  labs(x = "Microbiome Bray-Curtis dissimilarity (BL to FU)",
-       y = "CAZy Bray-Curtis dissimilarity (BL to FU)",
-       title = "Microbiome vs CAZy compositional change",
-       subtitle = subtitle_cor))
-ggsave("results/4_functional_change/cayman/cayman_vs_mb_braycurtis.pdf", pl_cor, width = 5.5, height = 5)
+  # Unstratified
+  (pl_cor <- ggplot(cazy_mb_dist, aes(x = mb_distance, y = cazy_distance)) +
+    geom_point(color = "royalblue", alpha = 0.4, size = 1) +
+    geom_smooth(method = "lm", color = "black") +
+    theme_Publication() +
+    labs(x = "Microbiome Bray-Curtis dissimilarity (BL to FU)",
+         y = "CAZy Bray-Curtis dissimilarity (BL to FU)",
+         title = "Microbiome vs CAZy compositional change",
+         subtitle = subtitle_cor))
+  ggsave("results/4_functional_change/cayman/cayman_vs_mb_braycurtis.pdf", pl_cor, width = 5.5, height = 5)
 
-# Stratified by ethnicity
-(pl_cor_eth <- ggplot(cazy_mb_dist %>% filter(!is.na(EthnicityTot)),
-                      aes(x = mb_distance, y = cazy_distance)) +
-  geom_point(aes(color = fct_rev(EthnicityTot)), alpha = 0.4, size = 1) +
-  geom_smooth(method = "lm", color = "black") +
-  scale_color_simpsons(guide = "none") +
-  facet_wrap(~fct_rev(EthnicityTot)) +
-  stat_cor(method = "spearman", size = 3) +
-  theme_Publication() +
-  labs(x = "Microbiome Bray-Curtis dissimilarity (BL to FU)",
-       y = "CAZy Bray-Curtis dissimilarity (BL to FU)",
-       title = "Microbiome vs CAZy compositional change"))
-ggsave("results/4_functional_change/cayman/cayman_vs_mb_braycurtis_ethnicity.pdf", pl_cor_eth, width = 8, height = 6)
+  # Stratified by ethnicity
+  (pl_cor_eth <- ggplot(cazy_mb_dist %>% filter(!is.na(EthnicityTot)),
+                        aes(x = mb_distance, y = cazy_distance)) +
+    geom_point(aes(color = fct_rev(EthnicityTot)), alpha = 0.4, size = 1) +
+    geom_smooth(method = "lm", color = "black") +
+    scale_color_simpsons(guide = "none") +
+    facet_wrap(~fct_rev(EthnicityTot)) +
+    stat_cor(method = "spearman", size = 3) +
+    theme_Publication() +
+    labs(x = "Microbiome Bray-Curtis dissimilarity (BL to FU)",
+         y = "CAZy Bray-Curtis dissimilarity (BL to FU)",
+         title = "Microbiome vs CAZy compositional change"))
+  ggsave("results/4_functional_change/cayman/cayman_vs_mb_braycurtis_ethnicity.pdf", pl_cor_eth, width = 8, height = 6)
 
-# Linear model: CAZy_BC ~ Microbiome_BC * Ethnicity
-model_bc <- lm(cazy_distance ~ mb_distance * EthnicityTot, data = cazy_mb_dist %>% filter(!is.na(EthnicityTot)))
-res_bc <- summary(model_bc)
-print(res_bc)
-ci_bc <- confint(model_bc)
+  # Linear model: CAZy_BC ~ Microbiome_BC * Ethnicity
+  model_bc <- lm(cazy_distance ~ mb_distance * EthnicityTot, data = cazy_mb_dist %>% filter(!is.na(EthnicityTot)))
+  res_bc <- summary(model_bc)
+  print(res_bc)
+  ci_bc <- confint(model_bc)
 
-# Extract all coefficients
-bc_results <- data.frame(
-  term = rownames(res_bc$coefficients),
-  estimate = res_bc$coefficients[, 1],
-  se = res_bc$coefficients[, 2],
-  conflow = ci_bc[, 1],
-  confhigh = ci_bc[, 2],
-  pval = res_bc$coefficients[, 4]
-) %>%
-  mutate(padj = p.adjust(pval, method = "fdr"))
-write.csv2(bc_results, "results/4_functional_change/cayman/lm_cazyBC_mbBC_ethnicity.csv", row.names = FALSE)
+  bc_results <- data.frame(
+    term = rownames(res_bc$coefficients),
+    estimate = res_bc$coefficients[, 1],
+    se = res_bc$coefficients[, 2],
+    conflow = ci_bc[, 1],
+    confhigh = ci_bc[, 2],
+    pval = res_bc$coefficients[, 4]
+  ) %>%
+    mutate(padj = p.adjust(pval, method = "fdr"))
+  write.csv2(bc_results, "results/4_functional_change/cayman/lm_cazyBC_mbBC_ethnicity.csv", row.names = FALSE)
+}, error = function(e) {
+  message("Skipping CAZy vs MB Bray-Curtis correlation (braydistance_delta.RDS not found): ",
+          conditionMessage(e))
+})
 
 #### Canberra distance ####
 print('Canberra distance CAZy composition')
@@ -231,7 +235,7 @@ dcan <- pcoord_can$vectors[, c('Axis.1', 'Axis.2')]
 dcan <- as.data.frame(dcan)
 dcan$sampleID <- rownames(dcan)
 df_can <- left_join(dcan, clinical, by = 'sampleID') %>%
-        select(CanberraPCo1 = `Axis.1`, CanberraPCo2 = `Axis.2`, everything(.))
+        dplyr::select(CanberraPCo1 = `Axis.1`, CanberraPCo2 = `Axis.2`, everything(.))
 
 #### PERMANOVA (Canberra) ####
 set.seed(14)
