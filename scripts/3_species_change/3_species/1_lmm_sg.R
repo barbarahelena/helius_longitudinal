@@ -138,9 +138,10 @@ for(i in 1:nrow(maxsig)){
 dir.create("results/3_species_change/3_species/lmer", recursive = TRUE, showWarnings = FALSE)
 
 (plots <- ggarrange(plotlist = plist, common.legend = TRUE, legend = "bottom",
-          labels = LETTERS[1:8],
-          nrow = 3, ncol = 3))
-ggsave(plots, filename = "results/3_species_change/3_species/lmer/lmer_plots.pdf", width = 12, height = 13)
+          labels = LETTERS[1:11],
+          nrow = 4, ncol = 3))
+ggsave(plots, filename = "results/3_species_change/3_species/lmer/lmer_plots.pdf", 
+            width = 12, height = 16)
 write.csv2(statres, "results/3_species_change/3_species/lmer/lmm_results.csv")
 
 #### Figure 3B — Forest plot: species with significant ethnicity × timepoint interaction ####
@@ -170,7 +171,7 @@ dir_colors <- c("Dutch more increase" = pal_jco()(2)[1], "SAS more increase" = p
     theme(legend.position = "bottom", plot.title = element_text(size = rel(1.2))))
 
 ggsave(pl_fig3_C, filename = "results/3_species_change/3_species/lmer/lmm_species_forest.pdf",
-       width = 10, height = 10)
+       width = 10, height = 11)
 
 #### Baseline differential abundance between ethnicities ####
 
