@@ -54,11 +54,12 @@ prevalent_genes <- gene_prevalence %>%
 # DATA PREPARATION ----
 df_wide <- df_raw %>%
   filter(Gene_Symbol %in% prevalent_genes) %>%
-  dplyr::select(Sample, Gene_Symbol, RPKM) %>%
+  mutate(CPM = (Mapped_Reads / Total_Reads) * 1e6) %>%
+  dplyr::select(Sample, Gene_Symbol, CPM) %>%
   group_by(Sample, Gene_Symbol) %>%
-  summarise(RPKM = mean(RPKM, na.rm = TRUE), .groups = "drop") %>%
-  pivot_wider(names_from = Gene_Symbol, values_from = RPKM,
-              values_fill = list(RPKM = 0)) %>%
+  summarise(CPM = mean(CPM, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = Gene_Symbol, values_from = CPM,
+              values_fill = list(CPM = 0)) %>%
   mutate(sampleID = Sample) %>%
   dplyr::select(sampleID, everything(), -Sample)
 
@@ -101,18 +102,19 @@ arg_burden_clin <- left_join(total_arg_burden, clinical, by = "sampleID") %>%
 # Tests (no need for depth adjustment - RPM already normalizes for depth)
 arg_baseline <- arg_burden_clin %>% filter(timepoint == "baseline")
 model_eth <- lm(log_rpm ~ EthnicityTot, data = arg_baseline)
-model_time <- lmer(log_rpm ~ timepoint + (1|ID), data = arg_burden_clin)
-model_int <- lmer(log_rpm ~ EthnicityTot * timepoint + (1|ID), data = arg_burden_clin)
+model_time <- lmer(log_rpm ~ timepoint + FUtime + (1|ID), data = arg_burden_clin)
+model_int <- lmer(log_rpm ~ EthnicityTot * timepoint + FUtime + (1|ID), data = arg_burden_clin)
 
 res_eth <- summary(model_eth)
 res_time <- summary(model_time)
 res_int <- summary(model_int)
 
+int_row <- grep("EthnicityTot.*:.*timepoint", rownames(res_int$coefficients))
 arg_burden_results <- data.frame(
   test = c("Ethnicity (baseline)", "Timepoint (overall)", "Ethnicity*Timepoint"),
-  estimate = c(res_eth$coefficients[2, 1], res_time$coefficients[2, 1], res_int$coefficients[4, 1]),
-  se = c(res_eth$coefficients[2, 2], res_time$coefficients[2, 2], res_int$coefficients[4, 2]),
-  pval = c(res_eth$coefficients[2, 4], res_time$coefficients[2, 5], res_int$coefficients[4, 5]))
+  estimate = c(res_eth$coefficients[2, 1], res_time$coefficients[2, 1], res_int$coefficients[int_row, 1]),
+  se = c(res_eth$coefficients[2, 2], res_time$coefficients[2, 2], res_int$coefficients[int_row, 2]),
+  pval = c(res_eth$coefficients[2, 4], res_time$coefficients[2, 5], res_int$coefficients[int_row, 5]))
 write.csv2(arg_burden_results, "results/5_arg/longitudinal/total_arg_burden_results.csv", row.names = FALSE)
 
 # Plots
@@ -211,23 +213,24 @@ arg_diversity <- arg_div_raw %>%
 arg_div_clin <- arg_diversity %>%
   left_join(clinical, by = "sampleID") %>%
   filter(!is.na(EthnicityTot)) %>%
-  mutate(timepoint   = factor(timepoint, levels = c("baseline", "follow-up")),
+  mutate(timepoint    = factor(timepoint, levels = c("baseline", "follow-up")),
          EthnicityTot = factor(EthnicityTot),
          ID           = factor(ID)) %>%
   droplevels()
 
 # LMMs: ethnicity × timepoint interaction
-model_rich_int <- lmer(richness ~ EthnicityTot * timepoint + (1|ID), data = arg_div_clin)
-model_shan_int <- lmer(shannon  ~ EthnicityTot * timepoint + (1|ID), data = arg_div_clin)
+model_rich_int <- lmer(richness ~ EthnicityTot * timepoint + FUtime + (1|ID), data = arg_div_clin)
+model_shan_int <- lmer(shannon  ~ EthnicityTot * timepoint + FUtime + (1|ID), data = arg_div_clin)
 
 res_rich <- summary(model_rich_int)
 res_shan <- summary(model_shan_int)
 
+div_int_row <- grep("EthnicityTot.*:.*timepoint", rownames(res_rich$coefficients))
 div_results <- data.frame(
   metric   = c("Richness", "Shannon"),
-  estimate = c(res_rich$coefficients[4, 1], res_shan$coefficients[4, 1]),
-  se       = c(res_rich$coefficients[4, 2], res_shan$coefficients[4, 2]),
-  pval     = c(res_rich$coefficients[4, 5], res_shan$coefficients[4, 5])
+  estimate = c(res_rich$coefficients[div_int_row, 1], res_shan$coefficients[div_int_row, 1]),
+  se       = c(res_rich$coefficients[div_int_row, 2], res_shan$coefficients[div_int_row, 2]),
+  pval     = c(res_rich$coefficients[div_int_row, 5], res_shan$coefficients[div_int_row, 5])
 )
 write.csv2(div_results, "results/5_arg/longitudinal/arg_diversity_lmm_results.csv", row.names = FALSE)
 
@@ -260,7 +263,7 @@ p_shannon <- ggplot(arg_div_plot, aes(x = EthnicityTot, y = shannon, fill = Ethn
   scale_fill_jco() +
   scale_x_discrete(labels = function(x) gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
   theme_Publication() +
-  labs(x = "", y = "Shannon Diversity", title = "ARG Shannon diversity by ethnicity") +
+  labs(x = "", y = "Shannon Diversity (RPKM-based)", title = "ARG Shannon diversity by ethnicity") +
   theme(legend.position = "none")
 ggsave("results/5_arg/longitudinal/arg_shannon_ethnicity.pdf", p_shannon, width = 8, height = 5)
 
@@ -271,7 +274,7 @@ statres <- data.frame()
 for(a in 1:length(gene_cols)){
   mbname <- gene_cols[a]
   df_tot$mb <- log10(df_tot[[mbname]] + 1)
-  model1 <- lmer(mb ~ EthnicityTot * timepoint + log_depth + (1|ID), data = df_tot)
+  model1 <- lmer(mb ~ EthnicityTot * timepoint + FUtime + (1|ID), data = df_tot)
   res <- summary(model1)
   confint_model1 <- confint(model1, method = "Wald")
   interaction_row <- grep("EthnicityTot.*:.*timepoint", rownames(res$coefficients))
@@ -350,7 +353,7 @@ if(nrow(statres_sig) > 0){
       scale_color_jco() +
       coord_cartesian(ylim = c(mbmin, mbmax)) +
       theme_Publication() +
-      labs(x = "Timepoint", y = "log10(RPKM + 1)",
+      labs(x = "Timepoint", y = "log10(CPM + 1)",
            title = paste0(nm, "\n", statres_sig$subclass[i]),
            color = "")
 
@@ -375,7 +378,7 @@ statres <- data.frame()
 for(a in 1:length(gene_cols)){
   mbname <- gene_cols[a]
   df_tot$mb <- log10(df_tot[[mbname]] + 1)
-  model1 <- lmer(mb ~ timepoint + log_depth + (1|ID), data = df_tot)
+  model1 <- lmer(mb ~ timepoint + FUtime + (1|ID), data = df_tot)
   res <- summary(model1)
   confint_model1 <- confint(model1, method = "Wald")
   pval_row <- grep("timepoint", rownames(res$coefficients))
@@ -447,7 +450,7 @@ for(i in 1:min(nrow(statres_sig), 20)){
                         tip.length = 0, bracket.shorten = 0.1, size = 4) +
     coord_cartesian(ylim = c(mbmin, mbmax)) +
     theme_Publication() +
-    labs(x = "Timepoint", y = "log10(RPKM + 1)",
+    labs(x = "Timepoint", y = "log10(CPM + 1)",
           title = paste0(nm), subtitle = paste0(statres_sig$subclass[i]),
           color = "")
 
@@ -540,7 +543,7 @@ pl_B_shan <- ggplot(arg_div_fig, aes(x = EthnicityTot, y = shannon, fill = Ethni
   scale_fill_manual(values = eth_colors, guide = "none") +
   scale_x_discrete(labels = function(x) gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
   theme_Publication(base_size = BASE_SIZE) +
-  labs(x = "", y = "Shannon Diversity", title = "ARG Shannon diversity by ethnicity")
+  labs(x = "", y = "Shannon Diversity (RPKM-based)", title = "ARG Shannon diversity by ethnicity")
 
 ## ── Panels F–: Key gene box + violin (FDR < 0.05 interaction) ────────────────
 key_genes <- statres_interaction %>%
