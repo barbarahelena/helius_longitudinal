@@ -77,7 +77,7 @@ for (gf in gene_families) {
   print(gf)
   dftot_adj$mb <- log10(dftot_adj[[gf]] + 1)
   tryCatch({
-    model_adj <- lmer(mb ~ EthnicityTot * timepoint + (1|ID), data = dftot_adj)
+    model_adj <- lmer(mb ~ EthnicityTot * timepoint + FUtime + (1|ID), data = dftot_adj)
     res <- summary(model_adj)
     ci  <- confint(model_adj, method = "Wald")
     interaction_row <- grep("EthnicityTotSouth-Asian Surinamese:timepointfollow-up",
