@@ -7,6 +7,7 @@ library(ggsci)
 library(ggpubr)
 library(lme4)
 library(afex)
+library(aplot)
 
 theme_Publication <- function(base_size=14, base_family="sans") {
     library(grid)
@@ -285,6 +286,67 @@ nrow(fu_sig)
 
 ggsave(pl_fu_eth, filename = "results/3_species_change/3_species/lmer/lm_followup_ethnicity_forest.pdf",
        width = 11, height = 13)
+
+#### Heatmap: cross-sectional ethnic differences for LMM-significant species ####
+
+lmm_sig_names_orig <- statres %>% filter(sigq != "") %>% pull(mbname)
+
+heatmap_data <- bind_rows(
+    statres_base %>%
+        filter(mbname %in% lmm_sig_names_orig) %>%
+        dplyr::select(mbname, estimate, qval) %>%
+        mutate(timepoint = "baseline"),
+    statres_fu %>%
+        filter(mbname %in% lmm_sig_names_orig) %>%
+        dplyr::select(mbname, estimate, qval) %>%
+        mutate(timepoint = "follow-up")
+) %>%
+    mutate(
+        diff_display = ifelse(qval < 0.05, estimate, NA_real_),
+        star = case_when(
+            qval < 0.001 ~ "***",
+            qval < 0.01  ~ "**",
+            qval < 0.05  ~ "*",
+            TRUE ~ ""
+        ),
+        mbname_clean = str_replace_all(mbname, "_", " "),
+        mbname_clean = factor(mbname_clean, levels = levels(lmm_sig$mbname)),
+        timepoint    = factor(timepoint, levels = c("baseline", "follow-up"))
+    )
+
+abs_lim <- max(abs(heatmap_data$diff_display), na.rm = TRUE)
+if (is.na(abs_lim) || abs_lim == 0) abs_lim <- 1
+
+pl_heatmap_species <- ggplot(heatmap_data,
+                              aes(x = timepoint, y = mbname_clean, fill = diff_display)) +
+    geom_tile(color = "white", linewidth = 0.4) +
+    geom_text(aes(label = star), color = "black", size = 2.5, vjust = 0.75) +
+    scale_fill_gradient2(
+        low      = "#2166AC",
+        mid      = "white",
+        high     = "#E6B800",
+        na.value = "grey93",
+        limits   = c(-abs_lim, abs_lim),
+        name     = "Effect\n(SAS vs Dutch)",
+        guide    = guide_colorbar(barheight = unit(6, "cm"), barwidth = unit(0.5, "cm"))
+    ) +
+    theme_Publication() +
+    theme(
+        axis.text.x  = element_text(angle = 45, hjust = 1),
+        axis.text.y  = element_blank(),
+        axis.ticks.y = element_blank(),
+        axis.line.y  = element_blank(),
+        legend.position = "right"
+    ) +
+    labs(x = "", y = "", caption = "* q<0.05  ** q<0.01  *** q<0.001")
+
+pl_forest_heatmap <- pl_fig3_C |> aplot::insert_right(pl_heatmap_species, width = 0.25)
+
+combined_height <- max(4, nrow(lmm_sig) * 0.3 + 2)
+cairo_pdf("results/3_species_change/3_species/lmer/forest_heatmap_species.pdf",
+          width = 9, height = combined_height)
+print(pl_forest_heatmap)
+dev.off()
 
 #### Overlap: baseline vs follow-up significant species ####
 
