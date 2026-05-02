@@ -164,11 +164,11 @@ dir_colors <- c("Dutch more increase" = pal_jco()(2)[1], "SAS more increase" = p
     geom_errorbar(aes(xmin = conflow, xmax = confhigh), orientation = "y", linewidth = 0.5, width = 0.2) +
     geom_point(size = 3.5) +
     scale_color_manual(values = dir_colors, name = NULL) +
-    labs(x = "Interaction effect (\u00b1 95% CI)",
+    labs(x = "Interaction effect for SAS (\u00b1 95% CI)",
          y = NULL,
          title = "Species changing differently\nby ethnicity over time") +
     theme_Publication() +
-    theme(legend.position = "bottom", plot.title = element_text(size = rel(1.2))))
+    theme(legend.position = "none", plot.title = element_text(size = rel(1.2))))
 
 ggsave(pl_fig3_C, filename = "results/3_species_change/3_species/lmer/lmm_species_forest.pdf",
        width = 10, height = 11)
@@ -330,8 +330,8 @@ pl_heatmap_species <- ggplot(heatmap_data,
         high     = "#E6B800",
         na.value = "grey93",
         limits   = c(-abs_lim, abs_lim),
-        name     = "Effect\n(SAS vs Dutch)",
-        guide    = guide_colorbar(barheight = unit(6, "cm"), barwidth = unit(0.5, "cm"))
+        name     = "Difference\n(SAS vs Dutch)",
+        guide    = guide_colorbar(barheight = unit(2, "cm"), barwidth = unit(0.3, "cm"))
     ) +
     theme_Publication() +
     theme(
@@ -339,9 +339,11 @@ pl_heatmap_species <- ggplot(heatmap_data,
         axis.text.y  = element_blank(),
         axis.ticks.y = element_blank(),
         axis.line.y  = element_blank(),
-        legend.position = "right"
+        legend.position = "right",
+        legend.title = element_text(size = 9),
+        legend.text  = element_text(size = 6)
     ) +
-    labs(x = "", y = "", caption = "* q<0.05  ** q<0.01  *** q<0.001")
+    labs(x = "", y = "")
 
 pl_forest_heatmap <- pl_fig3_C |> aplot::insert_right(pl_heatmap_species, width = 0.25)
 
