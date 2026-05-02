@@ -291,9 +291,9 @@ if (length(TOP_VF_CATS) < N_TOP_VF) {
 cat("Top", N_TOP_VF, "VF categories for plots:", paste(TOP_VF_CATS, collapse = ", "), "\n")
 
 tibble(bin_name = names(tip_clusters), cluster = tip_clusters) %>%
-  left_join(clade_nodes %>% select(cluster, clade), by = "cluster") %>%
+  left_join(clade_nodes %>% dplyr::select(cluster, clade), by = "cluster") %>%
   filter(clade %in% PLOT_CLADES) %>%
-  left_join(tip_meta %>% select(bin_name, EthnicityTot), by = "bin_name") %>%
+  left_join(tip_meta %>% dplyr::select(bin_name, EthnicityTot), by = "bin_name") %>%
   count(clade, EthnicityTot)
 
 # ---- 8b. Base tree with clade highlights ----
@@ -573,11 +573,11 @@ print(sig_pairs)
 
 # Build one plot per feature so comparisons stay within the right facet,
 # then assemble with ggarrange
-feat_plots <- map(unique(func_long_filt$feature), function(feat) {
+feat_plots <- purrr::map(unique(func_long_filt$feature), function(feat) {
   df    <- func_long_filt %>% filter(feature == feat)
   pairs <- sig_pairs %>%
     filter(feature == feat) %>%
-    { map2(.$group1, .$group2, c) }
+    { purrr::map2(.$group1, .$group2, c) }
 
   p <- ggplot(df, aes(x = clade, y = proportion, fill = clade)) +
     geom_boxplot(outlier.size = 0.6, width = 0.6, alpha = 0.7) +
