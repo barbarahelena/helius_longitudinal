@@ -15,6 +15,7 @@
 ## ML AUROC panels (formerly A & B) moved to suppl_figure_ml_auroc.pdf
 
 library(ggpubr)
+library(ggplotify)
 
 ## Source subscripts (run analyses and define panel objects) ----
 # source("scripts/3_species_change/2_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R")  # produces suppl_figure_ml_auroc.pdf
@@ -32,11 +33,15 @@ eth_abund_col <- ggarrange(
   legend = "bottom"
 )
 
-# Row 1: LMM forest plot | [eth bar / abundance] | VF boxplot 1 | VF boxplot 2
+# Panel A: aplot combines forest + heatmap with proper y-axis alignment;
+# convert to grob so ggarrange can place it
+panel_A <- as_ggplot(as.grob(pl_forest_heatmap))
+
+# Row 1: [forest + heatmap] | [eth bar / abundance] | VF boxplot 1 | VF boxplot 2
 top_row <- ggarrange(
-  pl_fig3_C, eth_abund_col, feat_plots[[1]], feat_plots[[2]],
+  panel_A, eth_abund_col, feat_plots[[1]], feat_plots[[2]],
   ncol   = 4,
-  widths = c(1.5, 1, 1, 1),
+  widths = c(2.5, 1.2, 1, 1),
   labels = c("A", "", "D", "E")
 )
 
