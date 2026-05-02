@@ -131,9 +131,9 @@ for (i in seq_len(min(nrow(statres_sig), 20))) {
 
     pl <- ggplot() +
         geom_line(data = df_clin, aes(x = timepoint, y = mb, color = EthnicityTot, group = ID),
-                  alpha = 0.15, linewidth = 0.5) +
+                  alpha = 0.07, linewidth = 0.5) +
         geom_point(data = df_clin, aes(x = timepoint, y = mb, color = EthnicityTot),
-                   alpha = 0.15, size = 0.8) +
+                   alpha = 0.07, size = 0.8) +
         geom_line(data = df_means, aes(x = timepoint, y = mean, color = EthnicityTot, group = EthnicityTot),
                   alpha = 1, linewidth = 0.8) +
         geom_point(data = df_means, aes(x = timepoint, y = mean, color = EthnicityTot, group = EthnicityTot),
