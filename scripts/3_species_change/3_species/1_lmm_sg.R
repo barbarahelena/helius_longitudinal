@@ -45,10 +45,12 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 df <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 mb <- readRDS("data/shotgun/shotgun_abundance.RDS")
 otu <- mb[which(rownames(mb) %in% df$sampleID),]
-mb1 <- otu[str_detect(rownames(otu), "HELIBA"),]
-tk1 <- apply(mb1[,2:ncol(mb1)], 2, function(x) sum(x > 0.1) > (0.25*length(x)))
-mb2 <- otu[str_detect(rownames(otu), "HELIFU"),]
-tk2 <- apply(mb2[,2:ncol(mb2)], 2, function(x) sum(x > 0.1) > (0.25*length(x)))
+dutch_ids <- df %>% filter(Ethnicity == "Dutch") %>% pull(sampleID)
+sas_ids   <- df %>% filter(Ethnicity == "Surinamese") %>% pull(sampleID)
+mb1 <- otu[rownames(otu) %in% dutch_ids,]
+tk1 <- apply(mb1, 2, function(x) sum(x > 0.1) > (0.20*length(x)))
+mb2 <- otu[rownames(otu) %in% sas_ids,]
+tk2 <- apply(mb2, 2, function(x) sum(x > 0.1) > (0.20*length(x)))
 tk <- Reduce(`+`,list(tk1,tk2)) > 0
 summary(tk)
 mb <- mb[,tk==TRUE]
