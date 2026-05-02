@@ -65,13 +65,13 @@ statres <- c()
 for(i in c(1:(ncol(mb)-1))) {
     df_tot$microbe <- df_tot[,i]
     mbname <- colnames(df_tot)[i]
-    model1 <- lmer(microbe ~ Ethnicity*timepoint + Age + Sex + BMI + (1|ID), data = df_tot)
+    model1 <- lmer(microbe ~ Ethnicity*timepoint + FUtime + (1|ID), data = df_tot)
     res <- summary(model1)
     confint_model1 <- confint(model1)
-    estimate <- as.numeric(format(round(res$coefficients[7,1], 3), nsmall = 3))
-    conflow <- as.numeric(format(round(confint_model1[9,1], 3), nsmall = 3))
-    confhigh <- as.numeric(format(round(confint_model1[9,2], 3), nsmall = 3))
-    pval <- format(round(res$coefficients[7,5], 3), nsmall = 3)
+    estimate <- as.numeric(format(round(res$coefficients[5,1], 3), nsmall = 3))
+    conflow <- as.numeric(format(round(confint_model1[7,1], 3), nsmall = 3))
+    confhigh <- as.numeric(format(round(confint_model1[7,2], 3), nsmall = 3))
+    pval <- format(round(res$coefficients[5,5], 3), nsmall = 3)
     pval <- as.numeric(pval)
     sig <- case_when(
         pval < 0.0001 ~ paste0("****"),
@@ -177,7 +177,7 @@ statres_base <- c()
 for(i in c(1:(ncol(mb)-1))) {
     df_base$microbe <- df_base[, i]
     mbname <- colnames(df_tot)[i]
-    model_base <- lm(microbe ~ Ethnicity + Age + Sex + BMI, data = df_base)
+    model_base <- lm(microbe ~ Ethnicity, data = df_base)
     res <- summary(model_base)
     confint_base <- confint(model_base)
     estimate  <- as.numeric(format(round(res$coefficients[2, 1], 3), nsmall = 3))
@@ -236,7 +236,7 @@ statres_fu <- c()
 for(i in c(1:(ncol(mb)-1))) {
     df_fu$microbe <- df_fu[, i]
     mbname <- colnames(df_tot)[i]
-    model_fu <- lm(microbe ~ Ethnicity + Age + Sex + BMI + FUtime, data = df_fu)
+    model_fu <- lm(microbe ~ Ethnicity + FUtime, data = df_fu)
     res <- summary(model_fu)
     confint_fu <- confint(model_fu)
     estimate  <- as.numeric(format(round(res$coefficients[2, 1], 3), nsmall = 3))
