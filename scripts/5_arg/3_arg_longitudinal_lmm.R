@@ -48,7 +48,7 @@ gene_prevalence <- df_raw %>%
             .groups = "drop")
 
 prevalent_genes <- gene_prevalence %>%
-  filter(prevalence_pct > 0.5) %>%
+  filter(prevalence_pct > 5) %>%
   pull(Gene_Symbol)
 
 # DATA PREPARATION ----

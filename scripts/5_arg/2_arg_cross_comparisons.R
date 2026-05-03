@@ -44,7 +44,7 @@ gene_prevalence <- df_raw %>%
             .groups = "drop")
 
 prevalent_genes <- gene_prevalence %>%
-  filter(prevalence_pct > 0.5) %>%
+  filter(prevalence_pct > 5) %>%
   pull(Gene_Symbol)
 
 # GENE-LEVEL PREVALENCE ----
@@ -691,8 +691,8 @@ if (dutch_idx_c == 1L) {
 }
 
 top_diff_combined <- bind_rows(
-  top_diff    %>% select(gene, prev_dutch, prev_sas) %>% mutate(timepoint = "Baseline"),
-  top_diff_fu %>% select(gene, prev_dutch, prev_sas) %>% mutate(timepoint = "Follow-up")
+  top_diff    %>% dplyr::select(gene, prev_dutch, prev_sas) %>% mutate(timepoint = "Baseline"),
+  top_diff_fu %>% dplyr::select(gene, prev_dutch, prev_sas) %>% mutate(timepoint = "Follow-up")
 ) %>%
   pivot_longer(c(prev_dutch, prev_sas),
                names_to = "eth_key", values_to = "prevalence") %>%
