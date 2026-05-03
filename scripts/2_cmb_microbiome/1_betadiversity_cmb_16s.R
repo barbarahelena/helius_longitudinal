@@ -266,7 +266,7 @@ heliusdist_ext <- helius_wide %>%
     mutate(across(
         c(DM_baseline, HT_BPMed_baseline, Dyslipidemia_baseline, MetSyn_baseline,
           Statins_baseline, Metformin_baseline, AntiHT_baseline, PPI_baseline,
-          GlucLowDrugs_baseline, PsychoMed_baseline, Cortico_baseline,
+          PsychoMed_baseline, Cortico_baseline,
           Smoking_current_baseline, Alcohol_baseline, ExerciseNorm_baseline),
         ~ relevel(factor(.), ref = "No"),
         .names = "{.col}"
@@ -292,7 +292,6 @@ bc_ext_effects <- bind_rows(
     extract_lm_effect_ext(heliusdist_ext, "Metformin_baseline",    "Metformin",              "Medication"),
     extract_lm_effect_ext(heliusdist_ext, "AntiHT_baseline",       "Antihypertensives",      "Medication"),
     extract_lm_effect_ext(heliusdist_ext, "PPI_baseline",          "PPI",                    "Medication"),
-    extract_lm_effect_ext(heliusdist_ext, "GlucLowDrugs_baseline", "Glucose-lowering drugs", "Medication"),
     extract_lm_effect_ext(heliusdist_ext, "PsychoMed_baseline",    "Psychotropics",          "Medication"),
     extract_lm_effect_ext(heliusdist_ext, "Cortico_baseline",      "Corticosteroids",        "Medication"),
     # Diet (energy-adjusted via Willett residual method, pre-computed in dietarydata.R)
@@ -334,7 +333,7 @@ var_meta_bc <- data.frame(
         "Smoking_current_baseline", "Alcohol_baseline", "ExerciseNorm_baseline", "DiscrMean_baseline",
         "DM_baseline", "HT_BPMed_baseline", "Dyslipidemia_baseline", "MetSyn_baseline",
         "Statins_baseline", "Metformin_baseline", "AntiHT_baseline", "PPI_baseline",
-        "GlucLowDrugs_baseline", "PsychoMed_baseline", "Cortico_baseline",
+        "PsychoMed_baseline", "Cortico_baseline",
         "Protein_baseline", "FattyAcids_baseline", "Carbohydrates_baseline",
         "Fiber_baseline", "Sodium_g_baseline", "DietPC1", "DietPC2"
     ),
@@ -343,17 +342,17 @@ var_meta_bc <- data.frame(
         "Current smoking", "Alcohol use", "Sufficient exercise", "Perceived discrimination (per SD)",
         "Diabetes", "Hypertension", "Dyslipidemia", "Metabolic syndrome",
         "Statins", "Metformin", "Antihypertensives", "PPI",
-        "Glucose-lowering drugs", "Psychotropics", "Corticosteroids",
+        "Psychotropics", "Corticosteroids",
         "Protein (per SD)", "Fatty acids (per SD)", "Carbohydrates (per SD)",
         "Fiber (per SD)", "Sodium (per SD)", "Diet PC1 (per SD)", "Diet PC2 (per SD)"
     ),
     group = c(
-        rep("Risk factors", 7), rep("Disease", 4), rep("Medication", 7), rep("Diet", 7)
+        rep("Risk factors", 7), rep("Disease", 4), rep("Medication", 6), rep("Diet", 7)
     ),
     type = c(
         "continuous", "binary", "continuous",
         rep("binary", 3), "continuous",
-        rep("binary", 11),
+        rep("binary", 10),
         rep("continuous", 7)
     ),
     stringsAsFactors = FALSE

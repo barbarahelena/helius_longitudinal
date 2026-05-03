@@ -119,7 +119,7 @@ extract_lmm_int <- function(data, outcome_var, predictor_var, label, group = NUL
 helius_wide <- readRDS("data/clinicaldata/clinicaldata_wide.RDS")
 
 bl_vars <- c("DM", "HT_BPMed", "Dyslipidemia",
-             "Statins", "Metformin", "AntiHT", "PPI", "GlucLowDrugs", "PsychoMed", "Cortico",
+             "Statins", "Metformin", "AntiHT", "PPI", "PsychoMed", "Cortico",
              "Smoking_current", "Alcohol", "ExerciseNorm",
              "Age", "BMI",
              "Protein", "FattyAcids", "Carbohydrates", "Fiber", "Sodium_g",
@@ -146,7 +146,7 @@ dftot2_ext <- dftot2 %>%
     )) %>%
     mutate(across(
         c(DM_bl, HT_BPMed_bl, Dyslipidemia_bl, Statins_bl, Metformin_bl, AntiHT_bl,
-          PPI_bl, GlucLowDrugs_bl, PsychoMed_bl, Cortico_bl,
+          PPI_bl, PsychoMed_bl, Cortico_bl,
           Smoking_current_bl, Alcohol_bl, ExerciseNorm_bl),
         ~ relevel(factor(.), ref = "No"),
         .names = "{.col}"
@@ -171,7 +171,6 @@ shan_ext_effects <- bind_rows(
     extract_lmm_int(dftot2_ext, "shannon", "Metformin_bl",    "Metformin",              group = "Medication"),
     extract_lmm_int(dftot2_ext, "shannon", "AntiHT_bl",       "Antihypertensives",      group = "Medication"),
     extract_lmm_int(dftot2_ext, "shannon", "PPI_bl",          "PPI",                    group = "Medication"),
-    extract_lmm_int(dftot2_ext, "shannon", "GlucLowDrugs_bl", "Glucose-lowering drugs", group = "Medication"),
     extract_lmm_int(dftot2_ext, "shannon", "PsychoMed_bl",    "Psychotropics",          group = "Medication"),
     extract_lmm_int(dftot2_ext, "shannon", "Cortico_bl",      "Corticosteroids",        group = "Medication"),
     # Diet
@@ -212,7 +211,7 @@ var_meta_shan <- data.frame(
         "Smoking_current_bl", "Alcohol_bl", "ExerciseNorm_bl", "DiscrMean_bl",
         "DM_bl", "HT_BPMed_bl", "Dyslipidemia_bl",
         "Statins_bl", "Metformin_bl", "AntiHT_bl", "PPI_bl",
-        "GlucLowDrugs_bl", "PsychoMed_bl", "Cortico_bl",
+        "PsychoMed_bl", "Cortico_bl",
         "Protein_bl", "FattyAcids_bl", "Carbohydrates_bl",
         "Fiber_bl", "Sodium_g_bl", "DietPC1", "DietPC2"
     ),
@@ -221,17 +220,17 @@ var_meta_shan <- data.frame(
         "Current smoking", "Alcohol use", "Sufficient exercise", "Perceived discrimination (per SD)",
         "Diabetes", "Hypertension", "Dyslipidemia",
         "Statins", "Metformin", "Antihypertensives", "PPI",
-        "Glucose-lowering drugs", "Psychotropics", "Corticosteroids",
+        "Psychotropics", "Corticosteroids",
         "Protein (per SD)", "Fatty acids (per SD)", "Carbohydrates (per SD)",
         "Fiber (per SD)", "Sodium (per SD)", "Diet PC1 (per SD)", "Diet PC2 (per SD)"
     ),
     group = c(
-        rep("Risk factors", 7), rep("Disease", 3), rep("Medication", 7), rep("Diet", 7)
+        rep("Risk factors", 7), rep("Disease", 3), rep("Medication", 6), rep("Diet", 7)
     ),
     type = c(
         "continuous", "continuous", "continuous",
         rep("binary", 3), "continuous",
-        rep("binary", 10),
+        rep("binary", 9),
         rep("continuous", 7)
     ),
     stringsAsFactors = FALSE
