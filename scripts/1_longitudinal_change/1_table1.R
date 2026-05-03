@@ -14,7 +14,7 @@ shotids <- read.csv('data/shotgun/shotgunseq_ids.csv') %>% dplyr::select(ID = x)
 shotids$shotgun <- TRUE
 shotids$ID <- str_c("S", shotids$ID)
 
-helius <- left_join(mbids, helius, by = "ID") |> 
+helius <- left_join(helius, mbids, by = "ID") |> 
     left_join(shotids, by = 'ID') |> 
     mutate(across(c('microbiome_16s', 'shotgun'), ~case_when(
         is.na(.x) ~ FALSE,
@@ -24,7 +24,7 @@ names(helius)
 helius |> filter(microbiome_16s == TRUE) |> nrow()
 
 ##### Table 1 #####
-table1 <- helius %>%
+table1 <- helius %>% filter(microbiome_16s == TRUE) |> 
     dplyr::select(Age, Sex, EthnicityTot, MigrGen, FUtime, BMI, Smoking_current, AlcCons,
            Alcohol, ExerciseNorm, DiscrMean_baseline,
            DM, HT_BPMed, MetSyn, Dyslipidemia,
@@ -94,4 +94,23 @@ for (eth in c("Dutch", "South-Asian Surinamese")) {
         as.data.frame(.)
     t <- t %>% mutate(across(everything(.), ~trimws(.x, which = "both")))
     write.csv2(t, paste0('results/tables/table2_shotgunset_', eth_label, '.csv'))
+}
+
+##### Table 2 per timepoint stratum #####
+for (tp in c("baseline", "follow-up")) {
+    t <- helius %>%
+        filter(shotgun == TRUE, timepoint == tp) %>% droplevels |> 
+        dplyr::select(Age, Sex, MigrGen, FUtime, BMI, Smoking_current, AlcCons,
+               Alcohol, ExerciseNorm, DiscrMean_baseline,
+               DM, HT_BPMed, MetSyn, Dyslipidemia,
+               SBP, DBP,
+               PPI, Metformin, Statins, AntiHT, GlucLowDrugs, PsychoMed, Cortico,
+               TC, LDL, Trig, HbA1c,
+               TotalCalories, Carbohydrates, Protein, Fiber, FattyAcids, Protein_animal, Sodium_g,
+               EthnicityTot) %>%
+        CreateTableOne(data = ., strata = 'EthnicityTot', test = TRUE) %>%
+        print(nonnormal = c("Trig")) %>%
+        as.data.frame(.)
+    t <- t %>% mutate(across(everything(.), ~trimws(.x, which = "both")))
+    write.csv2(t, paste0('results/tables/table2_shotgunset_', tp, '.csv'))
 }
