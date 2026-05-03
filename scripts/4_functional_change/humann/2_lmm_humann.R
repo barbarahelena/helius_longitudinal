@@ -127,7 +127,7 @@ for (i in seq_len(min(nrow(statres_sig), 20))) {
                      max(df_clin$mb, na.rm = TRUE) * 1.1)
     mbmin  <- min(df_clin$mb, na.rm = TRUE)
 
-    nm_label <- str_remove(nm, "^[A-Z0-9_-]+: ")
+    nm_label <- str_wrap(str_remove(nm, "^[A-Z0-9_-]+: "), width = 35)
 
     pl <- ggplot() +
         geom_line(data = df_clin, aes(x = timepoint, y = mb, color = EthnicityTot, group = ID),
@@ -158,7 +158,7 @@ if (n_plots > 0) {
     plots  <- ggarrange(plotlist = plist, common.legend = TRUE, legend = "bottom",
                         labels = LETTERS[1:n_plots], nrow = n_rows, ncol = n_cols)
     ggsave("results/4_functional_change/humann/longitudinal/significant_humann_timepoint_ethnicity.pdf",
-           plots, width = 12, height = 4 * n_rows, device = cairo_pdf)
+           plots, width = 14, height = 4 * n_rows, device = cairo_pdf)
 } else {
     message("No FDR-significant pathways — longitudinal plot skipped.")
 }
