@@ -208,6 +208,8 @@ ss_eth_effects <- purrr::map_dfr(seq_len(nrow(var_meta_ss)), function(i) {
         ethnicity = factor(ethnicity, levels = c("Dutch", "South-Asian Surinamese"))
     )
 
+write.csv2(ss_eth_effects, file.path(resultsfolder, "overall_lm_covariates_ethnicity.csv"), row.names = FALSE)
+
 ## N bar data
 n_total_ss <- nrow(dftot_scaled)
 bar_data_ss <- purrr::map_dfr(seq_len(nrow(var_meta_ss)), function(i) {
