@@ -310,6 +310,8 @@ bc_ext_effects <- bind_rows(
         group = factor(group, levels = c("Risk factors", "Disease", "Medication", "Diet"))
     )
 
+write.csv(bc_ext_effects, file.path(resultsfolder, "betadiversity_bc_main_effects.csv"), row.names = FALSE)
+
 (pl_bc_extended <- ggplot(bc_ext_effects, aes(x = estimate, y = label, color = sig)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
     geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.2) +
@@ -484,6 +486,8 @@ bc_eth_heatmap <- bc_eth_effects %>%
         label     = factor(label, levels = levels(bc_ext_effects$label)),
         ethnicity = factor(ethnicity, levels = names(eth_colors))
     )
+
+write.csv(bc_eth_heatmap, file.path(resultsfolder, "betadiversity_bc_ethnicity_effects.csv"), row.names = FALSE)
 
 est_lim <- quantile(abs(bc_eth_heatmap$estimate), 0.95, na.rm = TRUE)
 

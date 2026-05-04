@@ -189,6 +189,8 @@ shan_ext_effects <- bind_rows(
         group = factor(group, levels = c("Risk factors", "Disease", "Medication", "Diet"))
     )
 
+write.csv(shan_ext_effects, file.path(resultsfolder, "alphadiversity_shannon_main_effects.csv"), row.names = FALSE)
+
 (pl_shan_extended <- ggplot(shan_ext_effects, aes(x = estimate, y = label, color = sig)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
     geom_errorbar(aes(xmin = conf.low, xmax = conf.high), orientation = "y", linewidth = 0.8, width = 0.2) +
@@ -347,6 +349,8 @@ shan_eth_effects <- purrr::map_dfr(seq_len(nrow(var_meta_shan)), function(i) {
         group     = factor(group, levels = c("Risk factors", "Disease", "Medication", "Diet")),
         ethnicity = factor(ethnicity, levels = names(eth_colors))
     )
+
+write.csv(shan_eth_effects, file.path(resultsfolder, "alphadiversity_shannon_ethnicity_effects.csv"), row.names = FALSE)
 
 pl_shan_eth <- ggplot(shan_eth_effects,
                       aes(x = estimate, y = label)) +
