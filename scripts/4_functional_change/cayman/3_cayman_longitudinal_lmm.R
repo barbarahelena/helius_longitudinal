@@ -58,19 +58,11 @@ write.csv2(data.frame(family = prevalent_families),
            "results/4_functional_change/cayman/longitudinal/prevalent_families_list.csv",
            row.names = FALSE)
 
-# Adjusted gene family-level LMMs ----------------------------------------------
-# Model: CAZy ~ EthnicityTot * timepoint + Age + Sex + BMI + Smoking + PPI + (1|ID)
-baseline_covariates <- dftot %>%
-  filter(timepoint == "baseline") %>%
-  dplyr::select(ID, Age_baseline = Age, BMI_baseline = BMI,
-                Smoking_baseline = Smoking, PPI_baseline = PPI, AB_baseline = AB) %>%
-  distinct(ID, .keep_all = TRUE)
-
-dftot_adj <- dftot %>%
-  left_join(stats %>% dplyr::select(sampleID, total_reads), by = "sampleID") %>%
-  left_join(baseline_covariates, by = "ID") %>%
-  filter(!is.na(Age_baseline), !is.na(Sex), !is.na(BMI_baseline),
-         !is.na(Smoking_baseline), !is.na(PPI_baseline))
+# Gene family-level LMMs ------------------------------------------------------
+# Model: CAZy ~ EthnicityTot * timepoint + FUtime + (1|ID)
+# Covariates (Age, BMI, Sex, Smoking, PPI) used only to restrict to complete-case
+# sample; not included in model because participants were matched on these variables.
+dftot_adj <- dftot
 
 statres_adj <- data.frame()
 for (gf in gene_families) {
