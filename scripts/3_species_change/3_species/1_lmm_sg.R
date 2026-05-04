@@ -230,7 +230,7 @@ dir_colors_base <- c("Higher in Dutch" = pal_jco()(2)[1], "Higher in SAS" = pal_
     theme(legend.position = "bottom"))
 
 ggsave(pl_baseline_eth, filename = "results/3_species_change/3_species/lmer/lm_baseline_ethnicity_forest.pdf",
-       width = 11, height = 13)
+       width = 11, height = 18)
 
 #### Follow-up differential abundance between ethnicities ####
 
@@ -288,7 +288,7 @@ nrow(fu_sig)
     theme(legend.position = "bottom"))
 
 ggsave(pl_fu_eth, filename = "results/3_species_change/3_species/lmer/lm_followup_ethnicity_forest.pdf",
-       width = 11, height = 13)
+       width = 11, height = 18)
 
 #### Heatmap: cross-sectional ethnic differences for LMM-significant species ####
 
