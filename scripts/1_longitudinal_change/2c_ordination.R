@@ -180,10 +180,11 @@ pw_plot_data <- pairwise_permanova %>%
     geom_text(aes(label = paste0(sprintf("%.3f", R2), "\n", sig_label)), size = 3) +
     facet_wrap(~timepoint) +
     scale_fill_gradient(low = "white", high = "#197EC0FF", limits = c(0, NA), name = "R²",
-                        guide = guide_colorbar(barheight = unit(6, "cm"), barwidth = unit(0.4, "cm"))) +
+                        guide = guide_colorbar(barheight = unit(10, "cm"), barwidth = unit(0.4, "cm"))) +
     labs(x = "", y = "", title = "Pairwise PERMANOVA R² by ethnicity") +
     theme_Publication() +
-    theme(axis.text.x = element_text(angle = 45, hjust = 1)))
+    theme(axis.text.x = element_text(angle = 45, hjust = 1),
+          legend.position = "right"))
 
 ggsave(pl_pairwise_heatmap,
        filename = "results/1_longitudinal_change/ordination/pairwise_permanova_heatmap.pdf",
@@ -437,8 +438,9 @@ ggsave("results/1_longitudinal_change/ordination/pco1_pco2_spread_per_ethnicity.
        pl_pco_combined, width = 8, height = 9)
 
 #### Supplementary Figure 1 ####
-bottom_row <- ggarrange(pl, pl_suppl_diet, ncol = 2, labels = c("B", "C"))
-(suppl_fig1 <- ggarrange(pl_delta_R2, bottom_row, nrow = 2, labels = c("A", "")))
+top_row <- ggarrange(pl, pl_suppl_diet, ncol = 2, labels = c("A", "B"))
+bottom_row <- ggarrange(pl_pairwise_heatmap, pl_delta_R2, ncol = 2, labels = c("C", "D"))
+(suppl_fig1 <- ggarrange(top_row, bottom_row, nrow = 2))
 ggsave(suppl_fig1,
        filename = "results/1_longitudinal_change/ordination/suppl_fig1.pdf",
        width = 12, height = 12)
