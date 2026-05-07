@@ -209,7 +209,8 @@ ggsave(pl6, filename = file.path(resultsfolder, "violin_Carbohydrates.pdf"), dev
 ggsave(pl7, filename = file.path(resultsfolder, "violin_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
 (fig_macronutrients <- ggarrange(pl1, pl2, pl3, pl4, pl5, pl6, pl7,
-                                  ncol = 3, nrow = 3))
+                                  ncol = 3, nrow = 3,
+                                  labels = LETTERS[1:7]))
 ggsave(fig_macronutrients, filename = file.path(resultsfolder, "macronutrients_by_ethnicity.pdf"),
        device = "pdf", width = 15, height = 18)
 
@@ -289,7 +290,8 @@ ggsave(pln5, filename = file.path(resultsfolder_norm, "violin_norm_Fiber.pdf"), 
 ggsave(pln6, filename = file.path(resultsfolder_norm, "violin_norm_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
 (fig_macronutrients_norm <- ggarrange(pln1, pln2, pln3, pln4, pln5, pln6,
-                                       ncol = 3, nrow = 2))
+                                       ncol = 3, nrow = 2,
+                                       labels = LETTERS[1:6]))
 ggsave(fig_macronutrients_norm, filename = file.path(resultsfolder_norm, "macronutrients_norm_by_ethnicity.pdf"),
        device = "pdf", width = 15, height = 12)
 
@@ -377,7 +379,8 @@ ggsave(sg_pl6, filename = file.path(resultsfolder_sg, "violin_Carbohydrates.pdf"
 ggsave(sg_pl7, filename = file.path(resultsfolder_sg, "violin_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
 (fig_macronutrients_sg <- ggarrange(sg_pl1, sg_pl2, sg_pl3, sg_pl4, sg_pl5, sg_pl6, sg_pl7,
-                                     ncol = 3, nrow = 3))
+                                     ncol = 3, nrow = 3,
+                                     labels = LETTERS[1:7]))
 ggsave(fig_macronutrients_sg, filename = file.path(resultsfolder_sg, "macronutrients_by_ethnicity.pdf"),
        device = "pdf", width = 15, height = 18)
 
@@ -451,7 +454,8 @@ ggsave(sg_pln5, filename = file.path(resultsfolder_norm_sg, "violin_norm_Fiber.p
 ggsave(sg_pln6, filename = file.path(resultsfolder_norm_sg, "violin_norm_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
 (fig_macronutrients_norm_sg <- ggarrange(sg_pln1, sg_pln2, sg_pln3, sg_pln4, sg_pln5, sg_pln6,
-                                          ncol = 3, nrow = 2))
+                                          ncol = 3, nrow = 2,
+                                          labels = LETTERS[1:6]))
 ggsave(fig_macronutrients_norm_sg, filename = file.path(resultsfolder_norm_sg, "macronutrients_norm_by_ethnicity.pdf"),
        device = "pdf", width = 15, height = 12)
 
