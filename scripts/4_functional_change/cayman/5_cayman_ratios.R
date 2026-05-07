@@ -370,43 +370,54 @@ plab <- function(p) {
   formatC(p, format = "f", digits = 3)
 }
 
-# --- Plot: Mucin/DF ratio by ethnicity ----------------------------------------
-tp_labels <- c(baseline = "Baseline", "follow-up" = "Follow-up")
+# --- Helper: ratio violin with per-facet paired Wilcoxon annotation -----------
+make_ratio_vln <- function(df, ratio_var, y_label, title_label, interact_pval, show_pval = TRUE) {
+  df_plot <- df %>%
+    group_by(EthnicityTot, ID) %>%
+    filter(n() == 2) %>%
+    ungroup() %>%
+    arrange(EthnicityTot, ID, timepoint)
 
-p_mucin <- ggplot(dftot, aes(x = EthnicityTot, y = log10_Mucin_DF, fill = EthnicityTot)) +
-  geom_violin(colour = NA, alpha = 0.7) +
-  geom_boxplot(fill = "white", width = 0.15, outlier.shape = NA) +
-  facet_wrap(~timepoint, labeller = labeller(timepoint = tp_labels)) +
-  scale_fill_manual(values = eth_colors, guide = "none") +
-  theme_Publication() +
-  labs(
-    x        = "",
-    y        = "Mucin / DF (log10 ratio)",
-    title    = "Mucin-to-DF ratio",
-    subtitle = paste0(
-      "Baseline: p=", plab(wilcox_res$p_Mucin_DF[wilcox_res$timepoint == "baseline"]),
-      "  Follow-up: p=", plab(wilcox_res$p_Mucin_DF[wilcox_res$timepoint == "follow-up"])
-    )
-  ) +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+  pval_annot <- df_plot %>%
+    group_by(EthnicityTot) %>%
+    group_modify(~ {
+      bl <- .x[[ratio_var]][.x$timepoint == "baseline"]
+      fu <- .x[[ratio_var]][.x$timepoint == "follow-up"]
+      p  <- tryCatch(wilcox.test(bl, fu, paired = TRUE)$p.value, error = function(e) NA_real_)
+      data.frame(p = p, y_pos = max(.x[[ratio_var]], na.rm = TRUE) + diff(range(.x[[ratio_var]], na.rm = TRUE)) * 0.08)
+    }) %>%
+    ungroup() %>%
+    mutate(label = ifelse(p < 0.05,
+                          paste0("p=", ifelse(p < 0.001,
+                                              formatC(p, format = "e", digits = 2),
+                                              formatC(p, format = "f", digits = 3))),
+                          ""))
+
+  ggplot(df_plot, aes(x = timepoint, y = .data[[ratio_var]], fill = EthnicityTot)) +
+    geom_violin(colour = NA, aes(alpha = timepoint)) +
+    geom_boxplot(fill = "white", width = 0.15, outlier.shape = NA) +
+    { if (show_pval) geom_text(data = pval_annot,
+                               aes(x = 1.5, y = y_pos, label = label),
+                               inherit.aes = FALSE, size = 3) } +
+    facet_wrap(~EthnicityTot) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+    theme_Publication() +
+    labs(x = "", y = y_label, title = title_label,
+         subtitle = paste0("Ethnicity × Timepoint p=", plab(interact_pval)))
+}
+
+# --- Plot: Mucin/DF ratio by ethnicity ----------------------------------------
+p_mucin <- make_ratio_vln(
+  dftot, "log10_Mucin_DF", "Mucin / DF (log10 ratio)", "Mucin-to-DF ratio",
+  lmm_df$pval_interact[lmm_df$ratio == "log10_Mucin_DF"]
+)
 
 # --- Plot: GAG/DF ratio by ethnicity ------------------------------------------
-p_gag <- ggplot(dftot, aes(x = EthnicityTot, y = log10_GAG_DF, fill = EthnicityTot)) +
-  geom_violin(colour = NA, alpha = 0.7) +
-  geom_boxplot(fill = "white", width = 0.15, outlier.shape = NA) +
-  facet_wrap(~timepoint, labeller = labeller(timepoint = tp_labels)) +
-  scale_fill_manual(values = eth_colors, guide = "none") +
-  theme_Publication() +
-  labs(
-    x        = "",
-    y        = "GAG / DF (log10 ratio)",
-    title    = "GAG-to-DF ratio",
-    subtitle = paste0(
-      "Baseline: p=", plab(wilcox_res$p_GAG_DF[wilcox_res$timepoint == "baseline"]),
-      "  Follow-up: p=", plab(wilcox_res$p_GAG_DF[wilcox_res$timepoint == "follow-up"])
-    )
-  ) +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+p_gag <- make_ratio_vln(
+  dftot, "log10_GAG_DF", "GAG / DF (log10 ratio)", "GAG-to-DF ratio",
+  lmm_df$pval_interact[lmm_df$ratio == "log10_GAG_DF"]
+)
 
 # --- Assemble and save --------------------------------------------------------
 fig_ratios <- ggarrange(p_mucin, p_gag, nrow = 1, ncol = 2, labels = c("A", "B"))
