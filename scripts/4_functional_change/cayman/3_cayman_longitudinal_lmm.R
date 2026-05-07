@@ -4,7 +4,7 @@ library(ggsci)
 library(ggpubr)
 library(lme4)
 library(lmerTest)
-library(aplot)
+library(patchwork)
 
 # Theme ------------------------------------------------------------------------
 theme_Publication <- function(base_size=14, base_family="sans") {
@@ -92,13 +92,40 @@ write.csv2(statres_adj,
            row.names = FALSE)
 
 # Figure 4 panels (A, B–D) -----------------------------------------------------
-make_boxviolin <- function(df, family_name, pval, y_label) {
-  df$mb      <- log10(df[[family_name]] + 1)
+make_boxviolin <- function(df, family_name, pval, y_label, show_pval = TRUE) {
+  df$mb        <- log10(df[[family_name]] + 1)
+  df$timepoint <- factor(df$timepoint, levels = c("baseline", "follow-up"))
+  df           <- df %>%
+    group_by(EthnicityTot, ID) %>%
+    filter(n() == 2) %>%
+    ungroup() %>%
+    arrange(EthnicityTot, ID, timepoint)
+
+  # Paired Wilcoxon computed manually per facet to avoid ggpubr facet+paired bug
+  pval_annot <- df %>%
+    group_by(EthnicityTot) %>%
+    group_modify(~ {
+      bl <- .x$mb[.x$timepoint == "baseline"]
+      fu <- .x$mb[.x$timepoint == "follow-up"]
+      p  <- tryCatch(wilcox.test(bl, fu, paired = TRUE)$p.value, error = function(e) NA_real_)
+      data.frame(p = p, y_pos = max(.x$mb, na.rm = TRUE) + diff(range(.x$mb, na.rm = TRUE)) * 0.08)
+    }) %>%
+    ungroup() %>%
+    mutate(label = ifelse(p < 0.05,
+                          paste0("p=", ifelse(p < 0.001,
+                                              formatC(p, format = "e", digits = 2),
+                                              formatC(p, format = "f", digits = 3))),
+                          ""))
+
   pval_label <- formatC(pval, format = "e", digits = 2)
-  ggplot(df, aes(x = EthnicityTot, y = mb, fill = EthnicityTot)) +
+
+  ggplot(df, aes(x = timepoint, y = mb, fill = EthnicityTot)) +
     geom_violin(colour = NA, aes(alpha = timepoint)) +
     geom_boxplot(fill = "white", width = 0.2, outlier.shape = NA) +
-    facet_wrap(~timepoint) +
+    { if (show_pval) geom_text(data = pval_annot,
+                               aes(x = 1.5, y = y_pos, label = label),
+                               inherit.aes = FALSE, size = 3) } +
+    facet_wrap(~EthnicityTot) +
     scale_fill_jco(guide = "none") +
     scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
     theme_Publication() +
@@ -117,8 +144,8 @@ pl_4A <- ggplot(statres_adj_q, aes(x = estimate, y = family, colour = direction)
   geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
   geom_pointrange(aes(xmin = conflow, xmax = confhigh), size = 0.4, linewidth = 0.5) +
   scale_colour_manual(values = c("Dutch" = "#2166AC", "SAS" = "#E6B800"),
-                      name = "", labels = c("Dutch" = "More increase in Dutch",
-                                            "SAS"   = "More increase in SAS")) +
+                      name = "", labels = c("Dutch" = "Greater positive change in Dutch",
+                                            "SAS"   = "Greater positive change in SAS")) +
   theme_Publication() +
   labs(x        = "Interaction effect (\u00b1 95% CI)",
        y        = "",
@@ -274,12 +301,13 @@ if (nrow(statres_adj_q) >= 2) {
             axis.text.y  = element_blank(),
             axis.ticks.y = element_blank(),
             axis.line.y  = element_blank(),
+            axis.text.x  = element_text(angle = 45, hjust = 1, size = rel(1.0)),
             legend.position = "right"
         ) +
-        labs(x = "", y = "",
-             caption = "* q<0.05  ** q<0.01  *** q<0.001")
+        labs(x = "", y = "")
 
-    pl_combined <- pl_4A |> aplot::insert_right(pl_heatmap, width = 0.25)
+    pl_combined <- (pl_4A | pl_heatmap) +
+        plot_layout(widths = c(4, 1), guides = "keep")
 
     combined_height <- max(4, nrow(statres_adj_q) * 0.3 + 2)
     cairo_pdf("results/4_functional_change/cayman/longitudinal/forest_heatmap_cayman.pdf",
@@ -287,3 +315,56 @@ if (nrow(statres_adj_q) >= 2) {
     print(pl_combined)
     dev.off()
 }
+
+# ===========================================================================
+# SUPPLEMENT: all FDR-significant families — forest plot + violin plots
+# ===========================================================================
+dir.create("results/4_functional_change/cayman/longitudinal/supplement",
+           showWarnings = FALSE, recursive = TRUE)
+
+statres_supp <- statres_adj %>%
+  filter(padj < 0.05) %>%
+  mutate(family    = fct_reorder(family, estimate),
+         direction = ifelse(estimate > 0, "SAS", "Dutch"))
+
+# Supplement forest plot: all FDR-significant families (no n=20 cap)
+pl_supp_forest <- ggplot(statres_supp,
+                         aes(x = estimate, y = family, colour = direction)) +
+  geom_vline(xintercept = 0, linetype = "dashed", color = "gray50") +
+  geom_pointrange(aes(xmin = conflow, xmax = confhigh), size = 0.4, linewidth = 0.5) +
+  scale_colour_manual(values = c("Dutch" = "#2166AC", "SAS" = "#E6B800"),
+                      name   = "",
+                      labels = c("Dutch" = "Greater positive change in Dutch",
+                                 "SAS"   = "Greater positive change in SAS")) +
+  theme_Publication() +
+  labs(x        = "Interaction effect (± 95% CI)",
+       y        = "",
+       title    = "Differential CAZyme dynamics by ethnicity",
+       subtitle = "All FDR-significant gene families (padj < 0.05)")
+
+supp_forest_height <- max(5, nrow(statres_supp) * 0.28 + 2)
+ggsave(
+  "results/4_functional_change/cayman/longitudinal/supplement/supplement_forest_all.pdf",
+  pl_supp_forest, width = 8, height = supp_forest_height, device = cairo_pdf
+)
+
+# Supplement violin plots: all FDR-significant families, 9 per page
+supp_families <- as.character(statres_supp$family)
+
+pdf("results/4_functional_change/cayman/longitudinal/supplement/supplement_violins_all.pdf",
+    width = 18, height = 15)
+letter_idx <- 1
+for (i in seq(1, length(supp_families), by = 9)) {
+  batch <- supp_families[i:min(i + 8, length(supp_families))]
+  plots <- lapply(batch, function(fam) {
+    pval_row <- statres_adj %>% filter(family == fam)
+    pval     <- if (nrow(pval_row) > 0) pval_row$pval[1] else NA_real_
+    make_boxviolin(dftot_adj, fam, pval, "log10(CPM + 1)") +
+      labs(title = fam) +
+      theme(plot.title = element_text(face = "bold", size = rel(0.9), hjust = 0.5))
+  })
+  batch_labels <- LETTERS[letter_idx:(letter_idx + length(batch) - 1)]
+  letter_idx   <- letter_idx + length(batch)
+  print(ggarrange(plotlist = plots, ncol = 3, nrow = 3, labels = batch_labels))
+}
+dev.off()
