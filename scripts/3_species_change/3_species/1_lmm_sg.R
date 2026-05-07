@@ -154,10 +154,10 @@ lmm_sig <- statres %>%
         confhigh = as.numeric(confhigh),
         mbname   = str_replace_all(mbname, "_", " "),
         mbname   = factor(mbname, levels = mbname[order(as.numeric(estimate))]),
-        direction = ifelse(estimate > 0, "SAS more increase", "Dutch more increase")
+        direction = ifelse(estimate > 0, "Greater positive change in SAS", "Greater positive change in Dutch")
     )
 
-dir_colors <- c("Dutch more increase" = pal_jco()(2)[1], "SAS more increase" = pal_jco()(2)[2])
+dir_colors <- c("Greater positive change in Dutch" = pal_jco()(2)[1], "Greater positive change in SAS" = pal_jco()(2)[2])
 
 (pl_fig3_C <- ggplot(lmm_sig, aes(x = estimate, y = mbname, color = direction)) +
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
