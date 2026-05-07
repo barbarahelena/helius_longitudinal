@@ -294,12 +294,12 @@ heliusmb2
 # How many samples have paired data (baseline + follow-up data)
 summary(str_detect(sample_names(heliusmb), "HELIBA")) # 6031 baseline samples total
 summary(str_detect(sample_names(heliusmb), "HELIFU")) # 4415 follow-up samples total
-summary(str_detect(sample_names(heliusmb2), "HELIFU")) # 1944 follow-up samples with paired clinical data
+summary(str_detect(sample_names(heliusmb2), "HELIFU")) # 1904 follow-up samples with paired clinical data
 fusamples <- sample_names(prune_samples(str_detect(sample_names(heliusmb2), "HELIFU"), heliusmb2))
 basamples <- sample_names(prune_samples(str_detect(sample_names(heliusmb2), "HELIBA"), heliusmb2))
 basamples <- str_remove(basamples, "HELIBA_")
 fusamples <- str_remove(fusamples, "HELIFU_")
-idspaired <- str_c("S",fusamples[which(fusamples %in% basamples)]) # 1825 with paired baseline-FU data --> now 1937
+idspaired <- str_c("S",fusamples[which(fusamples %in% basamples)]) # 1825 with paired baseline-FU data --> now 1904
 write.csv2(idspaired, 'data/16s/ids_16s_paired.csv')
 
 ## Select paired samples
