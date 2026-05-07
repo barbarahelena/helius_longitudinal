@@ -33,8 +33,8 @@ table1 <- helius %>% filter(microbiome_16s == TRUE) |>
            TC, LDL, Trig, HbA1c,
            TotalCalories, Carbohydrates, Protein, Fiber, FattyAcids, Protein_animal, Sodium_g,
            microbiome_16s, shotgun, timepoint) %>%
-    CreateTableOne(data=., strata = 'timepoint', test = FALSE) %>% 
-    print(nonnormal=c("Trig")) %>% 
+    CreateTableOne(data=., strata = 'timepoint', test = TRUE) %>% 
+    print(nonnormal=c("Trig"), missing = TRUE) %>% 
     as.data.frame(.)
 table1 <- table1 %>% mutate(across(everything(.), ~trimws(.x, which = "both")))
 write.csv2(as.data.frame(table1), 'results/tables/table1_16s_timepoints.csv')
