@@ -189,6 +189,7 @@ df_new2 <- df_new %>%
                             labels = paste(c(18, 40, 50), c(39, 49, 78), sep = "-"), 
                             right = FALSE)
     ) %>%
+    filter(AB_BA != "Yes" & AB_FU != "Yes") %>%
     droplevels(.)
 dim(df_new2)
 summary(df_new2$Dyslipidemia_BA)
@@ -279,6 +280,7 @@ dfba <- df_new2 %>% filter(sampleID_BA %in% sample_names(heliusmb)) %>% mutate(`
 dfbafu <- full_join(dfba, dffu)
 length(c(idsfu, idsba)) #10446
 length(unique(c(idsfu, idsba))) #8508
+length(intersect(idsba,idsfu)) # 1938
 
 table(dffu$AgeDecade_FU, dffu$Ethnicity, dffu$Sex)
 table(dffu$EthnicityTot)
