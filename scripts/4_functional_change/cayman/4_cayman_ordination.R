@@ -77,8 +77,8 @@ print(res1)
     theme_Publication() +
     labs(color = "", alpha = "") +
     annotate("text", x= Inf, y = Inf, hjust = 1, vjust = 1,
-             label = str_c("PERMANOVA: p = ", res1$`Pr(>F)`[1], ", R2 = ",
-                           format(round(res1$R2[1],3), nsmall = 3))
+             label = str_c("PERMANOVA: R² = ", format(round(res1$R2[1],3), nsmall = 3),
+                           ", p = ", res1$`Pr(>F)`[1])
              ))
 ggsave(braycurt, filename = "results/4_functional_change/cayman/PCoA_BrayCurtis_cayman.pdf", device = "pdf", width = 8, height = 8)
 
@@ -103,8 +103,8 @@ print(res_eth)
     theme_Publication() +
     labs(color = "", alpha = "") +
     annotate("text", x= Inf, y = Inf, hjust = 1, vjust = 1,
-             label = str_c("PERMANOVA: p = ", res_eth$`Pr(>F)`[1], ", r2 = ",
-                           format(round(res_eth$R2[1],3), nsmall = 3))
+             label = str_c("PERMANOVA: R² = ", format(round(res_eth$R2[1],3), nsmall = 3),
+                           ", p = ", res_eth$`Pr(>F)`[1])
              ))
 ggsave(ethbray, filename = "results/4_functional_change/cayman/PCoA_BrayCurtis_cayman_ethnicity.pdf", device = "pdf", width = 8, height = 8)
 
@@ -129,8 +129,8 @@ print(res_eth)
     theme_Publication() +
     labs(color = "", alpha = "") +
     annotate("text", x= Inf, y = Inf, hjust = 1, vjust = 1,
-             label = str_c("PERMANOVA: p = ", res_eth$`Pr(>F)`[1], ", r2 = ",
-                           format(round(res_eth$R2[1],3), nsmall = 3))
+             label = str_c("PERMANOVA: R² = ", format(round(res_eth$R2[1],3), nsmall = 3),
+                           ", p = ", res_eth$`Pr(>F)`[1])
              ))
 ggsave(ethbray, filename = "results/4_functional_change/cayman/PCoA_BrayCurtis_cayman_ethnicity_FU.pdf", device = "pdf", width = 8, height = 8)
 
@@ -259,8 +259,8 @@ print(res1_can)
     theme_Publication() +
     labs(color = "", alpha = "") +
     annotate("text", x= Inf, y = Inf, hjust = 1, vjust = 1,
-             label = str_c("PERMANOVA: p = ", res1_can$`Pr(>F)`[1], ", R2 = ",
-                           format(round(res1_can$R2[1],3), nsmall = 3))
+             label = str_c("PERMANOVA: R² = ", format(round(res1_can$R2[1],3), nsmall = 3),
+                           ", p = ", res1_can$`Pr(>F)`[1])
              ))
 ggsave(canberra_tp, filename = "results/4_functional_change/cayman/PCoA_Canberra_cayman.pdf", device = "pdf", width = 8, height = 8)
 
@@ -284,8 +284,8 @@ print(res_eth_can_bl)
     theme_Publication() +
     labs(color = "", alpha = "") +
     annotate("text", x= Inf, y = Inf, hjust = 1, vjust = 1,
-             label = str_c("PERMANOVA: p = ", res_eth_can_bl$`Pr(>F)`[1], ", r2 = ",
-                           format(round(res_eth_can_bl$R2[1],3), nsmall = 3))
+             label = str_c("PERMANOVA: R² = ", format(round(res_eth_can_bl$R2[1],3), nsmall = 3),
+                           ", p = ", res_eth_can_bl$`Pr(>F)`[1])
              ))
 ggsave(ethcan_bl, filename = "results/4_functional_change/cayman/PCoA_Canberra_cayman_ethnicity.pdf", device = "pdf", width = 8, height = 8)
 
@@ -308,8 +308,8 @@ print(res_eth_can_fu)
     theme_Publication() +
     labs(color = "", alpha = "") +
     annotate("text", x= Inf, y = Inf, hjust = 1, vjust = 1,
-             label = str_c("PERMANOVA: p = ", res_eth_can_fu$`Pr(>F)`[1], ", r2 = ",
-                           format(round(res_eth_can_fu$R2[1],3), nsmall = 3))
+             label = str_c("PERMANOVA: R² = ", format(round(res_eth_can_fu$R2[1],3), nsmall = 3),
+                           ", p = ", res_eth_can_fu$`Pr(>F)`[1])
              ))
 ggsave(ethcan_fu, filename = "results/4_functional_change/cayman/PCoA_Canberra_cayman_ethnicity_FU.pdf", device = "pdf", width = 8, height = 8)
 
