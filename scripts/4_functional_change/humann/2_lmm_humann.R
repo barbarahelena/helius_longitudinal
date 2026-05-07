@@ -6,7 +6,7 @@ library(ggpubr)
 library(lme4)
 library(lmerTest)
 library(ggrepel)
-library(aplot)
+library(patchwork)
 
 # Theme
 theme_Publication <- function(base_size=14, base_family="sans") {
@@ -179,9 +179,10 @@ if (nrow(humann_fdr) >= 2) {
         geom_pointrange(aes(xmin = conflow, xmax = confhigh), size = 0.45, linewidth = 0.55) +
         scale_colour_manual(values = c("Dutch" = "#2166AC", "SAS" = "#E6B800"),
                             name = "",
-                            labels = c("Dutch" = "More increase in Dutch",
-                                       "SAS"   = "More increase in SAS")) +
+                            labels = c("Dutch" = "Greater positive change in Dutch",
+                                       "SAS"   = "Greater positive change in SAS")) +
         theme_Publication() +
+        theme(legend.position = "bottom") +
         labs(x = "Interaction effect (± 95% CI)", y = "",
              title    = "HUMAnN pathway shifts",
              subtitle = "LMM ethnicity × timepoint, FDR < 0.05")
@@ -385,12 +386,13 @@ if (nrow(humann_fdr) >= 2) {
             axis.text.y  = element_blank(),
             axis.ticks.y = element_blank(),
             axis.line.y  = element_blank(),
+            axis.text.x  = element_text(angle = 45, hjust = 1, size = rel(1.0)),
             legend.position = "right"
         ) +
-        labs(x = "", y = "",
-             caption = "* q<0.05  ** q<0.01  *** q<0.001")
+        labs(x = "", y = "")
 
-    pl_combined <- pl_forest |> aplot::insert_right(pl_heatmap, width = 0.25)
+    pl_combined <- (pl_forest | pl_heatmap) +
+        plot_layout(widths = c(4, 1), guides = "keep")
 
     combined_height <- max(4, nrow(humann_fdr) * 0.3 + 2)
     cairo_pdf("results/4_functional_change/humann/longitudinal/forest_heatmap_humann.pdf",
