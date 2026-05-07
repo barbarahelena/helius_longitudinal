@@ -16,8 +16,8 @@ library(tidyverse)
 library(ggsci)
 
 ## ── Helper: render an aplot composite to a ggplot panel ───────────────────────
-## aplot::insert_right() aligns axes via patchwork/grid; grid.grabExpr captures
-## the rendered output as a vector grob; as_ggplot wraps it for ggarrange.
+## patchwork combines forest + heatmap with guides="keep" so each panel's legend
+## stays in its configured position; grid.grabExpr captures the rendered grob.
 
 aplot_to_gg <- function(ap) {
   if (is.null(ap)) return(ggplot() + theme_void())
@@ -63,22 +63,11 @@ pl_can_fu <- if (exists("ethcan_fu")) ethcan_fu else ggplot() + theme_void()
 source("scripts/4_functional_change/cayman/5_cayman_ratios.R")
 # dftot (ratios), wilcox_res now in environment
 
-plab_gag_bl <- formatC(wilcox_res$p_GAG_DF[wilcox_res$timepoint == "baseline"],
-                        format = "e", digits = 2)
-plab_gag_fu <- formatC(wilcox_res$p_GAG_DF[wilcox_res$timepoint == "follow-up"],
-                        format = "e", digits = 2)
-
-p_gag_vln <- ggplot(dftot, aes(x = timepoint, y = log10_GAG_DF, fill = EthnicityTot)) +
-  geom_violin(colour = NA, aes(alpha = timepoint)) +
-  geom_boxplot(fill = "white", width = 0.2, outlier.shape = NA) +
-  facet_wrap(~EthnicityTot) +
-  scale_fill_jco(guide = "none") +
-  scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-  theme_Publication() +
-  labs(x        = "",
-       y        = "GAG / DF (log₁₀ ratio)",
-       title    = "GAG-to-DF ratio",
-       subtitle = paste0("Baseline p=", plab_gag_bl, "  Follow-up p=", plab_gag_fu))
+p_gag_vln <- make_ratio_vln(
+  dftot, "log10_GAG_DF", "GAG / DF (log₁₀ ratio)", "GAG-to-DF ratio",
+  lmm_df$pval_interact[lmm_df$ratio == "log10_GAG_DF"],
+  show_pval = FALSE
+) + theme(plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
 
 ## ── 5. Convert aplot composites → ggplot panels ───────────────────────────────
 
@@ -112,7 +101,8 @@ make_humann_vln <- function(partial_name) {
          y        = "log10(abundance % + pseudocount)",
          title    = nm_clean,
          subtitle = paste0("Ethnicity × Timepoint p=", pval_label)) +
-    theme(plot.title = element_text(face = "bold", size = rel(0.75), hjust = 0.5))
+    theme(plot.title    = element_text(face = "bold", size = rel(0.75), hjust = 0.5),
+          plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
 }
 
 pl_B <- make_humann_vln("Gluconeogenesis III")
@@ -126,9 +116,11 @@ get_cazyme_pval <- function(fam) {
 }
 
 make_cazyme_vln <- function(fam_name) {
-  make_boxviolin(dftot_adj, fam_name, get_cazyme_pval(fam_name), "log10(CPM + 1)") +
+  make_boxviolin(dftot_adj, fam_name, get_cazyme_pval(fam_name), "log10(CPM + 1)",
+                 show_pval = FALSE) +
     labs(title = fam_name) +
-    theme(plot.title = element_text(face = "bold", size = rel(0.9), hjust = 0.5))
+    theme(plot.title    = element_text(face = "bold", size = rel(0.9), hjust = 0.5),
+          plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
 }
 
 pl_F <- make_cazyme_vln("GH13_16")
