@@ -44,7 +44,7 @@ ethnicity_strata <- unique(na.omit(helius$EthnicityTot))
 
 for (eth in ethnicity_strata) {
     eth_label <- gsub("[^A-Za-z0-9]", "_", eth)
-    t <- helius %>%
+    t <- helius %>% filter(microbiome_16s == TRUE) |> 
         filter(EthnicityTot == eth) %>%
         dplyr::select(Age, Sex, MigrGen, FUtime, BMI, Smoking_current, AlcCons,
                Alcohol, ExerciseNorm, DiscrMean_baseline,
