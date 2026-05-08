@@ -440,7 +440,7 @@ ggsave("results/1_longitudinal_change/ordination/pco1_pco2_spread_per_ethnicity.
 #### Supplementary Figure 1 ####
 top_row <- ggarrange(pl, pl_suppl_diet, ncol = 2, labels = c("A", "B"))
 bottom_row <- ggarrange(pl_pairwise_heatmap, pl_delta_R2, ncol = 2, labels = c("C", "D"))
-(suppl_fig1 <- ggarrange(top_row, bottom_row, nrow = 2))
+(suppl_fig1 <- ggarrange(top_row, bottom_row, nrow = 2, heights = c(1.0,1.2)))
 ggsave(suppl_fig1,
        filename = "results/1_longitudinal_change/ordination/suppl_fig1.pdf",
-       width = 12, height = 12)
+       width = 16, height = 10)
