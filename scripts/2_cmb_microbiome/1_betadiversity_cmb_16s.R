@@ -51,6 +51,7 @@ helius    <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 heliusdist <- readRDS("data/16s/braydistance_delta.RDS") %>%
     dplyr::select(-any_of(names(helius)), ID) %>%
     left_join(helius %>% filter(timepoint == "baseline"), by = "ID")
+helius <- helius |> filter(ID %in% heliusdist$ID)
 
 #### Output folder ####
 resultsfolder <- "results/2_cmb_microbiome"
@@ -142,28 +143,30 @@ eth_effects_lld <- lapply(levels(dat_int_lld$EthnicityTot), function(eth) {
 
 #### Panel A — Disease prevalence by ethnicity: DM, HT, Dyslipidemia, MetSyn ####
 
-paired_ids <- heliusdist$ID
+helius_prev  <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
+paired_ids   <- read.csv2("data/16s/ids_16s_paired.csv") |> dplyr::pull(x)
+helius_prev  <- helius_prev |> filter(ID %in% paired_ids)
 
 prev_long <- bind_rows(
-    helius %>%
-        filter(ID %in% paired_ids, !is.na(DM), EthnicityTot != "Other") %>%
+    helius_prev %>%
+        filter(EthnicityTot != "Other") %>%
         group_by(EthnicityTot, timepoint) %>%
-        summarise(prev = mean(DM == "Yes") * 100, .groups = "drop") %>%
+        summarise(prev = sum(DM == "Yes", na.rm = TRUE) / n() * 100, n = n(), .groups = "drop") %>%
         mutate(condition = "Diabetes"),
-    helius %>%
-        filter(ID %in% paired_ids, !is.na(HT_BPMed), EthnicityTot != "Other") %>%
+    helius_prev %>%
+        filter(EthnicityTot != "Other") %>%
         group_by(EthnicityTot, timepoint) %>%
-        summarise(prev = mean(HT_BPMed == "Yes") * 100, .groups = "drop") %>%
+        summarise(prev = sum(HT_BPMed == "Yes", na.rm = TRUE) / n() * 100, n = n(), .groups = "drop") %>%
         mutate(condition = "Hypertension"),
-    helius %>%
-        filter(ID %in% paired_ids, !is.na(Dyslipidemia), EthnicityTot != "Other") %>%
+    helius_prev %>%
+        filter(EthnicityTot != "Other") %>%
         group_by(EthnicityTot, timepoint) %>%
-        summarise(prev = mean(Dyslipidemia == "Yes") * 100, .groups = "drop") %>%
+        summarise(prev = sum(Dyslipidemia == "Yes", na.rm = TRUE) / n() * 100, n = n(), .groups = "drop") %>%
         mutate(condition = "Dyslipidemia"),
-    helius %>%
-        filter(ID %in% paired_ids, !is.na(MetSyn), EthnicityTot != "Other") %>%
+    helius_prev %>%
+        filter(EthnicityTot != "Other") %>%
         group_by(EthnicityTot, timepoint) %>%
-        summarise(prev = mean(MetSyn == "Yes") * 100, .groups = "drop") %>%
+        summarise(prev = sum(MetSyn == "Yes", na.rm = TRUE) / n() * 100, n = n(), .groups = "drop") %>%
         mutate(condition = "Metabolic syndrome")
 ) %>%
     mutate(
@@ -173,14 +176,17 @@ prev_long <- bind_rows(
 
 # Prevalence table with relative increase
 prev_table <- prev_long %>%
-    pivot_wider(names_from = timepoint, values_from = prev) %>%
-    mutate(relative_increase_pct = ((`follow-up` - baseline) / baseline) * 100) %>%
-    dplyr::select(condition, EthnicityTot, baseline, `follow-up`, relative_increase_pct) %>%
+    pivot_wider(names_from = timepoint, values_from = c(prev, n)) %>%
+    mutate(relative_increase_pct = ((`prev_follow-up` - prev_baseline) / prev_baseline) * 100) %>%
+    dplyr::select(condition, EthnicityTot, prev_baseline, `prev_follow-up`,
+                  n_baseline, `n_follow-up`, relative_increase_pct) %>%
     rename(
-        Condition        = condition,
-        Ethnicity        = EthnicityTot,
-        Baseline_prev    = baseline,
-        Followup_prev    = `follow-up`,
+        Condition             = condition,
+        Ethnicity             = EthnicityTot,
+        Baseline_prev         = prev_baseline,
+        Followup_prev         = `prev_follow-up`,
+        N_baseline            = n_baseline,
+        N_followup            = `n_follow-up`,
         Relative_increase_pct = relative_increase_pct
     ) %>%
     arrange(Condition, Ethnicity)
