@@ -114,6 +114,7 @@ df_new <- dftot %>%
                   # Diet at baseline
                   TotalCalories_BA = ENKcal_Sum, Protein_BA = Prot_Sum, 
                   FattyAcids_BA = FattyAcidsTot_Sum, Fiber_BA = Fibre_Sum, 
+                  MonoUnsatFat_BA = MUFA_cis_Sum, PolyUnsatFat_BA = PUFA_Sum, SatFat_BA = SFA_Sum,
                   Carbohydrates_BA = Carbo_Sum, Protein_animal_BA = Prot_ani_Sum, 
                   Sodium_g_BA = Natrium_intake_totaal_gram, Sodium_mmol_BA = Natrium_intake_totaal_mmol, 
                   # Fecal sample 
@@ -143,6 +144,7 @@ df_new2 <- df_new %>%
                     "GGT_FU", "Trombo_FU", "Microalb_BA", "Microalb_FU", "UACR_BA", "UACR_FU",
                     "Kreat_BA", "Kreat_FU", "UKreat_BA", "UKreat_FU", "eGFR_CKDEPI_FU", "eGFR_MDRD_FU",
                     "TotalCalories_BA", "Protein_BA", "FattyAcids_BA", "Fiber_BA", "Carbohydrates_BA",
+                    "MonoUnsatFat_BA", "PolyUnsatFat_BA", "SatFat_BA",
                     "Protein_animal_BA", "Sodium_g_BA", "Sodium_mmol_BA"), as.numeric), 
            across(where(haven::is.labelled), ~haven::as_factor(.x, levels = "labels")),
            across(c("HT_BP_BA", "HT_BPMed_BA", "HT_SelfBP_BA", "HT_SelfBPMed_BA", "HT_Self_BA",
@@ -252,7 +254,7 @@ df_wide_delta <- df_wide %>%
 
 coldouble <- colnames(df_wide_delta)[which(str_detect(colnames(df_wide_delta), "_follow-up") | 
                                                str_detect(colnames(df_wide_delta), "_baseline"))]
-coldouble <- coldouble[c(1:2, 5:length(coldouble))]
+coldouble <- coldouble[c(3:length(coldouble))]
 df_long <- df_wide_delta %>% 
     pivot_longer(., cols = all_of(coldouble), names_to = c(".value", "timepoint"),
                                         names_pattern = "(.*)_([a-z-]+)$")

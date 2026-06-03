@@ -65,6 +65,7 @@ df <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 
 ## PCA diet
 df_diet <- df %>% dplyr::select(ID, EthnicityTot, TotalCalories, Fiber, Protein, Protein_animal, FattyAcids,
+                            MonoUnsatFat, PolyUnsatFat, SatFat,
                              Carbohydrates, Sodium_g) %>% 
     filter(!is.na(TotalCalories)) |> droplevels()
 df_diet2 <- df_diet %>% dplyr::select(-ID, -EthnicityTot, -TotalCalories) %>% 
@@ -208,11 +209,41 @@ ggsave(pl6, filename = file.path(resultsfolder, "violin_Carbohydrates.pdf"), dev
     sig_comparisons(df_diet, "Sodium_g", eth_pairs))
 ggsave(pl7, filename = file.path(resultsfolder, "violin_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
-(fig_macronutrients <- ggarrange(pl1, pl2, pl3, pl4, pl5, pl6, pl7,
-                                  ncol = 3, nrow = 3,
-                                  labels = LETTERS[1:7]))
+(pl8 <- ggplot(df_diet, aes(x = fct_reorder(EthnicityTot, MonoUnsatFat, median, na.rm = TRUE), y = MonoUnsatFat)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'gram', title = "Mono-unsaturated fat") +
+    sig_comparisons(df_diet, "MonoUnsatFat", eth_pairs))
+ggsave(pl8, filename = file.path(resultsfolder, "violin_MonoUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(pl9 <- ggplot(df_diet, aes(x = fct_reorder(EthnicityTot, PolyUnsatFat, median, na.rm = TRUE), y = PolyUnsatFat)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'gram', title = "Poly-unsaturated fat") +
+    sig_comparisons(df_diet, "PolyUnsatFat", eth_pairs))
+ggsave(pl9, filename = file.path(resultsfolder, "violin_PolyUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(pl10 <- ggplot(df_diet, aes(x = fct_reorder(EthnicityTot, SatFat, median, na.rm = TRUE), y = SatFat)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'gram', title = "Saturated fat") +
+    sig_comparisons(df_diet, "SatFat", eth_pairs))
+ggsave(pl10, filename = file.path(resultsfolder, "violin_SatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(fig_macronutrients <- ggarrange(pl1, pl2, pl3, pl4, pl5, pl6, pl7, pl8, pl9, pl10,
+                                  ncol = 3, nrow = 4,
+                                  labels = LETTERS[1:10]))
 ggsave(fig_macronutrients, filename = file.path(resultsfolder, "macronutrients_by_ethnicity.pdf"),
-       device = "pdf", width = 15, height = 18)
+       device = "pdf", width = 15, height = 24)
 
 #### Calorie-normalized macronutrients ####
 df_diet_norm <- df_diet %>%
@@ -223,7 +254,10 @@ df_diet_norm <- df_diet %>%
         FattyAcids_per1000     = FattyAcids / TotalCalories * 1000,
         Carbohydrates_per1000  = Carbohydrates / TotalCalories * 1000,
         Fiber_per1000          = Fiber / TotalCalories * 1000,
-        Sodium_per1000         = Sodium_g / TotalCalories * 1000
+        Sodium_per1000         = Sodium_g / TotalCalories * 1000,
+        MonoUnsatFat_per1000   = MonoUnsatFat / TotalCalories * 1000,
+        PolyUnsatFat_per1000   = PolyUnsatFat / TotalCalories * 1000,
+        SatFat_per1000         = SatFat / TotalCalories * 1000
     )
 
 resultsfolder_norm <- file.path(resultsfolder, "calorie_normalized")
@@ -289,11 +323,41 @@ ggsave(pln5, filename = file.path(resultsfolder_norm, "violin_norm_Fiber.pdf"), 
     sig_comparisons(df_diet_norm, "Sodium_per1000", eth_pairs))
 ggsave(pln6, filename = file.path(resultsfolder_norm, "violin_norm_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
-(fig_macronutrients_norm <- ggarrange(pln1, pln2, pln3, pln4, pln5, pln6,
-                                       ncol = 3, nrow = 2,
-                                       labels = LETTERS[1:6]))
+(pln7 <- ggplot(df_diet_norm, aes(x = fct_reorder(EthnicityTot, MonoUnsatFat_per1000, median, na.rm = TRUE), y = MonoUnsatFat_per1000)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'g / 1000 kcal', title = "Mono-unsaturated fat (per 1000 kcal)") +
+    sig_comparisons(df_diet_norm, "MonoUnsatFat_per1000", eth_pairs))
+ggsave(pln7, filename = file.path(resultsfolder_norm, "violin_norm_MonoUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(pln8 <- ggplot(df_diet_norm, aes(x = fct_reorder(EthnicityTot, PolyUnsatFat_per1000, median, na.rm = TRUE), y = PolyUnsatFat_per1000)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'g / 1000 kcal', title = "Poly-unsaturated fat (per 1000 kcal)") +
+    sig_comparisons(df_diet_norm, "PolyUnsatFat_per1000", eth_pairs))
+ggsave(pln8, filename = file.path(resultsfolder_norm, "violin_norm_PolyUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(pln9 <- ggplot(df_diet_norm, aes(x = fct_reorder(EthnicityTot, SatFat_per1000, median, na.rm = TRUE), y = SatFat_per1000)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'g / 1000 kcal', title = "Saturated fat (per 1000 kcal)") +
+    sig_comparisons(df_diet_norm, "SatFat_per1000", eth_pairs))
+ggsave(pln9, filename = file.path(resultsfolder_norm, "violin_norm_SatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(fig_macronutrients_norm <- ggarrange(pln1, pln2, pln3, pln4, pln5, pln6, pln7, pln8, pln9,
+                                       ncol = 3, nrow = 3,
+                                       labels = LETTERS[1:9]))
 ggsave(fig_macronutrients_norm, filename = file.path(resultsfolder_norm, "macronutrients_norm_by_ethnicity.pdf"),
-       device = "pdf", width = 15, height = 12)
+       device = "pdf", width = 15, height = 18)
 
 #### Shotgun subset - macronutrients ####
 shotids <- read.csv('data/shotgun/shotgunseq_ids.csv') %>%
@@ -378,11 +442,41 @@ ggsave(sg_pl6, filename = file.path(resultsfolder_sg, "violin_Carbohydrates.pdf"
     sig_comparisons(df_diet_sg, "Sodium_g", eth_pairs_sg))
 ggsave(sg_pl7, filename = file.path(resultsfolder_sg, "violin_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
-(fig_macronutrients_sg <- ggarrange(sg_pl1, sg_pl2, sg_pl3, sg_pl4, sg_pl5, sg_pl6, sg_pl7,
-                                     ncol = 3, nrow = 3,
-                                     labels = LETTERS[1:7]))
+(sg_pl8 <- ggplot(df_diet_sg, aes(x = fct_reorder(EthnicityTot, MonoUnsatFat, median, na.rm = TRUE), y = MonoUnsatFat)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'gram', title = "Mono-unsaturated fat") +
+    sig_comparisons(df_diet_sg, "MonoUnsatFat", eth_pairs_sg))
+ggsave(sg_pl8, filename = file.path(resultsfolder_sg, "violin_MonoUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(sg_pl9 <- ggplot(df_diet_sg, aes(x = fct_reorder(EthnicityTot, PolyUnsatFat, median, na.rm = TRUE), y = PolyUnsatFat)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'gram', title = "Poly-unsaturated fat") +
+    sig_comparisons(df_diet_sg, "PolyUnsatFat", eth_pairs_sg))
+ggsave(sg_pl9, filename = file.path(resultsfolder_sg, "violin_PolyUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(sg_pl10 <- ggplot(df_diet_sg, aes(x = fct_reorder(EthnicityTot, SatFat, median, na.rm = TRUE), y = SatFat)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'gram', title = "Saturated fat") +
+    sig_comparisons(df_diet_sg, "SatFat", eth_pairs_sg))
+ggsave(sg_pl10, filename = file.path(resultsfolder_sg, "violin_SatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(fig_macronutrients_sg <- ggarrange(sg_pl1, sg_pl2, sg_pl3, sg_pl4, sg_pl5, sg_pl6, sg_pl7, sg_pl8, sg_pl9, sg_pl10,
+                                     ncol = 3, nrow = 4,
+                                     labels = LETTERS[1:10]))
 ggsave(fig_macronutrients_sg, filename = file.path(resultsfolder_sg, "macronutrients_by_ethnicity.pdf"),
-       device = "pdf", width = 15, height = 18)
+       device = "pdf", width = 15, height = 24)
 
 #### Shotgun subset - calorie-normalized macronutrients ####
 df_diet_norm_sg <- df_diet_norm %>% filter(ID %in% shotids$ID) %>% droplevels()
@@ -453,11 +547,41 @@ ggsave(sg_pln5, filename = file.path(resultsfolder_norm_sg, "violin_norm_Fiber.p
     sig_comparisons(df_diet_norm_sg, "Sodium_per1000", eth_pairs_norm_sg))
 ggsave(sg_pln6, filename = file.path(resultsfolder_norm_sg, "violin_norm_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
-(fig_macronutrients_norm_sg <- ggarrange(sg_pln1, sg_pln2, sg_pln3, sg_pln4, sg_pln5, sg_pln6,
-                                          ncol = 3, nrow = 2,
-                                          labels = LETTERS[1:6]))
+(sg_pln7 <- ggplot(df_diet_norm_sg, aes(x = fct_reorder(EthnicityTot, MonoUnsatFat_per1000, median, na.rm = TRUE), y = MonoUnsatFat_per1000)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'g / 1000 kcal', title = "Mono-unsaturated fat (per 1000 kcal)") +
+    sig_comparisons(df_diet_norm_sg, "MonoUnsatFat_per1000", eth_pairs_norm_sg))
+ggsave(sg_pln7, filename = file.path(resultsfolder_norm_sg, "violin_norm_MonoUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(sg_pln8 <- ggplot(df_diet_norm_sg, aes(x = fct_reorder(EthnicityTot, PolyUnsatFat_per1000, median, na.rm = TRUE), y = PolyUnsatFat_per1000)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'g / 1000 kcal', title = "Poly-unsaturated fat (per 1000 kcal)") +
+    sig_comparisons(df_diet_norm_sg, "PolyUnsatFat_per1000", eth_pairs_norm_sg))
+ggsave(sg_pln8, filename = file.path(resultsfolder_norm_sg, "violin_norm_PolyUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(sg_pln9 <- ggplot(df_diet_norm_sg, aes(x = fct_reorder(EthnicityTot, SatFat_per1000, median, na.rm = TRUE), y = SatFat_per1000)) +
+    geom_violin(aes(fill = EthnicityTot), color = NA) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
+    theme_Publication() +
+    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
+    labs(x = '', y = 'g / 1000 kcal', title = "Saturated fat (per 1000 kcal)") +
+    sig_comparisons(df_diet_norm_sg, "SatFat_per1000", eth_pairs_norm_sg))
+ggsave(sg_pln9, filename = file.path(resultsfolder_norm_sg, "violin_norm_SatFat.pdf"), device = "pdf", width = 6, height = 6)
+
+(fig_macronutrients_norm_sg <- ggarrange(sg_pln1, sg_pln2, sg_pln3, sg_pln4, sg_pln5, sg_pln6, sg_pln7, sg_pln8, sg_pln9,
+                                          ncol = 3, nrow = 3,
+                                          labels = LETTERS[1:9]))
 ggsave(fig_macronutrients_norm_sg, filename = file.path(resultsfolder_norm_sg, "macronutrients_norm_by_ethnicity.pdf"),
-       device = "pdf", width = 15, height = 12)
+       device = "pdf", width = 15, height = 18)
 
 #### Energy-adjusted macronutrients (Willett residual method) ####
 ## For each macronutrient, regress on TotalCalories_baseline and store
@@ -467,7 +591,7 @@ ggsave(fig_macronutrients_norm_sg, filename = file.path(resultsfolder_norm_sg, "
 
 helius_wide_diet <- readRDS("data/clinicaldata/clinicaldata_wide.RDS")
 
-macro_vars <- c("Protein", "FattyAcids", "Carbohydrates", "Fiber", "Sodium_g")
+macro_vars <- c("Protein", "FattyAcids", "MonoUnsatFat", "PolyUnsatFat", "SatFat", "Carbohydrates", "Fiber", "Sodium_g")
 
 for (mac in macro_vars) {
     col     <- paste0(mac, "_baseline")
