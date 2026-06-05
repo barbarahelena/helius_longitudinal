@@ -48,19 +48,23 @@ top_row <- ggarrange(
 # Row 2: tree alone, full width
 tree_row <- ggarrange(p1, labels = "F")
 
-# Row 3: strain stability panels
-bottom_row <- ggarrange(
-  pl_fig3_H, pl_fig3_G, pl_fig3_I, pl_fig3_J,
-  nrow   = 1,
-  labels = LETTERS[7:10]
-)
-
 fig3 <- ggarrange(
-  top_row, tree_row, bottom_row,
-  nrow    = 3,
-  heights = c(0.5, 1.6, 0.5)
+  top_row, tree_row,
+  nrow    = 2,
+  heights = c(0.5, 1.6)
 )
 
 dir.create("results/3_species_change", showWarnings = FALSE, recursive = TRUE)
 ggsave(fig3, filename = "results/3_species_change/figure3.pdf",
-       width = 18, height = 26, device = cairo_pdf)
+       width = 18, height = 20, device = cairo_pdf)
+
+## Supplementary figure: strain stability panels (G–J) ----
+suppl_strain <- ggarrange(
+  pl_fig3_H, pl_fig3_G, pl_fig3_I, pl_fig3_J,
+  nrow   = 2,
+  ncol   = 2,
+  labels = c("A", "B", "C", "D")
+)
+
+ggsave(suppl_strain, filename = "results/3_species_change/suppl_figure_strain_stability.pdf",
+       width = 12, height = 14, device = cairo_pdf)
