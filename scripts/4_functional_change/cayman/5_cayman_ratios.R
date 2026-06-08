@@ -302,6 +302,129 @@ draw(ht_bl + ht_fu, annotation_legend_list = list(lgd_packed),
      padding = unit(c(5, 30, 5, 5), "mm"))
 dev.off()
 
+# --- Spearman correlations: baseline ratios vs dietary intake -----------------
+# Macronutrients are energy-adjusted using the Willett residual method: each
+# macronutrient (g/day) is regressed on total energy intake (kcal/day) within
+# the shotgun baseline subset, and the residuals are z-scored. This removes the
+# confounding effect of overall energy intake, so the adjusted variable reflects
+# macronutrient composition independent of how much a participant eats in total.
+# Total calories is kept on its original scale as a separate predictor.
+macro_vars_raw <- c("Protein", "Protein_animal", "FattyAcids", "MonoUnsatFat",
+                    "PolyUnsatFat", "SatFat", "Carbohydrates", "Fiber", "Sodium_g")
+
+df_baseline_diet <- df_baseline
+for (mac in macro_vars_raw) {
+  col_adj <- paste0(mac, "_adj")
+  idx <- !is.na(df_baseline_diet[[mac]]) & !is.na(df_baseline_diet$TotalCalories)
+  resid_vec <- rep(NA_real_, nrow(df_baseline_diet))
+  if (sum(idx) > 2) {
+    fit <- lm(df_baseline_diet[[mac]][idx] ~ df_baseline_diet$TotalCalories[idx])
+    resid_vec[idx] <- residuals(fit)
+  }
+  df_baseline_diet[[col_adj]] <- as.numeric(scale(resid_vec))
+}
+
+diet_vars <- c("TotalCalories", paste0(macro_vars_raw, "_adj"))
+diet_vars <- diet_vars[diet_vars %in% names(df_baseline_diet)]
+
+diet_labels <- c(
+  TotalCalories          = "Total calories",
+  Protein_adj            = "Protein",
+  Protein_animal_adj     = "Animal protein",
+  FattyAcids_adj         = "Fatty acids",
+  MonoUnsatFat_adj       = "Mono-unsat. fat",
+  PolyUnsatFat_adj       = "Poly-unsat. fat",
+  SatFat_adj             = "Saturated fat",
+  Carbohydrates_adj      = "Carbohydrates",
+  Fiber_adj              = "Fiber",
+  Sodium_g_adj           = "Sodium"
+)
+
+spearman_diet_all <- expand.grid(
+  ratio   = c("log10_Mucin_DF", "log10_GAG_DF"),
+  outcome = diet_vars,
+  stringsAsFactors = FALSE
+) |>
+  as_tibble() |>
+  rowwise() |>
+  mutate(
+    EthnicityTot = "All",
+    n    = sum(complete.cases(df_baseline_diet[[ratio]], df_baseline_diet[[outcome]])),
+    rho  = cor_pval(df_baseline_diet[[ratio]], df_baseline_diet[[outcome]])[["rho"]],
+    pval = cor_pval(df_baseline_diet[[ratio]], df_baseline_diet[[outcome]])[["pval"]]
+  ) |>
+  ungroup()
+
+spearman_diet_eth <- bind_rows(lapply(c(ETH_DUTCH, ETH_SAS), function(eth) {
+  df_eth <- df_baseline_diet |> filter(EthnicityTot == eth)
+  expand.grid(
+    ratio   = c("log10_Mucin_DF", "log10_GAG_DF"),
+    outcome = diet_vars,
+    stringsAsFactors = FALSE
+  ) |>
+    as_tibble() |>
+    rowwise() |>
+    mutate(
+      EthnicityTot = eth,
+      n    = sum(complete.cases(df_eth[[ratio]], df_eth[[outcome]])),
+      rho  = cor_pval(df_eth[[ratio]], df_eth[[outcome]])[["rho"]],
+      pval = cor_pval(df_eth[[ratio]], df_eth[[outcome]])[["pval"]]
+    ) |>
+    ungroup()
+}))
+
+spearman_diet <- bind_rows(spearman_diet_all, spearman_diet_eth) |>
+  group_by(EthnicityTot) |>
+  mutate(padj = p.adjust(pval, method = "fdr")) |>
+  ungroup()
+
+print(spearman_diet)
+write.csv2(spearman_diet,
+           "results/4_functional_change/cayman/ratios/spearman_dietary_correlations.csv",
+           row.names = FALSE)
+
+make_diet_matrix <- function(res, eth_label) {
+  r     <- res |> filter(EthnicityTot == eth_label)
+  avail <- diet_vars[diet_vars %in% r$outcome]
+  cor_m <- r |>
+    dplyr::select(ratio, outcome, rho) |>
+    pivot_wider(names_from = ratio, values_from = rho) |>
+    column_to_rownames("outcome") |>
+    as.matrix()
+  cor_m <- cor_m[avail, , drop = FALSE]
+  rownames(cor_m) <- diet_labels[rownames(cor_m)]
+  colnames(cor_m) <- ratio_labels[colnames(cor_m)]
+
+  pval_m <- r |>
+    dplyr::select(ratio, outcome, padj) |>
+    pivot_wider(names_from = ratio, values_from = padj) |>
+    column_to_rownames("outcome") |>
+    as.matrix()
+  pval_m <- pval_m[avail, , drop = FALSE]
+  rownames(pval_m) <- diet_labels[rownames(pval_m)]
+  colnames(pval_m) <- ratio_labels[colnames(pval_m)]
+
+  list(cor = cor_m, pval = pval_m)
+}
+
+mat_diet_all   <- make_diet_matrix(spearman_diet, "All")
+mat_diet_dutch <- make_diet_matrix(spearman_diet, ETH_DUTCH)
+mat_diet_sas   <- make_diet_matrix(spearman_diet, ETH_SAS)
+
+ht_diet_all   <- make_heatmap(mat_diet_all$cor,   mat_diet_all$pval,   "All",     show_row_names = TRUE)
+ht_diet_dutch <- make_heatmap(mat_diet_dutch$cor, mat_diet_dutch$pval, ETH_DUTCH, show_row_names = FALSE)
+ht_diet_sas   <- make_heatmap(mat_diet_sas$cor,   mat_diet_sas$pval,   ETH_SAS,   show_row_names = FALSE)
+ht_diet_all@name   <- "diet_all"
+ht_diet_dutch@name <- "diet_dutch"
+ht_diet_sas@name   <- "diet_sas"
+
+CairoPDF("results/4_functional_change/cayman/ratios/heatmap_spearman_diet.pdf",
+         width = 9, height = 7)
+draw(ht_diet_all + ht_diet_dutch + ht_diet_sas,
+     annotation_legend_list = list(lgd_packed),
+     padding = unit(c(5, 30, 5, 5), "mm"))
+dev.off()
+
 # --- Stability: correlation between baseline and follow-up ratios -------------
 df_wide_ratios <- dftot |>
   dplyr::select(ID, timepoint, log10_Mucin_DF, log10_GAG_DF) |>
