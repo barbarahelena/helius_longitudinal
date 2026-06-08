@@ -164,7 +164,7 @@ dir_colors <- c("Greater positive change in Dutch" = pal_jco()(2)[1], "Greater p
     geom_errorbar(aes(xmin = conflow, xmax = confhigh), orientation = "y", linewidth = 0.5, width = 0.2) +
     geom_point(size = 3.5) +
     scale_color_manual(values = dir_colors, name = NULL) +
-    labs(x = "Interaction effect for SAS (\u00b1 95% CI)",
+    labs(x = "Differential change over time: SAS \u2212 Dutch (log\u2081\u2080, \u00b1 95% CI)",
          y = NULL,
          title = "Species changing differently\nby ethnicity over time") +
     theme_Publication() +
