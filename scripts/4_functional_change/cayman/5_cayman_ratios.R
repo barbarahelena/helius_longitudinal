@@ -303,41 +303,32 @@ draw(ht_bl + ht_fu, annotation_legend_list = list(lgd_packed),
 dev.off()
 
 # --- Spearman correlations: baseline ratios vs dietary intake -----------------
-# Macronutrients are energy-adjusted using the Willett residual method: each
-# macronutrient (g/day) is regressed on total energy intake (kcal/day) within
-# the shotgun baseline subset, and the residuals are z-scored. This removes the
-# confounding effect of overall energy intake, so the adjusted variable reflects
-# macronutrient composition independent of how much a participant eats in total.
-# Total calories is kept on its original scale as a separate predictor.
-macro_vars_raw <- c("Protein", "Protein_animal", "FattyAcids", "MonoUnsatFat",
-                    "PolyUnsatFat", "SatFat", "Carbohydrates", "Fiber", "Sodium_g")
+# Willett residual-adjusted macronutrients are pre-computed in dietarydata.R
+# and stored in clinicaldata_wide.RDS as *_baseline_adj (scaled residuals from
+# regressing each macronutrient on total energy intake across the full cohort).
+helius_wide_diet <- readRDS("data/clinicaldata/clinicaldata_wide.RDS") |>
+  dplyr::select(ID, TotalCalories_baseline,
+                ends_with("_baseline_adj"))
 
-df_baseline_diet <- df_baseline
-for (mac in macro_vars_raw) {
-  col_adj <- paste0(mac, "_adj")
-  idx <- !is.na(df_baseline_diet[[mac]]) & !is.na(df_baseline_diet$TotalCalories)
-  resid_vec <- rep(NA_real_, nrow(df_baseline_diet))
-  if (sum(idx) > 2) {
-    fit <- lm(df_baseline_diet[[mac]][idx] ~ df_baseline_diet$TotalCalories[idx])
-    resid_vec[idx] <- residuals(fit)
-  }
-  df_baseline_diet[[col_adj]] <- as.numeric(scale(resid_vec))
-}
+df_baseline_diet <- df_baseline |>
+  left_join(helius_wide_diet, by = "ID")
 
-diet_vars <- c("TotalCalories", paste0(macro_vars_raw, "_adj"))
+diet_vars <- c("TotalCalories_baseline",
+               "Protein_baseline_adj", "Protein_animal_baseline_adj",
+               "FattyAcids_baseline_adj", "SatFat_baseline_adj",
+               "Carbohydrates_baseline_adj", "Fiber_baseline_adj",
+               "Sodium_g_baseline_adj")
 diet_vars <- diet_vars[diet_vars %in% names(df_baseline_diet)]
 
 diet_labels <- c(
-  TotalCalories          = "Total calories",
-  Protein_adj            = "Protein",
-  Protein_animal_adj     = "Animal protein",
-  FattyAcids_adj         = "Fatty acids",
-  MonoUnsatFat_adj       = "Mono-unsat. fat",
-  PolyUnsatFat_adj       = "Poly-unsat. fat",
-  SatFat_adj             = "Saturated fat",
-  Carbohydrates_adj      = "Carbohydrates",
-  Fiber_adj              = "Fiber",
-  Sodium_g_adj           = "Sodium"
+  TotalCalories_baseline        = "Total calories",
+  Protein_baseline_adj          = "Protein",
+  Protein_animal_baseline_adj   = "Animal protein",
+  FattyAcids_baseline_adj       = "Fatty acids",
+  SatFat_baseline_adj           = "Saturated fat",
+  Carbohydrates_baseline_adj    = "Carbohydrates",
+  Fiber_baseline_adj            = "Fiber",
+  Sodium_g_baseline_adj         = "Sodium"
 )
 
 spearman_diet_all <- expand.grid(
