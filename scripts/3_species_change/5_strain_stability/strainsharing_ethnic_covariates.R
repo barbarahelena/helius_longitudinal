@@ -155,9 +155,9 @@ pl_dumbbell <- ggplot(eth_sharing_perc, aes(x = Species)) +
                  color = "darkgrey") +
     geom_point(aes(y = sharing_perc, color = EthnicityTot), size = 3) +
     scale_color_manual(values = leg, name = NULL) +
-    labs(y = "% subjects with stable strains",
+    labs(y = "% subjects with stable strain",
          x = NULL,
-         title = "Ethnically-differential strain sharing\n(FDR < 0.05)") +
+         title = "Ethnically-differential strain stability\n(FDR < 0.05)") +
     theme_Publication() +
     coord_flip()
 
@@ -271,7 +271,7 @@ pl_atten <- ggplot(attenuation_results,
         name = NULL) +
     labs(x = "OR South-Asian Surinamese vs Dutch (95% CI)",
          y = NULL,
-         title = "Ethnic differences in strain sharing:\nattenuation by covariates") +
+         title = "Ethnic differences in strain stability:\nattenuation by covariates") +
     theme_Publication() +
     theme(legend.position = "bottom")
 

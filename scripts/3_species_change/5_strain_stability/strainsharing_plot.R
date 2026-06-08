@@ -118,7 +118,7 @@ dftot <- dftot %>% left_join(., bray_alphadiv)
     geom_violin(colour = NA, aes(fill = EthnicityTot)) +
     geom_boxplot(fill = "white", width = 0.2) +
     scale_fill_manual(values = rev(pal_simpsons()(2)), guide = "none") +
-    labs(y = "% of stable strains", title = "Strain sharing\nbetween timepoints", x = "") +
+    labs(y = "% of stable strains", title = "Strain stability\nbetween timepoints", x = "") +
     theme_Publication())
 ggsave("results/3_species_change/5_strain_stability/ethnicities.pdf", width = 4.5, height = 5)
 
@@ -135,7 +135,7 @@ stat_cor_fmt <- function(...) {
     geom_jitter(color = "#197EC0FF", alpha = 0.5, width = 0) +
     geom_smooth(color = "black", method = "lm") +
     scale_y_continuous(expand = expansion(add = c(2, 15))) +
-    labs(y = "Stable strains (%)", x = "Follow-up time (years)", title = "Follow-up time and\nstrain stability") +
+    labs(y = "% of stable strains", x = "Follow-up time (years)", title = "Follow-up time and\nstrain stability") +
     stat_cor_fmt(label.y = 100) +
     theme_Publication())
 ggsave("results/3_species_change/5_strain_stability/futime.pdf", width = 4.5, height = 5)
@@ -145,7 +145,7 @@ ggsave("results/3_species_change/5_strain_stability/futime.pdf", width = 4.5, he
     geom_jitter(color = "#197EC0FF", alpha = 0.5, width = 0) +
     geom_smooth(color = "black", method = "lm") +
     scale_y_continuous(expand = expansion(add = c(2, 15))) +
-    labs(y = "Stable strains (%)", x = "Bray-Curtis dissimilarity",
+    labs(y = "% of stable strains", x = "Bray-Curtis dissimilarity",
          title = "Strain stability and\nmicrobiome change") +
     stat_cor_fmt(label.y = 100) +
     theme_Publication())
@@ -156,7 +156,7 @@ ggsave("results/3_species_change/5_strain_stability/bray_strainsharing.pdf", wid
     geom_jitter(color = "#197EC0FF", alpha = 0.5, width = 0) +
     geom_smooth(color = "black", method = "lm") +
     scale_y_continuous(expand = expansion(add = c(2, 15))) +
-    labs(y = "Stable strains (%)", x = "Shannon index (baseline)", title = "Baseline diversity and\nstrain stability") +
+    labs(y = "% of stable strains", x = "Shannon index (baseline)", title = "Baseline diversity and\nstrain stability") +
     stat_cor_fmt(label.y = 100) +
     theme_Publication())
 ggsave("results/3_species_change/5_strain_stability/shannon_strainsharing.pdf", width = 4.5, height = 5)
@@ -224,9 +224,9 @@ leg <- c("Dutch" = pal_simpsons()(2)[2], "South-Asian Surinamese" = pal_simpsons
     geom_point(aes(y = `South-Asian Surinamese`, color = "South-Asian Surinamese"), size = 3) +
     geom_point(aes(y = Dutch, color = "Dutch"), size = 3) +
     scale_color_manual(values = leg) +
-    labs(y = "% subjects with stable strains",
+    labs(y = "% subjects with stable strain",
          x = "",
-         title = "Strain sharing", color = "") +
+         title = "Strain stability", color = "") +
     theme_Publication() +
     coord_flip())
 ggsave("results/3_species_change/5_strain_stability/diffsgbs_ethnicity_connect.pdf", width = 7, height = 7)
