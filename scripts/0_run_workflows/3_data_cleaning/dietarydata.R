@@ -100,6 +100,24 @@ loadings$Variables <- rownames(loadings)
 )
 ggsave(pcadiet, filename = "results/0_data_cleaning/diet/PCA_diet_loading.pdf", width = 7, height = 7)
 
+(pl_load1 <- ggplot(loadings, aes(x = fct_reorder(Variables, PC1), y = PC1)) +
+    geom_col(aes(fill = PC1 > 0), color = NA) +
+    scale_fill_manual(values = c("TRUE" = "#709AE1FF", "FALSE" = "#FD7446FF"), guide = "none") +
+    coord_flip() +
+    theme_Publication() +
+    labs(x = '', y = 'Loading', title = paste0('PC1 (', round(expvar_diet[1] * 100, 1), '% variance)')))
+
+(pl_load2 <- ggplot(loadings, aes(x = fct_reorder(Variables, PC2), y = PC2)) +
+    geom_col(aes(fill = PC2 > 0), color = NA) +
+    scale_fill_manual(values = c("TRUE" = "#709AE1FF", "FALSE" = "#FD7446FF"), guide = "none") +
+    coord_flip() +
+    theme_Publication() +
+    labs(x = '', y = 'Loading', title = paste0('PC2 (', round(expvar_diet[2] * 100, 1), '% variance)')))
+
+(fig_loadings <- ggarrange(pl_load1, pl_load2, ncol = 2, nrow = 1, labels = c("A", "B")))
+ggsave(fig_loadings, filename = "results/0_data_cleaning/diet/PCA_diet_loadings_barplot.pdf",
+       device = "pdf", width = 10, height = 5)
+
 (plright_diet <- ggplot(pcs, aes(x = EthnicityTot, y = PC2, fill = EthnicityTot)) +
     geom_boxplot(outlier.shape = NA, width = 0.5) +
     scale_fill_manual(values = eth_colors, guide = "none") +
@@ -262,6 +280,83 @@ df_diet_norm <- df_diet %>%
 
 resultsfolder_norm <- file.path(resultsfolder, "calorie_normalized")
 dir.create(resultsfolder_norm, showWarnings = FALSE)
+
+#### Energy-adjusted PCA ####
+df_diet_norm_pca <- df_diet_norm %>%
+    dplyr::select(ID, EthnicityTot, ends_with("_per1000"))
+df_diet_norm_pca2 <- df_diet_norm_pca %>%
+    dplyr::select(-ID, -EthnicityTot) %>%
+    mutate(across(everything(), scale))
+matdiet_norm <- as.matrix(df_diet_norm_pca2)
+tunediet_norm <- tune.pca(matdiet_norm, ncomp = 5, scale = TRUE)
+pc_norm <- mixOmics::pca(matdiet_norm, ncomp = 2)
+pcs_norm <- as.data.frame(pc_norm$variates$X)
+pcs_norm <- pcs_norm %>% mutate(ID = df_diet_norm_pca$ID, EthnicityTot = df_diet_norm_pca$EthnicityTot)
+expvar_diet_norm <- pc_norm$explained_variance[1:2]
+loadings_norm <- as.data.frame(pc_norm$loadings$X)
+loadings_norm$Variables <- gsub("_per1000", "", rownames(pc_norm$loadings$X))
+
+df <- df %>%
+    left_join(pcs_norm %>% dplyr::select(ID, DietPC1_norm = PC1, DietPC2_norm = PC2), by = "ID")
+saveRDS(df, "data/clinicaldata_long_pcdiet.RDS")
+
+(pcadiet_norm <- pcs_norm %>%
+        ggplot(aes(PC1, PC2)) +
+        geom_point(aes(color = EthnicityTot), size = 1, alpha = 1.0) +
+        xlab(paste0('PC1 (', round(expvar_diet_norm[1]*100, digits = 1),'%)')) +
+        ylab(paste0('PC2 (', round(expvar_diet_norm[2]*100, digits = 1),'%)')) +
+        theme_Publication() +
+        stat_ellipse(geom = "polygon", aes(color = EthnicityTot, fill = EthnicityTot), linewidth = 1.0,
+                     alpha = 0.1, type = "norm") +
+        scale_color_manual(values = eth_colors) +
+        scale_fill_manual(values = eth_colors, guide = "none") +
+        labs(color = "", title = "PCA diet (energy-adjusted)") +
+        theme(legend.position = "top") +
+        geom_segment(data = loadings_norm, aes(x = 0, y = 0, xend = (PC1*8), yend = (PC2*8)),
+                     arrow = arrow(length = unit(1/2, "picas")),
+                     color = "black", linewidth = 0.9) +
+        annotate("text", x = (loadings_norm$PC1*13), y = (loadings_norm$PC2*10),
+                 label = loadings_norm$Variables)
+)
+ggsave(pcadiet_norm, filename = file.path(resultsfolder_norm, "PCA_diet_norm_loading.pdf"), width = 7, height = 7)
+
+(pl_load1_norm <- ggplot(loadings_norm, aes(x = fct_reorder(Variables, PC1), y = PC1)) +
+    geom_col(aes(fill = PC1 > 0), color = NA) +
+    scale_fill_manual(values = c("TRUE" = "#709AE1FF", "FALSE" = "#FD7446FF"), guide = "none") +
+    coord_flip() +
+    theme_Publication() +
+    labs(x = '', y = 'Loading', title = paste0('PC1 (', round(expvar_diet_norm[1] * 100, 1), '% variance)')))
+
+(pl_load2_norm <- ggplot(loadings_norm, aes(x = fct_reorder(Variables, PC2), y = PC2)) +
+    geom_col(aes(fill = PC2 > 0), color = NA) +
+    scale_fill_manual(values = c("TRUE" = "#709AE1FF", "FALSE" = "#FD7446FF"), guide = "none") +
+    coord_flip() +
+    theme_Publication() +
+    labs(x = '', y = 'Loading', title = paste0('PC2 (', round(expvar_diet_norm[2] * 100, 1), '% variance)')))
+
+(fig_loadings_norm <- ggarrange(pl_load1_norm, pl_load2_norm, ncol = 2, nrow = 1, labels = c("A", "B")))
+ggsave(fig_loadings_norm, filename = file.path(resultsfolder_norm, "PCA_diet_norm_loadings_barplot.pdf"),
+       device = "pdf", width = 10, height = 5)
+
+(plright_diet_norm <- ggplot(pcs_norm, aes(x = EthnicityTot, y = PC2, fill = EthnicityTot)) +
+    geom_boxplot(outlier.shape = NA, width = 0.5) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    scale_x_discrete(expand = expansion(add = 0.3)) +
+    theme_transparent())
+
+(plbottom_diet_norm <- ggplot(pcs_norm, aes(x = fct_rev(EthnicityTot), y = PC1, fill = EthnicityTot)) +
+    geom_boxplot(outlier.shape = NA, width = 0.5) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    scale_x_discrete(expand = expansion(add = 0.3)) +
+    theme_transparent() +
+    coord_flip())
+
+options("aplot_guides" = "keep")
+ap_diet_norm <- pcadiet_norm %>%
+    insert_bottom(plbottom_diet_norm, height = 0.25) %>%
+    insert_right(plright_diet_norm, width = 0.25)
+ggsave(ap_diet_norm, filename = file.path(resultsfolder_norm, "PCA_diet_norm_loading_box.pdf"),
+       device = "pdf", width = 9, height = 9)
 
 (pln1 <- ggplot(df_diet_norm, aes(x = fct_reorder(EthnicityTot, Protein_per1000, median, na.rm = TRUE), y = Protein_per1000)) +
     geom_violin(aes(fill = EthnicityTot), color = NA) +
