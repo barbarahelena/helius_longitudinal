@@ -3,6 +3,7 @@
 ## Libraries
 library(tidyverse)
 library(vegan)
+library(permute)
 library(ggplot2)
 library(ggpubr)
 library(ggsci)
@@ -78,55 +79,63 @@ if (!file.exists("data/shotgun/bray_shotgun.RDS") ||
 helius <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 df <- dbray %>% dplyr::select(1:2, sampleID = ID)
 df <- left_join(df, helius, by = c("sampleID"))
+dim(df)
 
 #### Colour palette — timepoints ####
 tp_colors <- setNames(pal_simpsons()(2), c("baseline", "follow-up"))
 
-#### PCoA per ethnicity — timepoint comparison ####
-eth_levels <- df %>%
-    filter(!is.na(EthnicityTot), EthnicityTot != "Other") %>%
-    pull(EthnicityTot) %>% unique()
+#### Colour palette — ethnicities ####
+eth_colors <- c(
+    "Dutch"                  = "#709AE1FF",
+    "South-Asian Surinamese" = "#FED439FF"
+)
 
-permanova_eth <- purrr::map_dfr(eth_levels, function(eth) {
-    sub <- df %>% filter(EthnicityTot == eth)
+#### PCoA per timepoint — ethnicity comparison ####
+set.seed(1234)
+permanova_tp <- setNames(lapply(c("baseline", "follow-up"), function(tp) {
+    sub <- df %>% filter(timepoint == tp, !is.na(EthnicityTot), EthnicityTot != "Other")
     ids <- sub$sampleID
-    braymat_eth <- as.matrix(bray)[ids, ids]
-    if (nrow(sub) < 10 || length(unique(sub$timepoint)) < 2) return(NULL)
-    res <- adonis2(as.dist(braymat_eth) ~ timepoint, data = sub)
-    data.frame(
-        EthnicityTot = eth,
-        pval         = res$`Pr(>F)`[1],
-        r2           = res$R2[1],
-        stringsAsFactors = FALSE
-    )
-}) %>%
-    mutate(label = str_c("p = ", pval, ", r² = ", format(round(r2, 3), nsmall = 3)))
+    braymat_tp <- as.matrix(bray)[ids, ids]
+    if (nrow(sub) < 10 || length(unique(sub$EthnicityTot)) < 2) return(NULL)
+    adonis2(as.dist(braymat_tp) ~ EthnicityTot, data = sub, by = "terms")
+}), c("baseline", "follow-up"))
+print(permanova_tp)
 
-df_eth_pcoa <- df %>%
+label_df_tp <- data.frame(
+    timepoint = factor(c("baseline", "follow-up"), levels = c("baseline", "follow-up")),
+    label = sapply(c("baseline", "follow-up"), function(tp) {
+        res <- permanova_tp[[tp]]
+        if (is.null(res)) return("")
+        str_c("p = ", res$`Pr(>F)`[1], ", r² = ", format(round(res$R2[1], 3), nsmall = 3))
+    })
+)
+
+df_tp_pcoa <- df %>%
     filter(!is.na(EthnicityTot), EthnicityTot != "Other") %>%
-    left_join(permanova_eth %>% dplyr::select(EthnicityTot, label), by = "EthnicityTot")
+    mutate(timepoint = factor(timepoint, levels = c("baseline", "follow-up")))
 
-(pl_pcoa_eth <- ggplot(df_eth_pcoa, aes(BrayPCo1, BrayPCo2)) +
-    stat_ellipse(geom = "polygon", aes(color = timepoint, fill = timepoint),
+(pl_pcoa_tp <- ggplot(df_tp_pcoa, aes(BrayPCo1, BrayPCo2)) +
+    stat_ellipse(geom = "polygon", aes(color = EthnicityTot, fill = EthnicityTot),
                  type = "norm", alpha = 0.1) +
-    geom_point(aes(color = timepoint), size = 0.8, alpha = 0.5) +
+    geom_point(aes(color = EthnicityTot), size = 0.8, alpha = 0.5) +
     geom_text(
-        data = df_eth_pcoa %>% distinct(EthnicityTot, label),
+        data = label_df_tp,
         aes(label = label), x = Inf, y = Inf, hjust = 1.05, vjust = 1.5,
         size = 2.5, color = "grey30", inherit.aes = FALSE
     ) +
-    scale_color_manual(values = tp_colors) +
-    scale_fill_manual(values = tp_colors, guide = "none") +
-    facet_wrap(~EthnicityTot, scales = "free") +
+    scale_color_manual(values = eth_colors, name = NULL) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    facet_wrap(~timepoint, scales = "free") +
     xlab(paste0('PCo1 (', round(expl_variance_bray[1], digits = 1),'%)')) +
     ylab(paste0('PCo2 (', round(expl_variance_bray[2], digits = 1),'%)')) +
-    labs(color = "", title = "PCoA Bray-Curtis — by ethnicity") +
+    labs(color = "", title = "PCoA Bray-Curtis — by timepoint") +
     theme_Publication() +
     theme(legend.position = "bottom"))
-ggsave(pl_pcoa_eth, filename = file.path(resultsfolder, "PCoA_BrayCurtis_sg_ethnicity.pdf"),
-       device = "pdf", width = 12, height = 8)
+ggsave(pl_pcoa_tp, filename = file.path(resultsfolder, "PCoA_BrayCurtis_sg_timepoint.pdf"),
+       device = "pdf", width = 10, height = 6)
 
 ## Distance between datapoints
+
 braymat <- as.matrix(bray)
 all_combinations <- t(combn(unique(rownames(braymat)), 2, simplify = TRUE))
 data_long <- data.frame(
@@ -144,46 +153,41 @@ heliusdist <- inner_join(data_long, helius, by = "ID") %>% filter(timepoint == "
 saveRDS(heliusdist, "data/shotgun/braydistance_delta.RDS")
 
 #### Figure panels — Supplementary Figure 6 ####
-eth_colors <- c(
-    "Dutch"                  = "#709AE1FF",
-    "South-Asian Surinamese" = "#FED439FF"
-)
 
 ## Panel A — Follow-up time by ethnicity
 fu_data <- heliusdist %>%
     filter(!is.na(FUtime), !is.na(EthnicityTot), EthnicityTot != "Other") %>%
     mutate(EthnicityTot = fct_reorder(EthnicityTot, FUtime, median)) %>%
     droplevels()
-comp_a <- rev(combn(levels(fu_data$EthnicityTot), 2, simplify = FALSE))
 
 pl_sfig6_A <- ggplot(fu_data, aes(x = EthnicityTot, y = FUtime)) +
     geom_violin(colour = NA, aes(fill = EthnicityTot)) +
     geom_boxplot(fill = "white", width = 0.2) +
     scale_fill_manual(values = eth_colors, guide = "none") +
     labs(y = "Follow-up time (years)", title = "Follow-up time", x = "") +
-    stat_compare_means(label = "p.format", tip.length = 0, comparisons = comp_a) +
+    stat_compare_means(label = "p.format", tip.length = 0) +
     scale_y_continuous(expand = expansion(mult = c(0.05, 0.05)), breaks = 4:12) +
     theme_Publication() +
     coord_flip()
-## Panel B — per-ethnicity PCoA (computed above as pl_pcoa_eth)
-pl_sfig6_B <- pl_pcoa_eth
+## Panel B — per-timepoint PCoA (computed above as pl_pcoa_tp)
+pl_sfig6_B <- pl_pcoa_tp
 
 ## Panel C — Bray-Curtis dissimilarity vs follow-up time
 pl_sfig6_C <- ggplot(
         heliusdist %>% filter(!is.na(FUtime), EthnicityTot != "Other"),
         aes(x = FUtime, y = distance)) +
-    geom_jitter(color = "#197EC0FF", alpha = 0.3, width = 0) +
+    geom_jitter(color = "#197EC0FF", alpha = 0.3, position = position_jitter(seed = 1234, width = 0)) +
     geom_smooth(color = "black", method = "lm") +
     labs(y = "Bray-Curtis dissimilarity over FU time",
          x = "FU time (years)", title = "FU time and sample distance") +
     stat_cor() +
     theme_Publication()
+
 ## Panel D — Confounder-adjusted Bray-Curtis by ethnicity
 heliusdist_adj <- heliusdist %>%
     filter(!is.na(EthnicityTot), EthnicityTot != "Other") %>%
     filter(!is.na(Age), !is.na(Sex), !is.na(BMI),
-           !is.na(Metformin), !is.na(PPI), !is.na(AntiHT), !is.na(Statins),
-           !is.na(DiscrMean_baseline), !is.na(AlcCons)) %>%
+           !is.na(Metformin), !is.na(PPI), !is.na(AntiHT), !is.na(Statins), !is.na(AlcCons)) %>%
     droplevels()
 lm_confounders <- lm(distance ~ Age + Sex + BMI + Metformin + PPI + FUtime,
                      data = heliusdist_adj)
@@ -192,8 +196,6 @@ heliusdist_adj <- heliusdist_adj %>%
         dist_adjusted = residuals(lm_confounders) + mean(distance, na.rm = TRUE),
         EthnicityTot  = fct_reorder(EthnicityTot, dist_adjusted, median)
     )
-comp_d <- rev(combn(levels(heliusdist_adj$EthnicityTot), 2, simplify = FALSE))
-
 pl_sfig6_D <- ggplot(heliusdist_adj, aes(x = EthnicityTot, y = dist_adjusted)) +
     geom_violin(colour = NA, aes(fill = EthnicityTot)) +
     geom_boxplot(fill = "white", width = 0.2) +
@@ -201,7 +203,7 @@ pl_sfig6_D <- ggplot(heliusdist_adj, aes(x = EthnicityTot, y = dist_adjusted)) +
     labs(y = "Adjusted Bray-Curtis dissimilarity",
          title = "Distance baseline to follow-up", x = "") +
     stat_compare_means(aes(label = sprintf("p = %s", ..p.format..)),
-                       tip.length = 0, comparisons = comp_d) +
+                       tip.length = 0) +
     scale_y_continuous(expand = expansion(mult = c(0.05, 0.25))) +
     theme_Publication() +
     coord_flip()
