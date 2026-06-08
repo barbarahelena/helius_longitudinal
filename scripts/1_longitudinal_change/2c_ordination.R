@@ -3,6 +3,7 @@
 ## Libraries
 library(phyloseq)
 library(vegan)
+library(permute)
 library(tidyverse)
 library(ggplot2)
 library(ggpubr)
@@ -74,7 +75,8 @@ set.seed(1234)
 dfanova <- df[match(attributes(bray)[["Labels"]], df$sampleID),]
 all(dfanova$sampleID == attributes(bray)[["Labels"]]) # TRUE
 dim(df)
-res1 <- adonis2(bray ~ timepoint, data = dfanova) # PERMANOVA
+ctrl <- how(blocks = dfanova$ID, nperm = 999)
+res1 <- adonis2(bray ~ timepoint, data = dfanova, permutations = ctrl)
 print(res1)
 
 # Figure 1B: clean timepoint-coloured PCoA
@@ -301,7 +303,7 @@ heliusdist_adj <- heliusdist %>%
     filter(
         !is.na(Age) & !is.na(Sex) & !is.na(BMI) &
         !is.na(Metformin) & !is.na(PPI) & !is.na(AntiHT) & !is.na(Statins) &
-        !is.na(DiscrMean_baseline) & !is.na(AlcCons)
+        !is.na(AlcCons)
     )
 
 # Linear regression: distance ~ all confounders + ethnicity
@@ -437,10 +439,77 @@ ggsave("results/1_longitudinal_change/ordination/pco2_spread_per_ethnicity.pdf",
 ggsave("results/1_longitudinal_change/ordination/pco1_pco2_spread_per_ethnicity.pdf",
        pl_pco_combined, width = 8, height = 9)
 
-#### Supplementary Figure 1 ####
-top_row <- ggarrange(pl, pl_suppl_diet, ncol = 2, labels = c("A", "B"))
-bottom_row <- ggarrange(pl_pairwise_heatmap, pl_delta_R2, ncol = 2, labels = c("C", "D"))
-(suppl_fig1 <- ggarrange(top_row, bottom_row, nrow = 2, heights = c(1.0,1.2)))
-ggsave(suppl_fig1,
-       filename = "results/1_longitudinal_change/ordination/suppl_fig1.pdf",
-       width = 16, height = 10)
+#### Distance to Dutch centroid vs residence duration ####
+print('Distance to Dutch centroid vs residence duration..')
+
+df_baseline <- df |> filter(timepoint == "baseline")
+dutch_ids   <- df_baseline |> filter(EthnicityTot == "Dutch") |> pull(sampleID)
+
+migrant_baseline <- df_baseline |>
+    filter(EthnicityTot != "Dutch" & EthnicityTot != "Other") |>
+    left_join(heliusdf |> dplyr::select(sampleID, ResDuration, Age), by = "sampleID") |>
+    filter(!is.na(ResDuration)) |>
+    mutate(
+        dist_to_dutch = map_dbl(sampleID, \(sid) mean(braymat_full[sid, dutch_ids], na.rm = TRUE)),
+        Age_at_migration = Age - ResDuration
+    )
+# Residence duration and distance-to-Dutch summary per migrant group
+print(as.data.frame(migrant_baseline |>
+    group_by(EthnicityTot) |>
+    summarise(n = n(), median_resdur = median(ResDuration),
+              q25_resdur = quantile(ResDuration, 0.25), q75_resdur = quantile(ResDuration, 0.75),
+              mean_dist = mean(dist_to_dutch), sd_dist = sd(dist_to_dutch),
+              median_dist = median(dist_to_dutch))))
+
+print(as.data.frame(migrant_baseline |>
+    summarise(n = n(), mean_dist = mean(dist_to_dutch), sd_dist = sd(dist_to_dutch),
+              median_dist = median(dist_to_dutch)) |>
+    mutate(EthnicityTot = "All migrants")))
+
+library(broom)
+
+# Per-group slopes (unadjusted within each group)
+group_est <- migrant_baseline %>%
+    group_by(EthnicityTot) %>%
+    do(tidy(lm(dist_to_dutch ~ ResDuration, data = .), conf.int = TRUE)) %>%
+    filter(term == "ResDuration") %>%
+    ungroup() %>%
+    mutate(across(c(estimate, conf.low, conf.high), ~ . * 10)) %>%
+    rename(group = EthnicityTot)
+
+# Pooled estimate (ethnicity-adjusted)
+pooled <- tidy(lm(dist_to_dutch ~ ResDuration + EthnicityTot,
+                  data = migrant_baseline), conf.int = TRUE) %>%
+    filter(term == "ResDuration") %>%
+    mutate(across(c(estimate, conf.low, conf.high), ~ . * 10),
+           group = "Pooled (ethnicity-adjusted)")
+
+# Combine and order
+forest_df <- bind_rows(group_est, pooled) %>%
+    mutate(group = factor(group,
+        levels = rev(c(as.character(unique(group_est$group)),
+                       "Pooled (ethnicity-adjusted)"))))
+
+print(forest_df |> dplyr::select(group, estimate, conf.low, conf.high, p.value))
+
+(pl_forest_resdur <- ggplot(forest_df, aes(x = estimate, y = group)) +
+    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+    geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2) +
+    geom_point(aes(shape = group == "Pooled (ethnicity-adjusted)"), size = 3) +
+    scale_shape_manual(values = c("FALSE" = 16, "TRUE" = 18), guide = "none") +
+    labs(x = "Change in Bray-Curtis distance to Dutch centroid per decade of residence",
+         y = NULL) +
+    theme_Publication())
+
+ggsave(pl_forest_resdur,
+       filename = "results/1_longitudinal_change/ordination/forest_resdur_dist_to_dutch.pdf",
+       width = 7, height = 5)
+
+#### Supplementary Figure 2 ####
+top_row    <- ggarrange(pl, pl_suppl_diet, ncol = 2, labels = c("A", "B"))
+middle_row <- ggarrange(pl_pairwise_heatmap, pl_delta_R2, ncol = 2, labels = c("C", "D"))
+bottom_row <- ggarrange(pl_forest_resdur, ncol = 1, labels = "E")
+(suppl_fig2 <- ggarrange(top_row, middle_row, bottom_row, nrow = 3, heights = c(1.0, 1.2, 0.9)))
+ggsave(suppl_fig2,
+       filename = "results/1_longitudinal_change/ordination/suppl_fig2.pdf",
+       width = 16, height = 15)
