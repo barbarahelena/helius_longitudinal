@@ -128,38 +128,29 @@ pl_G <- make_cazyme_vln("GH5_26")
 
 ## ── 8. Assemble rows ──────────────────────────────────────────────────────────
 
-# Row 1 — HUMAnN: forest+heatmap (wide) + two pathway violins
-humann_row <- ggarrange(
-  pl_A, pl_B, pl_C,
+# Row 1 — HUMAnN forest+heatmap (A) + two CAZyme PCoAs (B)
+top_row <- ggarrange(
+  pl_A, pl_can_bl, pl_can_fu,
   ncol   = 3,
-  labels = c("A", "B", "C"),
+  labels = c("A", "B", ""),
   widths = c(2, 1, 1)
 )
 
-# Row 2 — CAZyme ordination: two Canberra PCoAs (D) + forest+heatmap (E)
-cazyme_ordin_row <- ggarrange(
-  pl_can_bl, pl_can_fu, pl_E,
-  ncol   = 3,
-  labels = c("D", "", "E"),
-  widths = c(1, 1, 2)
-)
-
-# Row 3 — CAZyme details: two family violins (F, G) + GAG ratio (H)
-cazyme_vln_row <- ggarrange(
-  pl_F, pl_G, p_gag_vln,
-  ncol   = 3,
-  labels = c("F", "G", "H"),
-  widths = c(1, 1, 1)
+# Row 2 — CAZyme forest+heatmap (C) + GAG ratio violin (D)
+bottom_row <- ggarrange(
+  pl_E, p_gag_vln,
+  ncol   = 2,
+  labels = c("C", "D"),
+  widths = c(3, 1)
 )
 
 ## ── 9. Final assembly ─────────────────────────────────────────────────────────
 
 fig4 <- ggarrange(
-  humann_row,
-  cazyme_ordin_row,
-  cazyme_vln_row,
-  nrow    = 3,
-  heights = c(1.2, 1.2, 1.0)
+  top_row,
+  bottom_row,
+  nrow    = 2,
+  heights = c(1, 1)
 )
 
 ## ── 10. Save ──────────────────────────────────────────────────────────────────
@@ -169,6 +160,23 @@ ggsave(
   fig4,
   filename = "results/4_functional_change/figure4.pdf",
   width    = 18,
-  height   = 15,
+  height   = 12,
+  device   = cairo_pdf
+)
+
+## ── 11. Supplementary figure: violin panels B, C, F, G ───────────────────────
+
+suppl_fig4 <- ggarrange(
+  pl_B, pl_C, pl_F, pl_G,
+  nrow   = 2,
+  ncol   = 2,
+  labels = c("A", "B", "C", "D")
+)
+
+ggsave(
+  suppl_fig4,
+  filename = "results/4_functional_change/suppl_figure_violins.pdf",
+  width    = 12,
+  height   = 12,
   device   = cairo_pdf
 )
