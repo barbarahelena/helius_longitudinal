@@ -252,10 +252,9 @@ df_wide_delta <- df_wide %>%
         Dyslipidemia_new = deltafactor(Dyslipidemia_baseline, `Dyslipidemia_follow-up`)
         )
 
-coldouble <- colnames(df_wide_delta)[which(str_detect(colnames(df_wide_delta), "_follow-up") | 
+coldouble <- colnames(df_wide_delta)[which(str_detect(colnames(df_wide_delta), "_follow-up") |
                                                str_detect(colnames(df_wide_delta), "_baseline"))]
-coldouble <- coldouble[c(3:length(coldouble))]
-df_long <- df_wide_delta %>% 
+df_long <- df_wide_delta %>%
     pivot_longer(., cols = all_of(coldouble), names_to = c(".value", "timepoint"),
                                         names_pattern = "(.*)_([a-z-]+)$")
 
