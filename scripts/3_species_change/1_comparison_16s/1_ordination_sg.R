@@ -203,7 +203,7 @@ pl_sfig6_D <- ggplot(heliusdist_adj, aes(x = EthnicityTot, y = dist_adjusted)) +
     labs(y = "Adjusted Bray-Curtis dissimilarity",
          title = "Distance baseline to follow-up", x = "") +
     stat_compare_means(aes(label = sprintf("p = %s", ..p.format..)),
-                       tip.length = 0) +
+                       tip.length = 0, label.x = 1.5) +
     scale_y_continuous(expand = expansion(mult = c(0.05, 0.25))) +
     theme_Publication() +
     coord_flip()
