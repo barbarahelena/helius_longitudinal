@@ -51,12 +51,12 @@ tree_row <- ggarrange(p1, labels = "F")
 fig3 <- ggarrange(
   top_row, tree_row,
   nrow    = 2,
-  heights = c(0.5, 1.6)
+  heights = c(1.0, 1.6)
 )
 
 dir.create("results/3_species_change", showWarnings = FALSE, recursive = TRUE)
 ggsave(fig3, filename = "results/3_species_change/figure3.pdf",
-       width = 18, height = 20, device = cairo_pdf)
+       width = 18, height = 16, device = cairo_pdf)
 
 ## Supplementary figure: strain stability panels (G–J) ----
 suppl_strain <- ggarrange(
