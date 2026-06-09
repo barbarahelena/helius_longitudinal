@@ -1,9 +1,9 @@
-## Figure 2 — Cardiometabolic disease and microbiome instability (16S)
+## Figure 2 — Cardiometabolic disease and microbiome change (16S)
 ## Beta-diversity (Bray-Curtis distance) analyses
 ##
 ## Panels (used in 3_assemble_figure.R):
 ##   A — pl_fig2_prev: disease prevalence by ethnicity (faceted bar, baseline + follow-up)
-##   B — pl_bc_extended: multi-domain predictors of Bray-Curtis instability (forest plot)
+##   B — pl_bc_extended: multi-domain predictors of Bray-Curtis change (forest plot)
 ##
 
 ## Libraries
@@ -230,7 +230,7 @@ prev_long <- prev_long %>% mutate(EthnicityTot = factor(EthnicityTot, levels = e
           axis.text.y = element_text(size = rel(1.0))))
 ggsave(file.path(resultsfolder, "cmb_prevalence_combined.pdf"), width = 15, height = 5)
 
-#### Panel B — Extended forest plot: multi-domain predictors of Bray-Curtis instability ####
+#### Panel B — Extended forest plot: multi-domain predictors of Bray-Curtis change ####
 
 # Helper: extract lm() effect (predictor in row 2 of coef table)
 extract_lm_effect_ext <- function(data, predictor_var, label, group) {
@@ -254,19 +254,11 @@ extract_lm_effect_ext <- function(data, predictor_var, label, group) {
 # Build analysis dataset from wide clinical data + Bray-Curtis distance
 helius_wide <- readRDS("data/clinicaldata/clinicaldata_wide.RDS")
 
-pcdiet <- readRDS("data/clinicaldata_long_pcdiet.RDS") %>%
-    filter(timepoint == "baseline") %>%
-    dplyr::select(ID, DietPC1, DietPC2)
-
 heliusdist_ext <- helius_wide %>%
     left_join(heliusdist %>% dplyr::select(ID, distance), by = "ID") %>%
-    left_join(pcdiet, by = "ID") %>%
     filter(!is.na(distance)) %>%
     mutate(across(
-        c(Age_baseline, BMI_baseline, DiscrMean_baseline,
-          Protein_baseline, FattyAcids_baseline,
-          Carbohydrates_baseline, Fiber_baseline, Sodium_g_baseline,
-          DietPC1, DietPC2),
+        c(Age_baseline, BMI_baseline, TotalCalories_baseline),
         ~ as.numeric(scale(.))
     )) %>%
     mutate(across(
@@ -287,7 +279,6 @@ bc_ext_effects <- bind_rows(
     extract_lm_effect_ext(heliusdist_ext, "Smoking_current_baseline", "Current smoking",                   "Risk factors"),
     extract_lm_effect_ext(heliusdist_ext, "Alcohol_baseline",         "Alcohol use",                       "Risk factors"),
     extract_lm_effect_ext(heliusdist_ext, "ExerciseNorm_baseline",    "Sufficient exercise",               "Risk factors"),
-    extract_lm_effect_ext(heliusdist_ext, "DiscrMean_baseline",       "Perceived discrimination (per SD)", "Risk factors"),
     # Cardiometabolic disease
     extract_lm_effect_ext(heliusdist_ext, "DM_baseline",           "Diabetes",           "Disease"),
     extract_lm_effect_ext(heliusdist_ext, "HT_BPMed_baseline",     "Hypertension",       "Disease"),
@@ -301,13 +292,12 @@ bc_ext_effects <- bind_rows(
     extract_lm_effect_ext(heliusdist_ext, "PsychoMed_baseline",    "Psychotropics",          "Medication"),
     extract_lm_effect_ext(heliusdist_ext, "Cortico_baseline",      "Corticosteroids",        "Medication"),
     # Diet (energy-adjusted via Willett residual method, pre-computed in dietarydata.R)
-    extract_lm_effect_ext(heliusdist_ext, "Protein_baseline",       "Protein (per SD)",       "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "FattyAcids_baseline",    "Fatty acids (per SD)",   "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "Carbohydrates_baseline", "Carbohydrates (per SD)", "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "Fiber_baseline",         "Fiber (per SD)",         "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "Sodium_g_baseline",      "Sodium (per SD)",        "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "DietPC1",                "Diet PC1 (per SD)",      "Diet"),
-    extract_lm_effect_ext(heliusdist_ext, "DietPC2",                "Diet PC2 (per SD)",      "Diet")
+    extract_lm_effect_ext(heliusdist_ext, "TotalCalories_baseline",        "Total calories (per SD)",        "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Protein_baseline_adj",         "Protein (per SD)",               "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "FattyAcids_baseline_adj",      "Fatty acids (per SD)",           "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Carbohydrates_baseline_adj",   "Carbohydrates (per SD)",         "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Fiber_baseline_adj",           "Fiber (per SD)",                 "Diet"),
+    extract_lm_effect_ext(heliusdist_ext, "Sodium_g_baseline_adj",        "Sodium (per SD)",                "Diet")
 ) %>%
     mutate(
         p.adj = p.adjust(p.value, method = "BH"),
@@ -326,42 +316,46 @@ write.csv(bc_ext_effects, file.path(resultsfolder, "betadiversity_bc_main_effect
         values = c("FDR < 0.05" = "#F05C3BFF", "FDR \u2265 0.05" = "grey55"),
         name = NULL
     ) +
-    facet_wrap(~ group, scales = "free_y", ncol = 1) +
-    labs(x = "Bray-Curtis instability: estimate (\u00b1 95% CI)",
+    facet_grid(group ~ ., scales = "free_y", space = "free_y") +
+    labs(x = "Bray-Curtis change: estimate (\u00b1 95% CI)",
          y = NULL) +
     guides(color = guide_legend(ncol = 1)) +
     theme_Publication() +
-    theme(legend.position = "bottom"))
+    theme(legend.position = "bottom",
+          strip.text.y = element_blank(),
+          strip.background.y = element_blank()))
 ggsave(file.path(resultsfolder, "effectsize_braycurtis_extended.pdf"), width = 6, height = 10)
 
 # Companion bar panel: prevalence (binary) and n non-missing (continuous)
 var_meta_bc <- data.frame(
     predictor = c(
         "Age_baseline", "Sex", "BMI_baseline",
-        "Smoking_current_baseline", "Alcohol_baseline", "ExerciseNorm_baseline", "DiscrMean_baseline",
+        "Smoking_current_baseline", "Alcohol_baseline", "ExerciseNorm_baseline",
         "DM_baseline", "HT_BPMed_baseline", "Dyslipidemia_baseline", "MetSyn_baseline",
         "Statins_baseline", "Metformin_baseline", "AntiHT_baseline", "PPI_baseline",
         "PsychoMed_baseline", "Cortico_baseline",
-        "Protein_baseline", "FattyAcids_baseline", "Carbohydrates_baseline",
-        "Fiber_baseline", "Sodium_g_baseline", "DietPC1", "DietPC2"
+        "TotalCalories_baseline",
+        "Protein_baseline_adj", "FattyAcids_baseline_adj",
+        "Carbohydrates_baseline_adj", "Fiber_baseline_adj", "Sodium_g_baseline_adj"
     ),
     label = c(
         "Age (per SD)", "Sex (female)", "BMI (per SD)",
-        "Current smoking", "Alcohol use", "Sufficient exercise", "Perceived discrimination (per SD)",
+        "Current smoking", "Alcohol use", "Sufficient exercise",
         "Diabetes", "Hypertension", "Dyslipidemia", "Metabolic syndrome",
         "Statins", "Metformin", "Antihypertensives", "PPI",
         "Psychotropics", "Corticosteroids",
-        "Protein (per SD)", "Fatty acids (per SD)", "Carbohydrates (per SD)",
-        "Fiber (per SD)", "Sodium (per SD)", "Diet PC1 (per SD)", "Diet PC2 (per SD)"
+        "Total calories (per SD)",
+        "Protein (per SD)", "Fatty acids (per SD)",
+        "Carbohydrates (per SD)", "Fiber (per SD)", "Sodium (per SD)"
     ),
     group = c(
-        rep("Risk factors", 7), rep("Disease", 4), rep("Medication", 6), rep("Diet", 7)
+        rep("Risk factors", 6), rep("Disease", 4), rep("Medication", 6), rep("Diet", 6)
     ),
     type = c(
         "continuous", "binary", "continuous",
-        rep("binary", 3), "continuous",
+        rep("binary", 3),
         rep("binary", 10),
-        rep("continuous", 7)
+        rep("continuous", 6)
     ),
     stringsAsFactors = FALSE
 )
@@ -414,7 +408,7 @@ pl_bc_bar <- ggplot(bar_data_bc, aes(x = pct, y = label, fill = category)) +
     ) + 
     scale_x_continuous(limits = c(0, 140), breaks = c(0, 50, 100),
                        expand = expansion(mult = c(0, 0))) +
-    facet_wrap(~ group, scales = "free_y", ncol = 1) +
+    facet_grid(group ~ ., scales = "free_y", space = "free_y") +
     labs(x = "% Yes / % non-missing", y = NULL, title = " ") +
     theme_Publication() +
     theme(
@@ -502,15 +496,17 @@ est_lim <- quantile(abs(bc_eth_heatmap$estimate), 0.95, na.rm = TRUE)
     geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
     geom_point(aes(fill = ethnicity), shape = 21, color = "black", size = 2.5, stroke = 0.5, alpha = 0.9) +
     scale_fill_manual(values = eth_colors, name = NULL) +
-    facet_wrap(~ group, scales = "free_y", ncol = 1) +
+    facet_grid(group ~ ., scales = "free_y", space = "free_y") +
     labs(x = "Estimate per ethnic group", y = NULL,
-         title = "Baseline predictors of microbiota instability") +
+         title = "Baseline predictors of microbiota change") +
     theme_Publication() +
     theme(
         legend.position = "bottom",
         axis.text.y  = element_blank(),
         axis.ticks.y = element_blank(),
-        axis.line.y  = element_blank()
+        axis.line.y  = element_blank(),
+        strip.text.y = element_blank(),
+        strip.background.y = element_blank()
     ))
 
 pl_bc_combined <- pl_bc_extended + pl_bc_eth + pl_bc_bar +
