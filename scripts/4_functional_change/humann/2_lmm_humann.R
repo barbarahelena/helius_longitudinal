@@ -184,7 +184,7 @@ if (nrow(humann_fdr) >= 2) {
         theme_Publication() +
         theme(legend.position = "bottom") +
         labs(x = "Interaction effect (± 95% CI)", y = "",
-             title    = "HUMAnN pathway shifts",
+             title    = "HUMAnN pathway differential changes",
              subtitle = "LMM ethnicity × timepoint, FDR < 0.05")
 } else {
     pl_forest <- ggplot() + theme_void() +
