@@ -138,10 +138,10 @@ top_row <- ggarrange(
 
 # Row 2 — CAZyme forest+heatmap (C) + GAG ratio violin (D)
 bottom_row <- ggarrange(
-  pl_E, p_gag_vln,
+  pl_E, ggarrange(p_gag_vln, NULL, nrow = 2, heights = c(1.5, 0.5)),
   ncol   = 2,
   labels = c("C", "D"),
-  widths = c(3, 1)
+  widths = c(2, 1)
 )
 
 ## ── 9. Final assembly ─────────────────────────────────────────────────────────
@@ -150,7 +150,7 @@ fig4 <- ggarrange(
   top_row,
   bottom_row,
   nrow    = 2,
-  heights = c(1, 1)
+  heights = c(1, 1.5)
 )
 
 ## ── 10. Save ──────────────────────────────────────────────────────────────────
