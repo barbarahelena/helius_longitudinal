@@ -48,7 +48,7 @@ eth_colors <- c(
     "Dutch"                  = "#709AE1FF",
     "South-Asian Surinamese" = "#FED439FF",
     "African Surinamese"     = "#8A9197FF",
-   # "Ghanaian"               = "#D2AF81FF",
+   # "Ghanaian"               = "#D2AF81FF", there is no Ghanaian dietary data
     "Turkish"                = "#FD7446FF",
     "Moroccan"               = "#D5E4A2FF"
 )
@@ -63,84 +63,83 @@ dir.create(resultsfolder, showWarnings = FALSE)
 ## Load dataset
 df <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 
-## PCA diet
-df_diet <- df %>% dplyr::select(ID, EthnicityTot, TotalCalories, Fiber, Protein, Protein_animal, FattyAcids,
-                            MonoUnsatFat, PolyUnsatFat, SatFat,
-                             Carbohydrates, Sodium_g) %>% 
-    filter(!is.na(TotalCalories)) |> droplevels()
-df_diet2 <- df_diet %>% dplyr::select(-ID, -EthnicityTot, -TotalCalories) %>% 
-    mutate(across(everything(.), scale))
-matdiet <- as.matrix(df_diet2)
-tunediet <- tune.pca(matdiet, ncomp = 5, scale = TRUE)
-# plot(tunediet)
-pc <- mixOmics::pca(matdiet, ncomp = 2)
-pcs <- as.data.frame(pc$variates$X)
-pcs <- pcs %>% mutate(ID = df_diet$ID, EthnicityTot = df_diet$EthnicityTot)
-expvar_diet <- pc$explained_variance[1:2]
-loadings <- as.data.frame(pc$loadings$X)
-loadings$Variables <- rownames(loadings)
+## PCA helpers
+run_diet_pca <- function(input_df, strip_suffix = NULL, eth_df = NULL) {
+    vars <- setdiff(names(input_df), c("ID", "EthnicityTot"))
+    complete_df <- input_df[complete.cases(input_df[, vars]), ]
+    mat <- complete_df %>% dplyr::select(all_of(vars)) %>%
+        mutate(across(everything(), scale)) %>% as.matrix()
+    pc  <- mixOmics::pca(mat, ncomp = 2, scale = FALSE)
+    pcs <- as.data.frame(pc$variates$X) %>% mutate(ID = complete_df$ID)
+    if ("EthnicityTot" %in% names(complete_df)) {
+        pcs$EthnicityTot <- complete_df$EthnicityTot
+    } else {
+        pcs <- left_join(pcs, dplyr::select(eth_df, ID, EthnicityTot), by = "ID")
+    }
+    lds <- as.data.frame(pc$loadings$X)
+    lds$Variables <- if (!is.null(strip_suffix)) gsub(strip_suffix, "", rownames(lds)) else rownames(lds)
+    list(pcs = pcs, expvar = pc$explained_variance[1:2], loadings = lds)
+}
 
-(pcadiet <- pcs %>% 
+pca_diet_plots <- function(pcs, loadings, expvar, title, outfolder, prefix) {
+    dir.create(outfolder, showWarnings = FALSE)
+    pl <- pcs %>%
         ggplot(aes(PC1, PC2)) +
         geom_point(aes(color = EthnicityTot), size = 1, alpha = 1.0) +
-        xlab(paste0('PC1 (', round(expvar_diet[1]*100, digits = 1),'%)')) +
-        ylab(paste0('PC2 (', round(expvar_diet[2]*100, digits = 1),'%)')) +
+        xlab(paste0('PC1 (', round(expvar[1]*100, 1), '%)')) +
+        ylab(paste0('PC2 (', round(expvar[2]*100, 1), '%)')) +
         theme_Publication() +
-        stat_ellipse(geom = "polygon", aes(color = EthnicityTot, fill = EthnicityTot), linewidth = 1.0,
-                     alpha = 0.1, type = "norm")+
+        stat_ellipse(geom = "polygon", aes(color = EthnicityTot, fill = EthnicityTot),
+                     linewidth = 1.0, alpha = 0.1, type = "norm") +
         scale_color_manual(values = eth_colors) +
         scale_fill_manual(values = eth_colors, guide = "none") +
-        labs(color = "", title = "PCA diet") +
-        theme(legend.position = "top") +
-        geom_segment(data = loadings, aes(x = 0, y = 0, xend = (PC1*8), yend = (PC2*8)), 
-                     arrow = arrow(length = unit(1/2, "picas")),
-                     color = "black", linewidth = 0.9) +
-        annotate("text", x = (loadings$PC1*13), y = (loadings$PC2*10),
-                 label = loadings$Variables)
-)
-ggsave(pcadiet, filename = "results/0_data_cleaning/diet/PCA_diet_loading.pdf", width = 7, height = 7)
+        labs(color = "", title = title) +
+        theme(legend.position = "top",
+              axis.title.x = element_text(vjust = -0.2, size = rel(0.8), margin = margin(b = 30, unit = "pt"))) +
+        geom_segment(data = loadings, aes(x = 0, y = 0, xend = PC1*8, yend = PC2*8),
+                     arrow = arrow(length = unit(1/2, "picas")), color = "black", linewidth = 0.9) +
+        annotate("text", x = loadings$PC1*11, y = loadings$PC2*11, label = loadings$Variables, size = 4)
+    ggsave(pl, filename = file.path(outfolder, paste0(prefix, "_loading.pdf")), width = 7, height = 7)
+    ggsave(
+        ggarrange(
+            ggplot(loadings, aes(x = fct_reorder(Variables, PC1), y = PC1)) +
+                geom_col(aes(fill = PC1 > 0), color = NA) +
+                scale_fill_manual(values = c("TRUE" = "#709AE1FF", "FALSE" = "#FD7446FF"), guide = "none") +
+                coord_flip() + theme_Publication() +
+                labs(x = '', y = 'Loading', title = paste0('PC1 (', round(expvar[1]*100, 1), '% variance)')),
+            ggplot(loadings, aes(x = fct_reorder(Variables, PC2), y = PC2)) +
+                geom_col(aes(fill = PC2 > 0), color = NA) +
+                scale_fill_manual(values = c("TRUE" = "#709AE1FF", "FALSE" = "#FD7446FF"), guide = "none") +
+                coord_flip() + theme_Publication() +
+                labs(x = '', y = 'Loading', title = paste0('PC2 (', round(expvar[2]*100, 1), '% variance)')),
+            ncol = 2, labels = c("A", "B")),
+        filename = file.path(outfolder, paste0(prefix, "_loadings_barplot.pdf")),
+        device = "pdf", width = 10, height = 5)
+    options("aplot_guides" = "keep")
+    ggsave(
+        pl %>%
+            insert_bottom(
+                ggplot(pcs, aes(x = fct_rev(EthnicityTot), y = PC1, fill = EthnicityTot)) +
+                    geom_boxplot(outlier.shape = NA, width = 0.5) +
+                    scale_fill_manual(values = eth_colors, guide = "none") +
+                    scale_x_discrete(expand = expansion(add = 0.3)) +
+                    theme_transparent() + coord_flip(),
+                height = 0.25) %>%
+            insert_right(
+                ggplot(pcs, aes(x = EthnicityTot, y = PC2, fill = EthnicityTot)) +
+                    geom_boxplot(outlier.shape = NA, width = 0.5) +
+                    scale_fill_manual(values = eth_colors, guide = "none") +
+                    scale_x_discrete(expand = expansion(add = 0.3)) +
+                    theme_transparent(),
+                width = 0.25),
+        filename = file.path(outfolder, paste0(prefix, "_loading_box.pdf")),
+        device = "pdf", width = 9, height = 9)
+}
 
-(pl_load1 <- ggplot(loadings, aes(x = fct_reorder(Variables, PC1), y = PC1)) +
-    geom_col(aes(fill = PC1 > 0), color = NA) +
-    scale_fill_manual(values = c("TRUE" = "#709AE1FF", "FALSE" = "#FD7446FF"), guide = "none") +
-    coord_flip() +
-    theme_Publication() +
-    labs(x = '', y = 'Loading', title = paste0('PC1 (', round(expvar_diet[1] * 100, 1), '% variance)')))
-
-(pl_load2 <- ggplot(loadings, aes(x = fct_reorder(Variables, PC2), y = PC2)) +
-    geom_col(aes(fill = PC2 > 0), color = NA) +
-    scale_fill_manual(values = c("TRUE" = "#709AE1FF", "FALSE" = "#FD7446FF"), guide = "none") +
-    coord_flip() +
-    theme_Publication() +
-    labs(x = '', y = 'Loading', title = paste0('PC2 (', round(expvar_diet[2] * 100, 1), '% variance)')))
-
-(fig_loadings <- ggarrange(pl_load1, pl_load2, ncol = 2, nrow = 1, labels = c("A", "B")))
-ggsave(fig_loadings, filename = "results/0_data_cleaning/diet/PCA_diet_loadings_barplot.pdf",
-       device = "pdf", width = 10, height = 5)
-
-(plright_diet <- ggplot(pcs, aes(x = EthnicityTot, y = PC2, fill = EthnicityTot)) +
-    geom_boxplot(outlier.shape = NA, width = 0.5) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    scale_x_discrete(expand = expansion(add = 0.3)) +
-    theme_transparent())
-
-(plbottom_diet <- ggplot(pcs, aes(x = fct_rev(EthnicityTot), y = PC1, fill = EthnicityTot)) +
-    geom_boxplot(outlier.shape = NA, width = 0.5) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    scale_x_discrete(expand = expansion(add = 0.3)) +
-    theme_transparent() +
-    coord_flip())
-
-options("aplot_guides" = "keep")
-ap_diet <- pcadiet %>%
-    insert_bottom(plbottom_diet, height = 0.25) %>%
-    insert_right(plright_diet, width = 0.25)
-ggsave(ap_diet, filename = "results/0_data_cleaning/diet/PCA_diet_loading_box.pdf", device = "pdf", width = 9, height = 9)
-
-df <- left_join(df, pcs, by = c("ID", "EthnicityTot")) %>% 
-    dplyr::select(everything(.), DietPC1=PC1, DietPC2=PC2)
-saveRDS(df, "data/clinicaldata_long_pcdiet.RDS")
-
+## PCA diet
+df_diet <- df %>% dplyr::select(ID, EthnicityTot, TotalCalories, Fiber, Protein, Protein_animal, FattyAcids,
+                            SatFat, Carbohydrates, Sodium_g) %>%
+    filter(!is.na(TotalCalories)) |> droplevels()
 # All pairwise ethnicity combinations for groups present in this dataset
 eth_present <- intersect(names(eth_colors), unique(as.character(df_diet$EthnicityTot)))
 eth_pairs <- combn(eth_present, 2, simplify = FALSE)
@@ -227,27 +226,7 @@ ggsave(pl6, filename = file.path(resultsfolder, "violin_Carbohydrates.pdf"), dev
     sig_comparisons(df_diet, "Sodium_g", eth_pairs))
 ggsave(pl7, filename = file.path(resultsfolder, "violin_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
-(pl8 <- ggplot(df_diet, aes(x = fct_reorder(EthnicityTot, MonoUnsatFat, median, na.rm = TRUE), y = MonoUnsatFat)) +
-    geom_violin(aes(fill = EthnicityTot), color = NA) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
-    theme_Publication() +
-    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = '', y = 'gram', title = "Mono-unsaturated fat") +
-    sig_comparisons(df_diet, "MonoUnsatFat", eth_pairs))
-ggsave(pl8, filename = file.path(resultsfolder, "violin_MonoUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
-
-(pl9 <- ggplot(df_diet, aes(x = fct_reorder(EthnicityTot, PolyUnsatFat, median, na.rm = TRUE), y = PolyUnsatFat)) +
-    geom_violin(aes(fill = EthnicityTot), color = NA) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
-    theme_Publication() +
-    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = '', y = 'gram', title = "Poly-unsaturated fat") +
-    sig_comparisons(df_diet, "PolyUnsatFat", eth_pairs))
-ggsave(pl9, filename = file.path(resultsfolder, "violin_PolyUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
-
-(pl10 <- ggplot(df_diet, aes(x = fct_reorder(EthnicityTot, SatFat, median, na.rm = TRUE), y = SatFat)) +
+(pl8 <- ggplot(df_diet, aes(x = fct_reorder(EthnicityTot, SatFat, median, na.rm = TRUE), y = SatFat)) +
     geom_violin(aes(fill = EthnicityTot), color = NA) +
     scale_fill_manual(values = eth_colors, guide = "none") +
     geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
@@ -255,11 +234,11 @@ ggsave(pl9, filename = file.path(resultsfolder, "violin_PolyUnsatFat.pdf"), devi
     theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
     labs(x = '', y = 'gram', title = "Saturated fat") +
     sig_comparisons(df_diet, "SatFat", eth_pairs))
-ggsave(pl10, filename = file.path(resultsfolder, "violin_SatFat.pdf"), device = "pdf", width = 6, height = 6)
+ggsave(pl8, filename = file.path(resultsfolder, "violin_SatFat.pdf"), device = "pdf", width = 6, height = 6)
 
-(fig_macronutrients <- ggarrange(pl1, pl2, pl3, pl4, pl5, pl6, pl7, pl8, pl9, pl10,
-                                  ncol = 3, nrow = 4,
-                                  labels = LETTERS[1:10]))
+(fig_macronutrients <- ggarrange(pl1, pl2, pl3, pl4, pl5, pl6, pl7, pl8,
+                                  ncol = 4, nrow = 2,
+                                  labels = LETTERS[1:8]))
 ggsave(fig_macronutrients, filename = file.path(resultsfolder, "macronutrients_by_ethnicity.pdf"),
        device = "pdf", width = 15, height = 24)
 
@@ -273,90 +252,19 @@ df_diet_norm <- df_diet %>%
         Carbohydrates_per1000  = Carbohydrates / TotalCalories * 1000,
         Fiber_per1000          = Fiber / TotalCalories * 1000,
         Sodium_per1000         = Sodium_g / TotalCalories * 1000,
-        MonoUnsatFat_per1000   = MonoUnsatFat / TotalCalories * 1000,
-        PolyUnsatFat_per1000   = PolyUnsatFat / TotalCalories * 1000,
         SatFat_per1000         = SatFat / TotalCalories * 1000
     )
 
 resultsfolder_norm <- file.path(resultsfolder, "calorie_normalized")
 dir.create(resultsfolder_norm, showWarnings = FALSE)
 
-#### Energy-adjusted PCA ####
-df_diet_norm_pca <- df_diet_norm %>%
-    dplyr::select(ID, EthnicityTot, ends_with("_per1000"))
-df_diet_norm_pca2 <- df_diet_norm_pca %>%
-    dplyr::select(-ID, -EthnicityTot) %>%
-    mutate(across(everything(), scale))
-matdiet_norm <- as.matrix(df_diet_norm_pca2)
-tunediet_norm <- tune.pca(matdiet_norm, ncomp = 5, scale = TRUE)
-pc_norm <- mixOmics::pca(matdiet_norm, ncomp = 2)
-pcs_norm <- as.data.frame(pc_norm$variates$X)
-pcs_norm <- pcs_norm %>% mutate(ID = df_diet_norm_pca$ID, EthnicityTot = df_diet_norm_pca$EthnicityTot)
-expvar_diet_norm <- pc_norm$explained_variance[1:2]
-loadings_norm <- as.data.frame(pc_norm$loadings$X)
-loadings_norm$Variables <- gsub("_per1000", "", rownames(pc_norm$loadings$X))
-
-df <- df %>%
-    left_join(pcs_norm %>% dplyr::select(ID, DietPC1_norm = PC1, DietPC2_norm = PC2), by = "ID")
+#### Energy-adjusted PCA (per 1000 kcal) ####
+pca_norm <- run_diet_pca(df_diet_norm %>% dplyr::select(ID, EthnicityTot, ends_with("_per1000")),
+                         strip_suffix = "_per1000")
+df <- df %>% left_join(pca_norm$pcs %>% dplyr::select(ID, DietPC1_norm = PC1, DietPC2_norm = PC2), by = "ID")
 saveRDS(df, "data/clinicaldata_long_pcdiet.RDS")
-
-(pcadiet_norm <- pcs_norm %>%
-        ggplot(aes(PC1, PC2)) +
-        geom_point(aes(color = EthnicityTot), size = 1, alpha = 1.0) +
-        xlab(paste0('PC1 (', round(expvar_diet_norm[1]*100, digits = 1),'%)')) +
-        ylab(paste0('PC2 (', round(expvar_diet_norm[2]*100, digits = 1),'%)')) +
-        theme_Publication() +
-        stat_ellipse(geom = "polygon", aes(color = EthnicityTot, fill = EthnicityTot), linewidth = 1.0,
-                     alpha = 0.1, type = "norm") +
-        scale_color_manual(values = eth_colors) +
-        scale_fill_manual(values = eth_colors, guide = "none") +
-        labs(color = "", title = "PCA diet (energy-adjusted)") +
-        theme(legend.position = "top") +
-        geom_segment(data = loadings_norm, aes(x = 0, y = 0, xend = (PC1*8), yend = (PC2*8)),
-                     arrow = arrow(length = unit(1/2, "picas")),
-                     color = "black", linewidth = 0.9) +
-        annotate("text", x = (loadings_norm$PC1*13), y = (loadings_norm$PC2*10),
-                 label = loadings_norm$Variables)
-)
-ggsave(pcadiet_norm, filename = file.path(resultsfolder_norm, "PCA_diet_norm_loading.pdf"), width = 7, height = 7)
-
-(pl_load1_norm <- ggplot(loadings_norm, aes(x = fct_reorder(Variables, PC1), y = PC1)) +
-    geom_col(aes(fill = PC1 > 0), color = NA) +
-    scale_fill_manual(values = c("TRUE" = "#709AE1FF", "FALSE" = "#FD7446FF"), guide = "none") +
-    coord_flip() +
-    theme_Publication() +
-    labs(x = '', y = 'Loading', title = paste0('PC1 (', round(expvar_diet_norm[1] * 100, 1), '% variance)')))
-
-(pl_load2_norm <- ggplot(loadings_norm, aes(x = fct_reorder(Variables, PC2), y = PC2)) +
-    geom_col(aes(fill = PC2 > 0), color = NA) +
-    scale_fill_manual(values = c("TRUE" = "#709AE1FF", "FALSE" = "#FD7446FF"), guide = "none") +
-    coord_flip() +
-    theme_Publication() +
-    labs(x = '', y = 'Loading', title = paste0('PC2 (', round(expvar_diet_norm[2] * 100, 1), '% variance)')))
-
-(fig_loadings_norm <- ggarrange(pl_load1_norm, pl_load2_norm, ncol = 2, nrow = 1, labels = c("A", "B")))
-ggsave(fig_loadings_norm, filename = file.path(resultsfolder_norm, "PCA_diet_norm_loadings_barplot.pdf"),
-       device = "pdf", width = 10, height = 5)
-
-(plright_diet_norm <- ggplot(pcs_norm, aes(x = EthnicityTot, y = PC2, fill = EthnicityTot)) +
-    geom_boxplot(outlier.shape = NA, width = 0.5) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    scale_x_discrete(expand = expansion(add = 0.3)) +
-    theme_transparent())
-
-(plbottom_diet_norm <- ggplot(pcs_norm, aes(x = fct_rev(EthnicityTot), y = PC1, fill = EthnicityTot)) +
-    geom_boxplot(outlier.shape = NA, width = 0.5) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    scale_x_discrete(expand = expansion(add = 0.3)) +
-    theme_transparent() +
-    coord_flip())
-
-options("aplot_guides" = "keep")
-ap_diet_norm <- pcadiet_norm %>%
-    insert_bottom(plbottom_diet_norm, height = 0.25) %>%
-    insert_right(plright_diet_norm, width = 0.25)
-ggsave(ap_diet_norm, filename = file.path(resultsfolder_norm, "PCA_diet_norm_loading_box.pdf"),
-       device = "pdf", width = 9, height = 9)
+pca_diet_plots(pca_norm$pcs, pca_norm$loadings, pca_norm$expvar,
+               "PCA diet (energy-adjusted)", resultsfolder_norm, "PCA_diet_norm")
 
 (pln1 <- ggplot(df_diet_norm, aes(x = fct_reorder(EthnicityTot, Protein_per1000, median, na.rm = TRUE), y = Protein_per1000)) +
     geom_violin(aes(fill = EthnicityTot), color = NA) +
@@ -418,27 +326,7 @@ ggsave(pln5, filename = file.path(resultsfolder_norm, "violin_norm_Fiber.pdf"), 
     sig_comparisons(df_diet_norm, "Sodium_per1000", eth_pairs))
 ggsave(pln6, filename = file.path(resultsfolder_norm, "violin_norm_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
-(pln7 <- ggplot(df_diet_norm, aes(x = fct_reorder(EthnicityTot, MonoUnsatFat_per1000, median, na.rm = TRUE), y = MonoUnsatFat_per1000)) +
-    geom_violin(aes(fill = EthnicityTot), color = NA) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
-    theme_Publication() +
-    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = '', y = 'g / 1000 kcal', title = "Mono-unsaturated fat (per 1000 kcal)") +
-    sig_comparisons(df_diet_norm, "MonoUnsatFat_per1000", eth_pairs))
-ggsave(pln7, filename = file.path(resultsfolder_norm, "violin_norm_MonoUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
-
-(pln8 <- ggplot(df_diet_norm, aes(x = fct_reorder(EthnicityTot, PolyUnsatFat_per1000, median, na.rm = TRUE), y = PolyUnsatFat_per1000)) +
-    geom_violin(aes(fill = EthnicityTot), color = NA) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
-    theme_Publication() +
-    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = '', y = 'g / 1000 kcal', title = "Poly-unsaturated fat (per 1000 kcal)") +
-    sig_comparisons(df_diet_norm, "PolyUnsatFat_per1000", eth_pairs))
-ggsave(pln8, filename = file.path(resultsfolder_norm, "violin_norm_PolyUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
-
-(pln9 <- ggplot(df_diet_norm, aes(x = fct_reorder(EthnicityTot, SatFat_per1000, median, na.rm = TRUE), y = SatFat_per1000)) +
+(pln7 <- ggplot(df_diet_norm, aes(x = fct_reorder(EthnicityTot, SatFat_per1000, median, na.rm = TRUE), y = SatFat_per1000)) +
     geom_violin(aes(fill = EthnicityTot), color = NA) +
     scale_fill_manual(values = eth_colors, guide = "none") +
     geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
@@ -446,11 +334,11 @@ ggsave(pln8, filename = file.path(resultsfolder_norm, "violin_norm_PolyUnsatFat.
     theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
     labs(x = '', y = 'g / 1000 kcal', title = "Saturated fat (per 1000 kcal)") +
     sig_comparisons(df_diet_norm, "SatFat_per1000", eth_pairs))
-ggsave(pln9, filename = file.path(resultsfolder_norm, "violin_norm_SatFat.pdf"), device = "pdf", width = 6, height = 6)
+ggsave(pln7, filename = file.path(resultsfolder_norm, "violin_norm_SatFat.pdf"), device = "pdf", width = 6, height = 6)
 
-(fig_macronutrients_norm <- ggarrange(pln1, pln2, pln3, pln4, pln5, pln6, pln7, pln8, pln9,
+(fig_macronutrients_norm <- ggarrange(pln1, pln2, pln3, pln4, pln5, pln6, pln7,
                                        ncol = 3, nrow = 3,
-                                       labels = LETTERS[1:9]))
+                                       labels = LETTERS[1:7]))
 ggsave(fig_macronutrients_norm, filename = file.path(resultsfolder_norm, "macronutrients_norm_by_ethnicity.pdf"),
        device = "pdf", width = 15, height = 18)
 
@@ -537,27 +425,7 @@ ggsave(sg_pl6, filename = file.path(resultsfolder_sg, "violin_Carbohydrates.pdf"
     sig_comparisons(df_diet_sg, "Sodium_g", eth_pairs_sg))
 ggsave(sg_pl7, filename = file.path(resultsfolder_sg, "violin_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
-(sg_pl8 <- ggplot(df_diet_sg, aes(x = fct_reorder(EthnicityTot, MonoUnsatFat, median, na.rm = TRUE), y = MonoUnsatFat)) +
-    geom_violin(aes(fill = EthnicityTot), color = NA) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
-    theme_Publication() +
-    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = '', y = 'gram', title = "Mono-unsaturated fat") +
-    sig_comparisons(df_diet_sg, "MonoUnsatFat", eth_pairs_sg))
-ggsave(sg_pl8, filename = file.path(resultsfolder_sg, "violin_MonoUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
-
-(sg_pl9 <- ggplot(df_diet_sg, aes(x = fct_reorder(EthnicityTot, PolyUnsatFat, median, na.rm = TRUE), y = PolyUnsatFat)) +
-    geom_violin(aes(fill = EthnicityTot), color = NA) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
-    theme_Publication() +
-    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = '', y = 'gram', title = "Poly-unsaturated fat") +
-    sig_comparisons(df_diet_sg, "PolyUnsatFat", eth_pairs_sg))
-ggsave(sg_pl9, filename = file.path(resultsfolder_sg, "violin_PolyUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
-
-(sg_pl10 <- ggplot(df_diet_sg, aes(x = fct_reorder(EthnicityTot, SatFat, median, na.rm = TRUE), y = SatFat)) +
+(sg_pl8 <- ggplot(df_diet_sg, aes(x = fct_reorder(EthnicityTot, SatFat, median, na.rm = TRUE), y = SatFat)) +
     geom_violin(aes(fill = EthnicityTot), color = NA) +
     scale_fill_manual(values = eth_colors, guide = "none") +
     geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
@@ -565,11 +433,11 @@ ggsave(sg_pl9, filename = file.path(resultsfolder_sg, "violin_PolyUnsatFat.pdf")
     theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
     labs(x = '', y = 'gram', title = "Saturated fat") +
     sig_comparisons(df_diet_sg, "SatFat", eth_pairs_sg))
-ggsave(sg_pl10, filename = file.path(resultsfolder_sg, "violin_SatFat.pdf"), device = "pdf", width = 6, height = 6)
+ggsave(sg_pl8, filename = file.path(resultsfolder_sg, "violin_SatFat.pdf"), device = "pdf", width = 6, height = 6)
 
-(fig_macronutrients_sg <- ggarrange(sg_pl1, sg_pl2, sg_pl3, sg_pl4, sg_pl5, sg_pl6, sg_pl7, sg_pl8, sg_pl9, sg_pl10,
-                                     ncol = 3, nrow = 4,
-                                     labels = LETTERS[1:10]))
+(fig_macronutrients_sg <- ggarrange(sg_pl1, sg_pl2, sg_pl3, sg_pl4, sg_pl5, sg_pl6, sg_pl7, sg_pl8,
+                                     ncol = 4, nrow = 2,
+                                     labels = LETTERS[1:8]))
 ggsave(fig_macronutrients_sg, filename = file.path(resultsfolder_sg, "macronutrients_by_ethnicity.pdf"),
        device = "pdf", width = 15, height = 24)
 
@@ -642,27 +510,7 @@ ggsave(sg_pln5, filename = file.path(resultsfolder_norm_sg, "violin_norm_Fiber.p
     sig_comparisons(df_diet_norm_sg, "Sodium_per1000", eth_pairs_norm_sg))
 ggsave(sg_pln6, filename = file.path(resultsfolder_norm_sg, "violin_norm_Sodium.pdf"), device = "pdf", width = 6, height = 6)
 
-(sg_pln7 <- ggplot(df_diet_norm_sg, aes(x = fct_reorder(EthnicityTot, MonoUnsatFat_per1000, median, na.rm = TRUE), y = MonoUnsatFat_per1000)) +
-    geom_violin(aes(fill = EthnicityTot), color = NA) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
-    theme_Publication() +
-    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = '', y = 'g / 1000 kcal', title = "Mono-unsaturated fat (per 1000 kcal)") +
-    sig_comparisons(df_diet_norm_sg, "MonoUnsatFat_per1000", eth_pairs_norm_sg))
-ggsave(sg_pln7, filename = file.path(resultsfolder_norm_sg, "violin_norm_MonoUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
-
-(sg_pln8 <- ggplot(df_diet_norm_sg, aes(x = fct_reorder(EthnicityTot, PolyUnsatFat_per1000, median, na.rm = TRUE), y = PolyUnsatFat_per1000)) +
-    geom_violin(aes(fill = EthnicityTot), color = NA) +
-    scale_fill_manual(values = eth_colors, guide = "none") +
-    geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
-    theme_Publication() +
-    theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
-    labs(x = '', y = 'g / 1000 kcal', title = "Poly-unsaturated fat (per 1000 kcal)") +
-    sig_comparisons(df_diet_norm_sg, "PolyUnsatFat_per1000", eth_pairs_norm_sg))
-ggsave(sg_pln8, filename = file.path(resultsfolder_norm_sg, "violin_norm_PolyUnsatFat.pdf"), device = "pdf", width = 6, height = 6)
-
-(sg_pln9 <- ggplot(df_diet_norm_sg, aes(x = fct_reorder(EthnicityTot, SatFat_per1000, median, na.rm = TRUE), y = SatFat_per1000)) +
+(sg_pln7 <- ggplot(df_diet_norm_sg, aes(x = fct_reorder(EthnicityTot, SatFat_per1000, median, na.rm = TRUE), y = SatFat_per1000)) +
     geom_violin(aes(fill = EthnicityTot), color = NA) +
     scale_fill_manual(values = eth_colors, guide = "none") +
     geom_boxplot(width = 0.1, fill = "white", outlier.shape = NA) +
@@ -670,11 +518,11 @@ ggsave(sg_pln8, filename = file.path(resultsfolder_norm_sg, "violin_norm_PolyUns
     theme(legend.position = 'none', axis.text.x = element_text(angle = 45, hjust = 1)) +
     labs(x = '', y = 'g / 1000 kcal', title = "Saturated fat (per 1000 kcal)") +
     sig_comparisons(df_diet_norm_sg, "SatFat_per1000", eth_pairs_norm_sg))
-ggsave(sg_pln9, filename = file.path(resultsfolder_norm_sg, "violin_norm_SatFat.pdf"), device = "pdf", width = 6, height = 6)
+ggsave(sg_pln7, filename = file.path(resultsfolder_norm_sg, "violin_norm_SatFat.pdf"), device = "pdf", width = 6, height = 6)
 
-(fig_macronutrients_norm_sg <- ggarrange(sg_pln1, sg_pln2, sg_pln3, sg_pln4, sg_pln5, sg_pln6, sg_pln7, sg_pln8, sg_pln9,
+(fig_macronutrients_norm_sg <- ggarrange(sg_pln1, sg_pln2, sg_pln3, sg_pln4, sg_pln5, sg_pln6, sg_pln7,
                                           ncol = 3, nrow = 3,
-                                          labels = LETTERS[1:9]))
+                                          labels = LETTERS[1:7]))
 ggsave(fig_macronutrients_norm_sg, filename = file.path(resultsfolder_norm_sg, "macronutrients_norm_by_ethnicity.pdf"),
        device = "pdf", width = 15, height = 18)
 
@@ -686,7 +534,7 @@ ggsave(fig_macronutrients_norm_sg, filename = file.path(resultsfolder_norm_sg, "
 
 helius_wide_diet <- readRDS("data/clinicaldata/clinicaldata_wide.RDS")
 
-macro_vars <- c("Protein", "FattyAcids", "MonoUnsatFat", "PolyUnsatFat", "SatFat", "Carbohydrates", "Fiber", "Sodium_g")
+macro_vars <- c("Protein", "Protein_animal", "FattyAcids", "SatFat", "Carbohydrates", "Fiber", "Sodium_g")
 
 for (mac in macro_vars) {
     col     <- paste0(mac, "_baseline")
@@ -701,3 +549,25 @@ for (mac in macro_vars) {
 }
 
 saveRDS(helius_wide_diet, "data/clinicaldata/clinicaldata_wide.RDS")
+
+#### Willett residual PCA ####
+macro_adj_cols <- paste0(macro_vars, "_baseline_adj")
+macro_adj_cols <- macro_adj_cols[macro_adj_cols %in% names(helius_wide_diet)]
+resultsfolder_adj <- file.path(resultsfolder, "willett_adj")
+
+pca_adj <- run_diet_pca(
+    helius_wide_diet %>% dplyr::select(ID, all_of(macro_adj_cols)) %>% filter(complete.cases(.)),
+    strip_suffix = "_baseline_adj", eth_df = helius_wide_diet)
+df <- df %>% left_join(pca_adj$pcs %>% dplyr::select(ID, DietPC1_adj = PC1, DietPC2_adj = PC2), by = "ID")
+saveRDS(df, "data/clinicaldata_long_pcdiet.RDS")
+pca_diet_plots(pca_adj$pcs, pca_adj$loadings, pca_adj$expvar,
+               "PCA diet (Willett-adjusted)", resultsfolder_adj, "PCA_diet_adj")
+
+#### Shotgun subset - Willett-adjusted PCA ####
+resultsfolder_sg_willett <- file.path(resultsfolder_sg, "willett_adj")
+pca_adj_sg <- run_diet_pca(
+    helius_wide_diet %>% dplyr::select(ID, all_of(macro_adj_cols)) %>%
+        filter(ID %in% shotids$ID) %>% filter(complete.cases(.)),
+    strip_suffix = "_baseline_adj", eth_df = helius_wide_diet)
+pca_diet_plots(pca_adj_sg$pcs, pca_adj_sg$loadings, pca_adj_sg$expvar,
+               "PCA diet (Willett-adjusted, shotgun subset)", resultsfolder_sg_willett, "PCA_diet_adj_sg")
