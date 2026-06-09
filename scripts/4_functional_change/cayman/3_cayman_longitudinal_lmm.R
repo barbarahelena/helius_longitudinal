@@ -149,7 +149,7 @@ pl_4A <- ggplot(statres_adj_q, aes(x = estimate, y = family, colour = direction)
   theme_Publication() +
   labs(x        = "Interaction effect (\u00b1 95% CI)",
        y        = "",
-       title    = "Differential CAZyme dynamics by ethnicity",
+       title    = "Differential CAZyme changes by ethnicity",
        subtitle = "Adjusted LMM: ethnicity \u00d7 timepoint interaction (FDR < 0.05)")
 
 # Panels B–D: top-3 FDR-significant CAZyme box-violin plots
