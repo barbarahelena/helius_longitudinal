@@ -111,7 +111,6 @@ if (any(df_tot$timepoint == "baseline")) {
   statres_baseline <- data.frame()
   for (gf in gene_families) {
     df_baseline$mb <- log10(df_baseline[[gf]] + 1)
-    tryCatch({
       model_baseline <- lm(mb ~ EthnicityTot, data = df_baseline)
       res <- summary(model_baseline)
       if (nrow(res$coefficients) >= 2) {
@@ -125,7 +124,6 @@ if (any(df_tot$timepoint == "baseline")) {
           confhigh = confint_baseline[2, 2]
         ))
       }
-    }, error = function(e) NULL)
   }
   statres_baseline <- statres_baseline %>%
     arrange(pval) %>%
@@ -153,6 +151,8 @@ if (any(df_tot$timepoint == "baseline")) {
          title = "Baseline Cayman Abundance Differences Between Ethnicities", color = "")
   ggsave(file.path(cross_dir, "baseline_abundance_volcano.pdf"), p_baseline_volcano, width = 7, height = 7, device = cairo_pdf)
 }
+statres_baseline |> filter(estimate > 0 & padj < 0.05) |> nrow()
+statres_baseline |> filter(estimate < 0 & padj < 0.05) |> nrow()
 
 # Follow-up analysis
 if (any(df_tot$timepoint == "follow-up")) {
@@ -202,6 +202,8 @@ if (any(df_tot$timepoint == "follow-up")) {
          title = "Follow-up Cayman Abundance Differences Between Ethnicities", color = "")
   ggsave(file.path(cross_dir, "followup_abundance_volcano.pdf"), p_followup_volcano, width = 7, height = 7, device = cairo_pdf)
 }
+statres_followup |> filter(estimate > 0 & padj < 0.05) |> nrow()
+statres_followup |> filter(estimate < 0 & padj < 0.05) |> nrow()
 
 # ---------------------------------------------------------------------------
 # Save unified cross-sectional results table (for LMM overlap analysis)
