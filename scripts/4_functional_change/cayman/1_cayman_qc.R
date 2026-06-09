@@ -2,6 +2,7 @@
 library(tidyverse)
 library(ggsci)
 library(ggpubr)
+library(rstatix)
 
 theme_Publication <- function(base_size=14, base_family="sans") {
   library(grid)
@@ -36,10 +37,10 @@ stats <- rio::import("data/shotgun/cayman_results/sample_statistics.tsv") |>
   rename(sampleID = sample) |> select(-timepoint)
 names(stats)
 str(stats$sampleID)
-clinical <- readRDS("data/clinicaldata_long.RDS")
+clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
 names(clinical)
 str(clinical$sampleID)
-stats <- left_join(stats, clinical, by = "sampleID")
+stats <- left_join(stats, clinical, by = "sampleID") |> filter(!is.na(timepoint))
 head(stats)[1:5,1:10]
 
 # Create QC output directory
@@ -62,9 +63,16 @@ gg_pct_cazy_box <- ggboxplot(stats, x = "timepoint", y = "pct_cazy_reads", fill 
     labs(title = "% CAZy Reads by Timepoint", x = "Timepoint", y = "% CAZy Reads")
   ggsave(file.path(qc_dir, "pct_cazy_reads_by_timepoint_boxplot.pdf"), gg_pct_cazy_box, width = 4, height = 6)
 
+pwc_pct <- stats %>%
+  group_by(timepoint) %>%
+  wilcox_test(pct_cazy_reads ~ EthnicityTot) %>%
+  adjust_pvalue(method = "fdr") %>%
+  add_significance("p.adj") %>%
+  add_xy_position(x = "timepoint", dodge = 0.8)
+
 (gg_pct_cazy_box <- ggboxplot(stats, x = "timepoint", y = "pct_cazy_reads", fill = "EthnicityTot", width = 0.4) +
     theme_Publication() +
-    stat_compare_means() +
+    stat_pvalue_manual(pwc_pct, label = "p.adj.signif", tip.length = 0, size = 5) +
     scale_fill_jco() +
     labs(title = "% CAZy Reads by Timepoint", x = "Timepoint", y = "% CAZy Reads", fill = ""))
 ggsave(file.path(qc_dir, "pct_cazy_reads_by_timepoint_ethnicity_boxplot.pdf"), gg_pct_cazy_box, width = 5, height = 6)
@@ -79,7 +87,7 @@ ggsave(file.path(qc_dir, "pct_cazy_reads_by_timepoint_ethnicity_boxplot.pdf"), g
     geom_smooth(method = "lm", se = TRUE, color = "black", linetype = "dashed") +
     theme_Publication() +
     labs(title = "% CAZy Reads vs Total Reads", x = "Total Reads", y = "% CAZy Reads", subtitle = subtitle_pctcazy_total)
-  ggsave(file.path(qc_dir, "pct_cazy_reads_vs_total_reads.pdf"), gg_pct_cazy_scatter, width = 6, height = 4)ß
+  ggsave(file.path(qc_dir, "pct_cazy_reads_vs_total_reads.pdf"), gg_pct_cazy_scatter, width = 6, height = 4)
 
 # 4. Histogram of richness
 gg_richness_hist <- gghistogram(stats, x = "richness", bins = 30, fill = "#E69F00", color = "black") +
@@ -96,7 +104,6 @@ gg_richness_box <- ggboxplot(stats, x = "timepoint", y = "richness", fill = "tim
   labs(title = "Richness by Timepoint", x = "Timepoint", y = "Richness")
 ggsave(file.path(qc_dir, "richness_by_timepoint_boxplot.pdf"), gg_richness_box, width = 4, height = 6)
 
-library(rstatix)
 stats <- stats |> mutate(log_richness = log10(richness))
 pwc <- stats %>%
   group_by(timepoint) %>%
