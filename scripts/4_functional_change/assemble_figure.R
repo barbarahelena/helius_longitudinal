@@ -150,7 +150,7 @@ fig4 <- ggarrange(
   top_row,
   bottom_row,
   nrow    = 2,
-  heights = c(1, 1.5)
+  heights = c(1.2, 1.5)
 )
 
 ## ── 10. Save ──────────────────────────────────────────────────────────────────
@@ -159,8 +159,8 @@ dir.create("results/4_functional_change", showWarnings = FALSE, recursive = TRUE
 ggsave(
   fig4,
   filename = "results/4_functional_change/figure4.pdf",
-  width    = 18,
-  height   = 12,
+  width    = 20,
+  height   = 18,
   device   = cairo_pdf
 )
 
