@@ -36,9 +36,10 @@ df_raw <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |> d
 rownames(df_raw) <- df_raw$family
 df_raw$family <- NULL
 caymat <- t(as.matrix(df_raw))  # samples in rows, families in columns
-clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
+clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS") |> filter(sampleID %in% rownames(caymat))
 caymat <- caymat[rownames(caymat) %in% clinical$sampleID,]
 dim(caymat)
+length(clinical$sampleID)
 
 #### Output folder ####
 resultsfolder <- "results/4_functional_change/cayman"
@@ -58,10 +59,10 @@ df <- left_join(dbray, clinical |> dplyr::select(timepoint, EthnicityTot, sample
 
 #### PERMANOVA ####
 set.seed(14)
-dfanova <- df[match(attributes(bray_bl)[["Labels"]], df$sampleID),]
-dfanova[which(is.na(dfanova$timepoint)),]
+dfanova <- df[match(attributes(bray)[["Labels"]], df$sampleID),]
+attributes(bray)["Labels"]
 all(dfanova$sampleID == attributes(bray)[["Labels"]]) # TRUE
-res1 <- adonis2(bray_bl ~ timepoint * EthnicityTot, data = dfanova, by = "term")
+res1 <- adonis2(bray ~ timepoint * EthnicityTot, data = dfanova, by = "term")
 print(res1)
 
 #### PCoA plot - timepoint ####
