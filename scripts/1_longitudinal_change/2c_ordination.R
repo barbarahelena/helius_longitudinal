@@ -496,8 +496,12 @@ print(forest_df |> dplyr::select(group, estimate, conf.low, conf.high, p.value))
 (pl_forest_resdur <- ggplot(forest_df, aes(x = estimate, y = group)) +
     geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
     geom_errorbarh(aes(xmin = conf.low, xmax = conf.high), height = 0.2) +
-    geom_point(aes(shape = group == "Pooled (ethnicity-adjusted)"), size = 3) +
+    geom_point(aes(shape = group == "Pooled (ethnicity-adjusted)",
+                   colour = group == "Pooled (ethnicity-adjusted)",
+                   size = group == "Pooled (ethnicity-adjusted)")) +
     scale_shape_manual(values = c("FALSE" = 16, "TRUE" = 18), guide = "none") +
+    scale_colour_manual(values = c("FALSE" = "black", "TRUE" = "#1F78B4"), guide = "none") +
+    scale_size_manual(values = c("FALSE" = 3, "TRUE" = 4.5), guide = "none") +
     labs(x = "Change in Bray-Curtis distance to Dutch centroid per decade of residence",
          y = NULL) +
     theme_Publication())
@@ -509,8 +513,8 @@ ggsave(pl_forest_resdur,
 #### Supplementary Figure 2 ####
 top_row    <- ggarrange(pl, pl_suppl_diet, ncol = 2, labels = c("A", "B"))
 middle_row <- ggarrange(pl_pairwise_heatmap, pl_delta_R2, ncol = 2, labels = c("C", "D"))
-bottom_row <- ggarrange(pl_forest_resdur, NULL, ncol = 2, labels = "E")
-(suppl_fig2 <- ggarrange(top_row, middle_row, bottom_row, nrow = 3, heights = c(1.0, 1.2, 0.9)))
+bottom_row <- ggarrange(pl_forest_resdur, NULL, ncol = 2, labels = "E", widths = c(1.0, 1.5))
+(suppl_fig2 <- ggarrange(top_row, middle_row, bottom_row, nrow = 3, heights = c(1.0, 1.2, 1.0)))
 ggsave(suppl_fig2,
        filename = "results/1_longitudinal_change/ordination/suppl_fig2.pdf",
        width = 16, height = 15)
