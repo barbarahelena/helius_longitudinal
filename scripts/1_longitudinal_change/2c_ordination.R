@@ -8,6 +8,7 @@ library(tidyverse)
 library(ggplot2)
 library(ggpubr)
 library(ggsci)
+library(broom)
 
 theme_Publication <- function(base_size=14, base_family="sans") {
     library(grid)
@@ -63,8 +64,9 @@ df$sampleID <- NULL
 df <- df |> dplyr::select(sampleID = ID, everything()) |> 
     dplyr::select(1:3)
 heliusdf <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
-df <- inner_join(df, heliusdf, by = "sampleID") |> dplyr::select(sampleID, ID, FUtime, Sex, EthnicityTot,
- BrayPCo1, BrayPCo2, timepoint)
+df <- inner_join(df, heliusdf, by = "sampleID") |>
+    dplyr::select(sampleID, ID, FUtime, Sex, EthnicityTot,
+                  BrayPCo1, BrayPCo2, timepoint, Age, ResDuration)
 ev_bray <- read.csv("data/16s/expl_var_bray.csv", header = FALSE)
 bray <- readRDS("data/16s/bray.RDS")
 
@@ -82,7 +84,8 @@ print(res1)
 # Figure 1B: clean timepoint-coloured PCoA
 (pl_fig1_B <- df %>%
     ggplot(aes(BrayPCo1, BrayPCo2)) +
-    stat_ellipse(geom = "polygon", aes(color = timepoint, fill = timepoint), type = "norm", alpha = 0.1) +
+    stat_ellipse(geom = "polygon", aes(color = timepoint, fill = timepoint), 
+            type = "norm", alpha = 0.1) +
     geom_point(aes(color = timepoint), size = 1, alpha = 0.5) +
     xlab(paste0("PCo1 (", round(ev_bray$V1[1], 1), "%)")) +
     ylab(paste0("PCo2 (", round(ev_bray$V1[2], 1), "%)")) +
@@ -347,7 +350,7 @@ ggsave("results/1_longitudinal_change/ordination/distance_ethnicities_adjusted.p
 # Join with diet PCs (only available in clinicaldata_long_pcdiet.RDS)
 pcdiet <- readRDS("data/clinicaldata_long_pcdiet.RDS") %>%
     filter(timepoint == "baseline") %>%
-    dplyr::select(ID, DietPC1, DietPC2)
+    dplyr::select(ID, DietPC1_adj, DietPC2_adj)
 
 heliusdist_adj2 <- heliusdist %>%
     left_join(pcdiet, by = "ID") %>%
@@ -355,17 +358,17 @@ heliusdist_adj2 <- heliusdist %>%
     filter(
         !is.na(Age) & !is.na(Sex) & !is.na(BMI) &
         !is.na(Metformin) & !is.na(PPI) & !is.na(AntiHT) & !is.na(Statins) &
-        !is.na(DiscrMean_baseline) & !is.na(AlcCons) & !is.na(DietPC1) & !is.na(DietPC2)
+        !is.na(AlcCons) & !is.na(DietPC1_adj) & !is.na(DietPC2_adj)
     )
 
 # Linear regression: distance ~ all confounders + ethnicity
-lm_full <- lm(distance ~ Age + Sex + BMI + DietPC1 + DietPC2 +
+lm_full <- lm(distance ~ Age + Sex + BMI + DietPC1_adj + DietPC2_adj +
                   Metformin + PPI + FUtime + EthnicityTot,
               data = heliusdist_adj2)
 print(summary(lm_full))
 
 # Confounder-only model: residuals + grand mean = adjusted dissimilarity
-lm_confounders <- lm(distance ~ Age + Sex + BMI + DietPC1 + DietPC2 +
+lm_confounders <- lm(distance ~ Age + Sex + BMI + DietPC1_adj + DietPC2_adj +
                          Metformin + PPI + FUtime,
                      data = heliusdist_adj2)
 
@@ -447,12 +450,12 @@ dutch_ids   <- df_baseline |> filter(EthnicityTot == "Dutch") |> pull(sampleID)
 
 migrant_baseline <- df_baseline |>
     filter(EthnicityTot != "Dutch" & EthnicityTot != "Other") |>
-    left_join(heliusdf |> dplyr::select(sampleID, ResDuration, Age), by = "sampleID") |>
     filter(!is.na(ResDuration)) |>
     mutate(
         dist_to_dutch = map_dbl(sampleID, \(sid) mean(braymat_full[sid, dutch_ids], na.rm = TRUE)),
         Age_at_migration = Age - ResDuration
     )
+
 # Residence duration and distance-to-Dutch summary per migrant group
 print(as.data.frame(migrant_baseline |>
     group_by(EthnicityTot) |>
@@ -465,8 +468,6 @@ print(as.data.frame(migrant_baseline |>
     summarise(n = n(), mean_dist = mean(dist_to_dutch), sd_dist = sd(dist_to_dutch),
               median_dist = median(dist_to_dutch)) |>
     mutate(EthnicityTot = "All migrants")))
-
-library(broom)
 
 # Per-group slopes (unadjusted within each group)
 group_est <- migrant_baseline %>%
@@ -508,7 +509,7 @@ ggsave(pl_forest_resdur,
 #### Supplementary Figure 2 ####
 top_row    <- ggarrange(pl, pl_suppl_diet, ncol = 2, labels = c("A", "B"))
 middle_row <- ggarrange(pl_pairwise_heatmap, pl_delta_R2, ncol = 2, labels = c("C", "D"))
-bottom_row <- ggarrange(pl_forest_resdur, ncol = 1, labels = "E")
+bottom_row <- ggarrange(pl_forest_resdur, NULL, ncol = 2, labels = "E")
 (suppl_fig2 <- ggarrange(top_row, middle_row, bottom_row, nrow = 3, heights = c(1.0, 1.2, 0.9)))
 ggsave(suppl_fig2,
        filename = "results/1_longitudinal_change/ordination/suppl_fig2.pdf",
