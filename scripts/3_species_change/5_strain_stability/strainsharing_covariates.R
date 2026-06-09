@@ -83,6 +83,13 @@ bray_alphadiv <- readRDS("data/shotgun/alphabetadiversity_shotgun.RDS") %>%
     dplyr::select(sampleID, shannon, shannon_delta, richness, richness_delta, distance)
 dftot <- dftot %>% left_join(., bray_alphadiv, by = "sampleID")
 
+helius_wide <- readRDS("data/clinicaldata/clinicaldata_wide.RDS")
+nutrient_adj <- helius_wide %>%
+    dplyr::select(ID, TotalCalories_baseline,
+                  Protein_baseline_adj, FattyAcids_baseline_adj,
+                  Carbohydrates_baseline_adj, Fiber_baseline_adj, Sodium_g_baseline_adj)
+dftot <- dftot %>% left_join(nutrient_adj, by = "ID")
+
 #### 1. Overall strain sharing — covariate analysis ####
 # Linear regression of sharing_perc per covariate block.
 # Continuous predictors are z-scored so effect sizes are comparable.
@@ -94,24 +101,27 @@ var_meta_ss <- data.frame(
               "DM", "HT_BPMed", "MetSyn", "Dyslipidemia",
               "Statins", "Metformin", "AntiHT", "PPI",
               "shannon", "richness", "distance",
-              "Protein", "FattyAcids", "Carbohydrates", "Fiber", "Sodium_g"),
+              "TotalCalories_baseline",
+              "Protein_baseline_adj", "FattyAcids_baseline_adj", "Carbohydrates_baseline_adj",
+              "Fiber_baseline_adj", "Sodium_g_baseline_adj"),
     label = c("Age (per SD)", "Sex (female)", "BMI (per SD)", "Follow-up time (per SD)",
               "Alcohol use", "Current smoking",
               "Diabetes", "Hypertension", "MetSyn", "Dyslipidemia",
               "Statins", "Metformin", "Antihypertensives", "PPI",
               "Shannon index (per SD)", "Richness (per SD)", "Bray-Curtis dissimilarity (per SD)",
+              "Total calories (per SD)",
               "Protein (per SD)", "Fatty acids (per SD)", "Carbohydrates (per SD)",
               "Fiber (per SD)", "Sodium (per SD)"),
     group = c(rep("Risk factors", 6),
               rep("Disease", 4),
               rep("Medication", 4),
               rep("Microbiota", 3),
-              rep("Diet", 5)),
+              rep("Diet", 6)),
     type  = c("continuous", "binary", "continuous", "continuous", "binary", "binary",
               "binary", "binary", "binary", "binary",
               "binary", "binary", "binary", "binary",
               "continuous", "continuous", "continuous",
-              rep("continuous", 5)),
+              rep("continuous", 6)),
     stringsAsFactors = FALSE
 )
 
@@ -252,13 +262,15 @@ pl_ss_main <- ggplot(ss_effects, aes(x = estimate, y = label, color = sig)) +
     geom_errorbar(aes(xmin = conf.low, xmax = conf.high),
                   orientation = "y", linewidth = 0.8, width = 0.2) +
     geom_point(size = 3) +
-    scale_color_manual(values = c("FDR < 0.05" = "#E18727FF", "FDR \u2265 0.05" = "grey55"),
+    scale_color_manual(values = c("FDR < 0.05" = "#F05C3BFF", "FDR \u2265 0.05" = "grey55"),
                        name = NULL) +
-    facet_wrap(~ group, scales = "free_y", ncol = 1) +
+    facet_grid(group ~ ., scales = "free_y", space = "free_y") +
     labs(x = "\u03b2 coefficient (95% CI)", y = NULL,
          title = "" ) +
     theme_Publication() +
-    theme(legend.position = "bottom")
+    theme(legend.position = "bottom",
+          strip.text.y = element_blank(),
+          strip.background.y = element_blank())
 
 ## Per-ethnicity companion (dots per ethnicity, same y-axis)
 pl_ss_eth <- ggplot(ss_eth_effects, aes(x = estimate, y = label)) +
@@ -266,13 +278,15 @@ pl_ss_eth <- ggplot(ss_eth_effects, aes(x = estimate, y = label)) +
     geom_point(aes(fill = ethnicity), shape = 21, color = "black",
                size = 2.5, stroke = 0.5, alpha = 0.9) +
     scale_fill_manual(values = eth_colors_ss, name = NULL) +
-    facet_wrap(~ group, scales = "free_y", ncol = 1) +
+    facet_grid(group ~ ., scales = "free_y", space = "free_y") +
     labs(x = "\u03b2", y = NULL, title = "Baseline predictors of strain stability") +
     theme_Publication() +
     theme(legend.position = "bottom",
           axis.text.y  = element_blank(),
           axis.ticks.y = element_blank(),
-          axis.line.y  = element_blank())
+          axis.line.y  = element_blank(),
+          strip.text.y = element_blank(),
+          strip.background.y = element_blank())
 
 ## N bar (% Yes / % non-missing per predictor)
 pl_ss_bar <- ggplot(bar_data_ss, aes(x = pct, y = label, fill = category)) +
@@ -286,7 +300,7 @@ pl_ss_bar <- ggplot(bar_data_ss, aes(x = pct, y = label, fill = category)) +
                       guide = "none") +
     scale_x_continuous(limits = c(0, 140), breaks = c(0, 50, 100),
                        expand = expansion(mult = c(0, 0))) +
-    facet_wrap(~ group, scales = "free_y", ncol = 1) +
+    facet_grid(group ~ ., scales = "free_y", space = "free_y") +
     labs(x = "% / % non-missing", y = NULL, title = " ") +
     theme_Publication() +
     theme(axis.text.y  = element_blank(),
