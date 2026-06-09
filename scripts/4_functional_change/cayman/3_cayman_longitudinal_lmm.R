@@ -53,7 +53,7 @@ df            <- as.data.frame(t(as.matrix(df_raw)))
 df$sampleID   <- rownames(df)
 gene_families <- setdiff(colnames(df), "sampleID")
 
-dftot <- left_join(df, clinical) |> droplevels()
+dftot <- left_join(df, clinical) |> filter(!is.na(timepoint)) |> droplevels()
 write.csv2(data.frame(family = prevalent_families),
            "results/4_functional_change/cayman/longitudinal/prevalent_families_list.csv",
            row.names = FALSE)
