@@ -224,12 +224,17 @@ model_shan_int <- lmer(shannon  ~ EthnicityTot * timepoint + FUtime + (1|ID), da
 
 res_rich <- summary(model_rich_int)
 res_shan <- summary(model_shan_int)
+confint_rich <- confint(model_rich_int, method = "Wald")
+confint_shan <- confint(model_shan_int, method = "Wald")
 
 div_int_row <- grep("EthnicityTot.*:.*timepoint", rownames(res_rich$coefficients))
+ci_row <- grep("EthnicityTot.*:timepoint.*", rownames(confint_rich))
 div_results <- data.frame(
   metric   = c("Richness", "Shannon"),
   estimate = c(res_rich$coefficients[div_int_row, 1], res_shan$coefficients[div_int_row, 1]),
   se       = c(res_rich$coefficients[div_int_row, 2], res_shan$coefficients[div_int_row, 2]),
+  conf_low = c(confint_rich[ci_row, 1], confint_shan[ci_row, 1]),
+  conf_high = c(confint_rich[ci_row, 2], confint_shan[ci_row, 2]),
   pval     = c(res_rich$coefficients[div_int_row, 5], res_shan$coefficients[div_int_row, 5])
 )
 write.csv2(div_results, "results/5_arg/longitudinal/arg_diversity_lmm_results.csv", row.names = FALSE)
