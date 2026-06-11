@@ -165,7 +165,7 @@ pl_sfig6_A <- ggplot(fu_data, aes(x = EthnicityTot, y = FUtime)) +
     geom_boxplot(fill = "white", width = 0.2) +
     scale_fill_manual(values = eth_colors, guide = "none") +
     labs(y = "Follow-up time (years)", title = "Follow-up time", x = "") +
-    stat_compare_means(label = "p.format", tip.length = 0) +
+    stat_compare_means(label = "p.format", tip.length = 0, label.x = 1.5, label.y = 8) +
     scale_y_continuous(expand = expansion(mult = c(0.05, 0.05)), breaks = 4:12) +
     theme_Publication() +
     coord_flip()
