@@ -100,26 +100,47 @@ print(res1)
 
 ggsave(pl_fig1_B, filename = "results/1_longitudinal_change/ordination/PCoA_BrayCurtis.pdf", width = 8, height = 8)
 
-#### Bray-Curtis distance – ethnicity per timepoint ####
-print('PERMANOVA for ethnicity per timepoint..')
+#### Bray-Curtis distance – ethnicity x timepoint interaction ####
+# A significant EthnicityTot:timepoint term is the actual evidence that the
+# ethnicity effect on composition changed over follow-up. Comparing two
+# separately-fitted per-timepoint R² values has no test attached to their
+# difference and conflates centroid location with within-group dispersion
+# (see betadisper() below), so it is not used to claim convergence.
+print('PERMANOVA for ethnicity x timepoint interaction..')
 set.seed(1234)
-res2_list <- lapply(c("baseline", "follow-up"), function(tp) {
-    dftp <- dfanova %>% filter(timepoint == tp & !is.na(EthnicityTot) & EthnicityTot != "Other")
-    bray_tp <- as.dist(as.matrix(bray)[dftp$sampleID, dftp$sampleID])
-    adonis2(bray_tp ~ EthnicityTot, data = dftp)
-})
-names(res2_list) <- c("baseline", "follow-up")
-print(res2_list)
+dfanova_eth <- dfanova %>% filter(!is.na(EthnicityTot) & EthnicityTot != "Other")
+bray_eth <- as.dist(as.matrix(bray)[dfanova_eth$sampleID, dfanova_eth$sampleID])
+ctrl_eth <- how(blocks = dfanova_eth$ID, nperm = 999)
+res_interaction <- adonis2(bray_eth ~ EthnicityTot * timepoint, data = dfanova_eth,
+                            by = "terms", permutations = ctrl_eth)
+print(res_interaction)
+write.csv(as.data.frame(res_interaction),
+          "results/1_longitudinal_change/ordination/permanova_ethnicity_timepoint_interaction.csv")
 
 fmt_pval_eth <- function(p) ifelse(p < 0.001, "< 0.001", format(round(p, 3), nsmall = 3))
-annot_eth <- tibble(
-    timepoint = c("baseline", "follow-up"),
-    label = c(
-        paste0("PERMANOVA: R² = ", format(round(res2_list[["baseline"]]$R2[1], 3), nsmall = 3),
-               ", p ", fmt_pval_eth(res2_list[["baseline"]]$`Pr(>F)`[1])),
-        paste0("PERMANOVA: R² = ", format(round(res2_list[["follow-up"]]$R2[1], 3), nsmall = 3),
-               ", p ", fmt_pval_eth(res2_list[["follow-up"]]$`Pr(>F)`[1]))
-    )
+interaction_row <- res_interaction["EthnicityTot:timepoint", ]
+interaction_label <- paste0(
+    "Ethnicity x timepoint: R² = ", format(round(interaction_row$R2, 3), nsmall = 3),
+    ", p ", fmt_pval_eth(interaction_row$`Pr(>F)`)
+)
+
+#### Dispersion (PERMDISP) by ethnicity x timepoint ####
+# Tests whether within-group spread differs across ethnicity x timepoint
+# groups. If centroids converge (interaction above) but dispersion here is
+# unchanged, that supports a genuine location (convergence) effect; if
+# dispersion also differs, part of the apparent convergence reflects a
+# change in group variability rather than groups becoming more similar.
+print('betadisper for ethnicity x timepoint..')
+set.seed(1234)
+dfanova_eth <- dfanova_eth %>%
+    mutate(eth_tp = interaction(EthnicityTot, timepoint, drop = TRUE, sep = " - "))
+disp_eth <- betadisper(bray_eth, group = dfanova_eth$eth_tp, type = "centroid")
+disp_test <- permutest(disp_eth, permutations = ctrl_eth)
+print(disp_test)
+write.csv(as.data.frame(disp_test$tab),
+          "results/1_longitudinal_change/ordination/betadisper_ethnicity_timepoint.csv")
+dispersion_label <- paste0(
+    "PERMDISP: p ", fmt_pval_eth(disp_test$tab$`Pr(>F)`[1])
 )
 
 (pl_bray_eth <- df %>%
@@ -132,10 +153,9 @@ annot_eth <- tibble(
     ylab(paste0("PCo2 (", round(ev_bray$V1[2], 1), "%)")) +
     scale_color_manual(values = eth_colors) +
     scale_fill_manual(values = eth_colors, guide = "none") +
-    labs(color = "", title = "Microbiota composition by ethnicity") +
-    theme_Publication() +
-    geom_text(data = annot_eth, aes(x = Inf, y = Inf, label = label),
-              hjust = 1, vjust = 1, size = 3, inherit.aes = FALSE))
+    labs(color = "", title = "Microbiota composition by ethnicity",
+         caption = paste0(interaction_label, "  |  ", dispersion_label)) +
+    theme_Publication())
 
 ggsave(pl_bray_eth, filename = "results/1_longitudinal_change/ordination/PCoA_BrayCurtis_ethnicity.pdf", width = 12, height = 6)
 
