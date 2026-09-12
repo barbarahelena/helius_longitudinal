@@ -33,8 +33,10 @@ dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 MIN_PIDENT      <- 30
 MIN_BITSCORE    <- 50
 TARGET_MODULES  <- c("M00129", "M00014")
-PLOT_CLADES     <- c("Clade I", "Clade III", "Clade IV", "Clade VI")
+MIN_CLADE_SIZE  <- 5   # clades smaller than this are excluded from PLOT_CLADES (too few bins for group-wise stats)
 N_TOP_VF        <- 2   # number of top VFDB categories to display
+# PLOT_CLADES is set dynamically in section 8a, after clade calling, from all
+# clades with >= MIN_CLADE_SIZE tips — see that section for why.
 
 #### 1. Load tree ####
 tree <- read.iqtree(tree_file)
@@ -212,17 +214,71 @@ cat("Tips in metadata after filter:", nrow(tip_meta), "\n")
 #### 8. Draw tree ####
 eth_colors <- jco_palette()  # Dutch = blue, SAS = orange/yellow
 
-# ---- 8a. Cut tree at branch length threshold ----
-# Uses cophenetic (patristic) distances + average linkage — works for both
-# ultrametric and non-ultrametric (IQ-TREE) trees. Lower H_CUT = more clades.
-H_CUT <- 0.02
+# ---- 8a. Call clades from cophenetic (patristic) distances ----
+# Clades are called with a threshold h on the maximum pairwise cophenetic
+# distance within a group, applied TOP-DOWN on the tree topology itself:
+# starting at the root, descend into a node's children only if its subtree's
+# internal max distance exceeds h; otherwise the whole subtree is one clade.
+# Every group returned is therefore a genuine clade (or a singleton) BY
+# CONSTRUCTION — unlike hclust(..., method = "average") on the same distance
+# matrix, which can merge tips that are close in patristic distance without
+# being each other's closest relatives on the tree. That matters here: at
+# h = 0.02, average-linkage/cutree put 83 of 180 tips in one "clade" whose
+# tips' MRCA was the root of the whole tree (i.e. not a clade at all), and a
+# second 13-tip group was likewise non-monophyletic. Both problems are fixed
+# by construction below (see the diagnostic comparison printed further down).
+phylo_tree <- tree@phylo
+D          <- ape::cophenetic.phylo(phylo_tree)
 
-hc           <- hclust(as.dist(ape::cophenetic.phylo(tree@phylo)), method = "average")
-tip_clusters <- cutree(hc, h = H_CUT)
+call_monophyletic_clades <- function(phylo, D, h) {
+  root         <- setdiff(phylo$edge[, 1], phylo$edge[, 2])
+  n_tip        <- length(phylo$tip.label)
+  get_children <- function(node) phylo$edge[phylo$edge[, 1] == node, 2]
+  get_tips     <- function(node) {
+    if (node <= n_tip) return(phylo$tip.label[node])
+    ape::extract.clade(phylo, node)$tip.label
+  }
+  clusters <- list()
+  stack    <- list(root)
+  while (length(stack) > 0) {
+    node  <- stack[[1]]
+    stack <- stack[-1]
+    tips  <- get_tips(node)
+    max_d <- if (length(tips) == 1) 0 else max(D[tips, tips])
+    if (max_d <= h) {
+      clusters[[length(clusters) + 1]] <- tips
+    } else {
+      stack <- c(stack, as.list(get_children(node)))
+    }
+  }
+  setNames(
+    unlist(lapply(seq_along(clusters), function(i) rep(i, length(clusters[[i]])))),
+    unlist(clusters)
+  )
+}
 
-cat("Clades detected at h =", H_CUT, ":", n_distinct(tip_clusters), "\n")
+# H_CUT: a fine sweep of h (0.001 steps, 0.015-0.05) found no natural break
+# near 0.02 for the old average-linkage method. Under the monophyletic caller
+# the same sweep shows a clean, wide plateau at 9 clades for h in
+# [0.029, 0.040] (12 consecutive grid points with no change) — by far the
+# most stable partition in the whole range — so that plateau is used as the
+# primary, data-driven cutoff. h = 0.02 (finer-grained, 26 clades) is kept
+# below purely as a sensitivity comparison, alongside the rest of the sweep.
+H_CUT             <- 0.03    # primary: start of the [0.029, 0.040] plateau
+H_CUT_SENSITIVITY <- 0.02    # for comparison only, see clade_h_sensitivity.csv
 
-# For each multi-tip cluster find its MRCA node (used for geom_hilight)
+tip_clusters <- call_monophyletic_clades(phylo_tree, D, H_CUT)
+cat("Monophyletic clades detected at h =", H_CUT, ":", n_distinct(tip_clusters), "\n")
+
+# Diagnostic: how different is this from the old average-linkage/cutree call
+# at the same h? (quantifies the effect of the monophyly fix)
+hc_old           <- hclust(as.dist(D), method = "average")
+tip_clusters_old <- cutree(hc_old, h = H_CUT)
+cat("For comparison, average-linkage cutree at the same h gives:",
+    n_distinct(tip_clusters_old), "clusters (not all guaranteed monophyletic)\n")
+
+# For each cluster find its MRCA node (used for geom_hilight). With the
+# monophyletic caller, this MRCA's descendant tips equal the cluster exactly.
 clade_nodes <- map_dfr(sort(unique(tip_clusters)), function(cl) {
   tips <- names(tip_clusters)[tip_clusters == cl]
   nd <- if (length(tips) == 1) {
@@ -230,22 +286,69 @@ clade_nodes <- map_dfr(sort(unique(tip_clusters)), function(cl) {
   } else {
     ape::getMRCA(tree@phylo, tips)
   }
-  tibble(node = nd, n_tips = length(tips), cluster = cl,
-         clade = paste0("Clade ", as.roman(cl)))
+  tibble(node = nd, n_tips = length(tips), cluster = cl)
 }) %>%
-  filter(!is.na(node)) %>%
-  arrange(node)
+  filter(!is.na(node))
 
-cat("Detected clades:\n")
+# Readable "Clade I, II, ..." labels are given only to clusters big enough
+# for group-wise stats (n_tips >= MIN_CLADE_SIZE), numbered by descending
+# size so Clade I is the largest — this keeps the numbering contiguous
+# (I, II, III, ...) instead of skipping labels for excluded clusters.
+# Smaller clusters get a plain descriptive label instead of a roman numeral.
+clade_nodes <- clade_nodes %>% arrange(desc(n_tips))
+named_idx   <- which(clade_nodes$n_tips >= MIN_CLADE_SIZE)
+clade_nodes$clade <- NA_character_
+clade_nodes$clade[named_idx]  <- paste0("Clade ", as.roman(seq_along(named_idx)))
+clade_nodes$clade[-named_idx] <- paste0("Unclassified (cluster ", clade_nodes$cluster[-named_idx],
+                                         ", n=", clade_nodes$n_tips[-named_idx], ")")
+clade_nodes <- clade_nodes %>% arrange(node)
+
+# Sanity check: every multi-tip cluster must be monophyletic by construction.
+mono_check <- clade_nodes %>%
+  filter(n_tips > 1) %>%
+  rowwise() %>%
+  mutate(monophyletic = ape::is.monophyletic(
+    phylo_tree, names(tip_clusters)[tip_clusters == cluster])) %>%
+  ungroup()
+if (!all(mono_check$monophyletic)) {
+  stop("Non-monophyletic cluster produced by call_monophyletic_clades() — this should not happen.")
+}
+cat("Monophyly check: all", nrow(mono_check), "multi-tip clades confirmed monophyletic.\n")
+
+cat("Detected clades (all, before any size filtering):\n")
 print(clade_nodes %>% dplyr::select(clade, n_tips, node))
 
-# Hand-picked high-contrast palette for clade highlights
-clade_pal <- c("#4E79A7", "#F28E2B", "#59A14F", "#E15759", "#B07AA1",
-               "#76B7B2", "#EDC948", "#FF9DA7", "#9C755F", "#BAB0AC")
-clade_colors <- setNames(
-  clade_pal[seq_len(nrow(clade_nodes))],
-  clade_nodes$clade
-)
+# PLOT_CLADES: every clade with enough tips for meaningful group-wise stats,
+# not a hand-picked subset — so no clade is silently dropped from the figures
+# or tables. Smaller clades are reported here (and in the CSV below) but
+# excluded from group comparisons that need reasonable group sizes.
+PLOT_CLADES <- clade_nodes %>% filter(n_tips >= MIN_CLADE_SIZE) %>% pull(clade)
+cat("\nPLOT_CLADES (n_tips >=", MIN_CLADE_SIZE, "):", paste(PLOT_CLADES, collapse = ", "), "\n")
+cat("Excluded from PLOT_CLADES (too few tips for group-wise stats):",
+    paste(setdiff(clade_nodes$clade, PLOT_CLADES), collapse = ", "), "\n")
+
+# Full ethnicity composition of ALL detected clades, not just PLOT_CLADES —
+# exported so nothing is left unaccounted for in the text/methods.
+clade_eth_all <- tibble(bin_name = names(tip_clusters), cluster = tip_clusters) %>%
+  left_join(clade_nodes %>% dplyr::select(cluster, clade, n_tips), by = "cluster") %>%
+  left_join(tip_meta %>% dplyr::select(bin_name, EthnicityTot), by = "bin_name") %>%
+  count(clade, n_tips, EthnicityTot) %>%
+  arrange(desc(n_tips))
+cat("\nEthnicity composition of ALL detected clades:\n")
+print(clade_eth_all, n = Inf)
+write.csv(clade_eth_all, file.path(results_dir, "clade_ethnicity_all_clades.csv"), row.names = FALSE)
+
+# Hand-picked high-contrast palette for clade highlights; extended via
+# interpolation if there are more clades than base colors (was fixed at 10,
+# but the monophyletic caller can produce more clades than that).
+clade_pal_base <- c("#4E79A7", "#F28E2B", "#59A14F", "#E15759", "#B07AA1",
+                     "#76B7B2", "#EDC948", "#FF9DA7", "#9C755F", "#BAB0AC")
+clade_pal <- if (nrow(clade_nodes) <= length(clade_pal_base)) {
+  clade_pal_base[seq_len(nrow(clade_nodes))]
+} else {
+  grDevices::colorRampPalette(clade_pal_base)(nrow(clade_nodes))
+}
+clade_colors <- setNames(clade_pal, clade_nodes$clade)
 
 # ---- 8a-ii. Assign clades and rank VFDB categories by clade difference ----
 clade_map <- tibble(
@@ -257,9 +360,11 @@ clade_map <- tibble(
 tip_meta_clades <- tip_meta %>%
   left_join(clade_map %>% dplyr::select(bin_name, clade), by = "bin_name")
 
-# Run KW for all VFDB categories across the four focal clades (baseline bins only)
+# Run KW for all VFDB categories across PLOT_CLADES only (baseline bins only)
+# — restricted to clades with enough tips (MIN_CLADE_SIZE) so the comparison
+# isn't diluted by singleton/near-singleton groups.
 tip_meta_focal <- tip_meta_clades %>%
-  filter(timepoint == "baseline")
+  filter(timepoint == "baseline", clade %in% PLOT_CLADES)
 
 vf_kw <- map_dfr(vf_cat_cols, function(cat) {
   vals  <- tip_meta_focal[[cat]]
@@ -290,11 +395,57 @@ if (length(TOP_VF_CATS) < N_TOP_VF) {
 
 cat("Top", N_TOP_VF, "VF categories for plots:", paste(TOP_VF_CATS, collapse = ", "), "\n")
 
-tibble(bin_name = names(tip_clusters), cluster = tip_clusters) %>%
-  left_join(clade_nodes %>% dplyr::select(cluster, clade), by = "cluster") %>%
-  filter(clade %in% PLOT_CLADES) %>%
-  left_join(tip_meta %>% dplyr::select(bin_name, EthnicityTot), by = "bin_name") %>%
-  count(clade, EthnicityTot)
+# ---- 8a-iii. Sensitivity of clade calling and downstream findings to h ----
+# Re-derive clades at each h with the same monophyletic caller, then check
+# whether (i) the number of clades that are majority-Dutch vs majority-SAS
+# among PLOT_CLADES-sized clusters is stable, and (ii) the top VF categories
+# above stay significantly different across clades (Kruskal-Wallis).
+H_SWEEP <- c(0.02, 0.025, 0.03, 0.035, 0.04)
+
+sensitivity_results <- map_dfr(H_SWEEP, function(h) {
+  cl_h  <- call_monophyletic_clades(phylo_tree, D, h)
+  map_h <- tibble(bin_name = names(cl_h), cluster = cl_h)
+  meta_h <- tip_meta %>%
+    inner_join(map_h, by = "bin_name") %>%
+    filter(!is.na(EthnicityTot))
+
+  big_clusters <- meta_h %>%
+    count(cluster) %>%
+    filter(n >= MIN_CLADE_SIZE) %>%
+    pull(cluster)
+
+  eth_by_cluster <- meta_h %>%
+    filter(cluster %in% big_clusters) %>%
+    count(cluster, EthnicityTot) %>%
+    group_by(cluster) %>%
+    mutate(prop = n / sum(n)) %>%
+    ungroup()
+
+  n_dutch_enriched <- eth_by_cluster %>%
+    filter(EthnicityTot == "Dutch", prop > 0.5) %>% nrow()
+  n_sas_enriched <- eth_by_cluster %>%
+    filter(EthnicityTot == "South-Asian Surinamese", prop > 0.5) %>% nrow()
+
+  vf_h <- map_dfr(TOP_VF_CATS, function(cat) {
+    sub <- meta_h %>% filter(cluster %in% big_clusters, timepoint == "baseline")
+    if (n_distinct(sub$cluster) < 2 || var(sub[[cat]], na.rm = TRUE) == 0) {
+      return(tibble(vf_category = cat, kw_p = NA_real_))
+    }
+    tibble(vf_category = cat,
+           kw_p = kruskal.test(sub[[cat]] ~ factor(sub$cluster))$p.value)
+  }) %>%
+    pivot_wider(names_from = vf_category, values_from = kw_p, names_prefix = "kw_p_")
+
+  tibble(h = h, n_clusters_total = n_distinct(cl_h),
+         n_clusters_ge_min = length(big_clusters),
+         n_dutch_enriched  = n_dutch_enriched,
+         n_sas_enriched    = n_sas_enriched) %>%
+    bind_cols(vf_h)
+})
+
+cat("\nSensitivity of clade calling across h:\n")
+print(sensitivity_results, n = Inf)
+write.csv(sensitivity_results, file.path(results_dir, "clade_h_sensitivity.csv"), row.names = FALSE)
 
 # ---- 8b. Base tree with clade highlights ----
 # Pre-compute tip layout here so we can restrict each highlight to the exact
@@ -359,7 +510,7 @@ p_base <- p_base %<+%
 clade_nodes_focal <- clade_nodes %>%
   filter(clade %in% PLOT_CLADES) %>%
   arrange(clade) %>%
-  mutate(short_label = as.character(as.roman(cluster)))
+  mutate(short_label = sub("^Clade ", "", clade))
 
 # Compute mean y (= angular position) of tips per clade
 clade_tip_angles <- tibble(
