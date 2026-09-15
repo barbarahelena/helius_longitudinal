@@ -22,6 +22,38 @@
 
 ## Libraries
 library(tidyverse)
+library(ggplot2)
+
+theme_Publication <- function(base_size=14, base_family="sans") {
+    library(grid)
+    library(ggthemes)
+    library(stringr)
+    suppressWarnings(theme_foundation(base_size=base_size, base_family=base_family)
+        + theme(plot.title = element_text(face = "bold",
+                                          size = rel(1.0), hjust = 0.5),
+                text = element_text(),
+                panel.background = element_rect(colour = NA, fill = NA),
+                plot.background = element_rect(colour = NA, fill = NA),
+                panel.border = element_rect(colour = NA),
+                axis.title = element_text(face = "bold",size = rel(0.8)),
+                axis.title.y = element_text(angle=90, vjust =2),
+                axis.title.x = element_text(vjust = -0.2),
+                axis.text = element_text(size = rel(0.7)),
+                axis.text.x = element_text(angle = 0),
+                axis.line = element_line(colour="black"),
+                axis.ticks = element_line(),
+                panel.grid.major = element_line(colour="#f0f0f0"),
+                panel.grid.minor = element_blank(),
+                legend.key = element_rect(colour = NA),
+                legend.position = "bottom",
+                legend.key.size= unit(0.2, "cm"),
+                legend.spacing  = unit(0, "cm"),
+                plot.margin=unit(c(10,5,5,5),"mm"),
+                strip.background=element_rect(colour="#f0f0f0",fill="#f0f0f0"),
+                strip.text = element_text(face="bold"),
+                plot.caption = element_text(size = rel(0.5), face = "italic")
+        ))
+}
 
 #### Output folder ####
 resultsfolder <- "results/2_cmb_microbiome"
@@ -141,6 +173,44 @@ print(fullcohort_results, width = Inf)
 write.csv(fullcohort_results,
           file.path(resultsfolder, "sensitivity_starters_fullcohort.csv"),
           row.names = FALSE)
+
+#### Figure — main vs. sensitivity estimates, full cohort ####
+
+forest_data <- bind_rows(
+    fullcohort_results %>%
+        transmute(label, group, analysis = "Main analysis",
+                  estimate = main_estimate, conf.low = main_conf.low,
+                  conf.high = main_conf.high, q.value = main_q.value),
+    fullcohort_results %>%
+        transmute(label, group, analysis = "Sensitivity (excl. starters)",
+                  estimate = sens_estimate, conf.low = sens_conf.low,
+                  conf.high = sens_conf.high, q.value = sens_q.value)
+) %>%
+    mutate(
+        analysis = factor(analysis, levels = c("Main analysis", "Sensitivity (excl. starters)")),
+        group    = factor(group, levels = c("Disease", "Medication", "Risk factor")),
+        label    = factor(label, levels = rev(unique(fullcohort_results$label))),
+        sig      = ifelse(q.value < 0.05, "FDR < 0.05", "FDR ≥ 0.05")
+    )
+
+(pl_sensitivity_forest <- ggplot(forest_data, aes(x = estimate, y = label, color = analysis, shape = sig)) +
+    geom_vline(xintercept = 0, linetype = "dashed", color = "grey60") +
+    geom_errorbar(aes(xmin = conf.low, xmax = conf.high),
+                  position = position_dodge(width = 0.5), width = 0.2, linewidth = 0.6) +
+    geom_point(position = position_dodge(width = 0.5), size = 2.8) +
+    scale_color_manual(values = c("Main analysis" = "#197EC0FF",
+                                  "Sensitivity (excl. starters)" = "#F05C3BFF"), name = NULL) +
+    scale_shape_manual(values = c("FDR < 0.05" = 16, "FDR ≥ 0.05" = 1), name = NULL) +
+    facet_grid(group ~ ., scales = "free_y", space = "free_y") +
+    labs(x = "Bray-Curtis change: estimate (± 95% CI)", y = NULL,
+         title = "Main vs. sensitivity estimates\n(excluding per-variable starters)") +
+    guides(color = guide_legend(ncol = 1), shape = guide_legend(ncol = 1)) +
+    theme_Publication() +
+    theme(strip.text.y = element_text(angle = 0)))
+
+ggsave(pl_sensitivity_forest,
+       filename = file.path(resultsfolder, "sensitivity_starters_forest.pdf"),
+       width = 8, height = 7)
 
 #### Ethnicity-stratified main + sensitivity models, per variable ####
 eth_levels <- setdiff(unique(heliusdist_ext$EthnicityTot[!is.na(heliusdist_ext$EthnicityTot)]), "Other")
