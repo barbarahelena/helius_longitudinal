@@ -306,7 +306,7 @@ subj_depth_all <- tip_meta_clades %>%
 
 # Dominant clade per subject at baseline = clade of the bin with max depth_baseline
 clade_at_bl <- subj_depth_all %>%
-  filter(depth_baseline > 0) %>%
+  filter(depth_baseline >= PRESENCE_THRESHOLD) %>%
   group_by(subject_id, EthnicityTot) %>%
   slice_max(depth_baseline, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
@@ -314,7 +314,7 @@ clade_at_bl <- subj_depth_all %>%
 
 # Dominant clade per subject at follow-up = clade of the bin with max depth_followup
 clade_at_fu <- subj_depth_all %>%
-  filter(depth_followup > 0) %>%
+  filter(depth_followup >= PRESENCE_THRESHOLD) %>%
   group_by(subject_id, EthnicityTot) %>%
   slice_max(depth_followup, n = 1, with_ties = FALSE) %>%
   ungroup() %>%
@@ -384,10 +384,10 @@ cat("Clade × ethnicity × timepoint plot saved to:",
 # clades, that is a real clade transition.
 
 # Diagnostic: check how many bins have each depth > 0
-cat("\nBins with depth_baseline > 0:", sum(tip_meta_clades$depth_baseline > 0, na.rm = TRUE), "\n")
-cat("Bins with depth_followup  > 0:", sum(tip_meta_clades$depth_followup  > 0, na.rm = TRUE), "\n")
-cat("Bins with both depths     > 0:", sum(tip_meta_clades$depth_baseline > 0 &
-                                           tip_meta_clades$depth_followup  > 0, na.rm = TRUE), "\n")
+cat("\nBins with depth_baseline > 0:", sum(tip_meta_clades$depth_baseline >= PRESENCE_THRESHOLD, na.rm = TRUE), "\n")
+cat("Bins with depth_followup  > 0:", sum(tip_meta_clades$depth_followup  >= PRESENCE_THRESHOLD, na.rm = TRUE), "\n")
+cat("Bins with both depths     > 0:", sum(tip_meta_clades$depth_baseline >= PRESENCE_THRESHOLD &
+                                           tip_meta_clades$depth_followup  >= PRESENCE_THRESHOLD, na.rm = TRUE), "\n")
 
 # Per-subject clade sets derived from depth columns — use ALL clades (no MIN_CLADE_N
 # filter) so that participants whose dominant bin is in a small clade are not excluded
@@ -398,14 +398,14 @@ subj_depth_allclades <- tip_meta_clades %>%
 
 # Clades present at baseline (depth_baseline > 0) per subject
 clades_bl <- subj_depth_allclades %>%
-  filter(depth_baseline > 0) %>%
+  filter(depth_baseline >= PRESENCE_THRESHOLD) %>%
   group_by(subject_id, EthnicityTot) %>%
   slice_max(depth_baseline, n = 1, with_ties = FALSE) %>%
   summarise(clades_bl = list(unique(clade)), .groups = "drop")
 
 # Clades present at follow-up (depth_followup > 0) per subject
 clades_fu <- subj_depth_allclades %>%
-  filter(depth_followup > 0) %>%
+  filter(depth_followup >= PRESENCE_THRESHOLD) %>%
   group_by(subject_id) %>%
   slice_max(depth_followup, n = 1, with_ties = FALSE) %>%
   summarise(clades_fu = list(unique(clade)), .groups = "drop")
@@ -484,8 +484,8 @@ if (all(dim(stab_tab) == c(2, 2))) {
 detect_pat <- subj_depth_all %>%
   group_by(subject_id, EthnicityTot, clade) %>%
   summarise(
-    has_bl = any(depth_baseline > 0),
-    has_fu = any(depth_followup  > 0),
+    has_bl = any(depth_baseline >= PRESENCE_THRESHOLD),
+    has_fu = any(depth_followup  >= PRESENCE_THRESHOLD),
     .groups = "drop"
   ) %>%
   filter(has_bl | has_fu) %>%
@@ -851,7 +851,7 @@ lmm_results <- map_dfr(clade_levels, function(cl) {
   carriers <- depth_long %>%
     filter(clade == cl) %>%
     group_by(subject_id) %>%
-    filter(any(depth > 0)) %>%
+    filter(any(depth >= PRESENCE_THRESHOLD)) %>%
     pull(subject_id) %>%
     unique()
   df_cl <- depth_long %>%

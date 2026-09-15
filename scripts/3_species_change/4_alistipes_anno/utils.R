@@ -9,6 +9,16 @@ library(ggthemes)
 library(grid)
 library(ggpubr)
 
+#### Presence-calling threshold ####
+# Minimum independently re-mapped depth at a timepoint required to call a MAG
+# "present" there. Depths in (0, 1x) are trace-level signal (single/few reads,
+# plausibly cross-mapping from a closely related co-occurring strain) that is
+# not reliably distinguishable from background — see
+# results/3_species_change/4_alistipes_anno/alistipes_depth_wide.csv, which
+# shows a clean bimodal split (<1x vs >8x) with no bins in between once one
+# timepoint is genuinely colonised.
+PRESENCE_THRESHOLD <- 1
+
 #### Theme ####
 theme_Publication <- function(base_size = 14, base_family = "sans") {
   library(grid)
@@ -89,7 +99,7 @@ load_bin_clin <- function(trans, batch_files, clin_file) {
               by = c("locus_prefix", "sampleID")) %>%
     mutate(
       depth        = replace_na(depth, 0),
-      present      = depth > 0,
+      present      = depth >= PRESENCE_THRESHOLD,
       timepoint    = factor(timepoint, levels = c("baseline", "follow-up")),
       EthnicityTot = factor(EthnicityTot,
                             levels = c("Dutch", "South-Asian Surinamese"))
