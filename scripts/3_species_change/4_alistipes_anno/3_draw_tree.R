@@ -501,7 +501,7 @@ jco_cols <- jco_palette()
 # Shows: for each ethnicity, what proportion of its bins fall in each clade.
 # Chi-square based on present-sample (depth > 0 at baseline) counts.
 sample_counts_clade <- tip_meta_clades %>%
-  filter(!is.na(EthnicityTot), depth_baseline > 0, clade %in% PLOT_CLADES) %>%
+  filter(!is.na(EthnicityTot), depth_baseline >= PRESENCE_THRESHOLD, clade %in% PLOT_CLADES) %>%
   count(clade, EthnicityTot) %>%
   pivot_wider(names_from = EthnicityTot, values_from = n, values_fill = 0L)
 
@@ -594,7 +594,7 @@ feat_plots <- purrr::map(unique(func_long_filt$feature), function(feat) {
 
 ## 10c. Horizontal boxplot: baseline depth per clade, Dutch vs SAS
 abund_clade <- tip_meta_clades %>%
-  filter(!is.na(EthnicityTot), clade %in% PLOT_CLADES, depth_baseline > 0) %>%
+  filter(!is.na(EthnicityTot), clade %in% PLOT_CLADES, depth_baseline >= PRESENCE_THRESHOLD) %>%
   mutate(
     EthnicityTot = factor(EthnicityTot, levels = c("South-Asian Surinamese", "Dutch")),
     clade        = factor(clade, levels = rev(PLOT_CLADES))
