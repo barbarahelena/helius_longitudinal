@@ -56,7 +56,7 @@ tt <- as.data.frame(tax_table(ps)) |>
     rownames_to_column("ASV") |>
     mutate(label = case_when(
         !is.na(Genus) & !is.na(Species) ~ paste(Genus, Species),
-        !is.na(Genus)                   ~ Genus,
+        !is.na(Genus)                   ~ paste0(Genus, " spp."),
         !is.na(Family)                  ~ paste0(Family, " spp."),
         TRUE                            ~ ASV
     ))
