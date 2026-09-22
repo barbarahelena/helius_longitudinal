@@ -143,6 +143,61 @@ dispersion_label <- paste0(
     "PERMDISP: p ", fmt_pval_eth(disp_test$tab$`Pr(>F)`[1])
 )
 
+#### Direction of dispersion change per ethnicity ####
+# The omnibus PERMDISP test above only shows that dispersion differs among
+# the 12 ethnicity x timepoint groups, not which groups got tighter or more
+# spread out. Extract each sample's distance to its own group centroid and
+# compare baseline vs. follow-up per ethnicity, paired within participant,
+# to determine the direction of any dispersion change.
+disp_df <- dfanova_eth %>%
+    mutate(dist_to_centroid = disp_eth$distances)
+
+disp_summary <- disp_df %>%
+    group_by(EthnicityTot, timepoint) %>%
+    summarise(n = n(), mean_dist = mean(dist_to_centroid),
+              sd_dist = sd(dist_to_centroid),
+              median_dist = median(dist_to_centroid), .groups = "drop")
+print(as.data.frame(disp_summary))
+write.csv(disp_summary,
+          "results/1_longitudinal_change/ordination/betadisper_distance_to_centroid_summary.csv",
+          row.names = FALSE)
+
+disp_wide <- disp_df %>%
+    dplyr::select(ID, EthnicityTot, timepoint, dist_to_centroid) %>%
+    pivot_wider(names_from = timepoint, values_from = dist_to_centroid) %>%
+    filter(!is.na(baseline) & !is.na(`follow-up`))
+
+disp_paired_test <- disp_wide %>%
+    group_by(EthnicityTot) %>%
+    summarise(
+        n = n(),
+        mean_delta = mean(`follow-up` - baseline),
+        p_wilcoxon = wilcox.test(`follow-up`, baseline, paired = TRUE)$p.value,
+        .groups = "drop"
+    ) %>%
+    mutate(padj = p.adjust(p_wilcoxon, method = "BH"),
+           direction = ifelse(mean_delta < 0, "tighter (less dispersed)", "more spread out"))
+print(disp_paired_test)
+write.csv(disp_paired_test,
+          "results/1_longitudinal_change/ordination/betadisper_distance_to_centroid_paired_test.csv",
+          row.names = FALSE)
+
+(pl_disp_eth <- disp_df %>%
+    mutate(timepoint = factor(timepoint, levels = c("baseline", "follow-up"),
+                              labels = c("Baseline", "Follow-up"))) %>%
+    ggplot(aes(x = EthnicityTot, y = dist_to_centroid)) +
+    geom_violin(aes(fill = EthnicityTot), colour = NA, alpha = 0.8) +
+    geom_boxplot(fill = "white", width = 0.2, outlier.size = 0.5) +
+    facet_wrap(~timepoint) +
+    scale_fill_manual(values = eth_colors, guide = "none") +
+    labs(x = "", y = "Distance to group centroid (Bray-Curtis)",
+         title = "Within-ethnicity dispersion (PERMDISP) by timepoint") +
+    theme_Publication() +
+    coord_flip())
+ggsave(pl_disp_eth,
+       filename = "results/1_longitudinal_change/ordination/betadisper_distance_to_centroid_by_ethnicity.pdf",
+       width = 8, height = 5)
+
 (pl_bray_eth <- df %>%
     filter(!is.na(EthnicityTot) & EthnicityTot != "Other") %>%
     ggplot(aes(BrayPCo1, BrayPCo2)) +
