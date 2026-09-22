@@ -18,8 +18,6 @@ batch_files <- c(
 )
 
 #### Constants ####
-PLOT_CLADES <- c("Clade I", "Clade II", "Clade III", "Clade IV")
-
 # Hand-picked high-contrast palette — must match 3_draw_tree.R
 clade_pal <- c("#4E79A7", "#F28E2B", "#59A14F", "#E15759", "#B07AA1",
                "#76B7B2", "#EDC948", "#FF9DA7", "#9C755F", "#BAB0AC")
@@ -32,8 +30,10 @@ bin_quality_clade <- readRDS(file.path(results_dir, "bin_quality_clade.RDS"))
 all_clades   <- sort(unique(tip_meta_clades$clade))
 clade_colors <- setNames(clade_pal[seq_along(all_clades)], all_clades)
 
-# Restrict analyses to clades with at least MIN_CLADE_N bins total
-MIN_CLADE_N  <- 20
+# Restrict analyses to clades with at least MIN_CLADE_N bins total.
+# Must match MIN_CLADE_SIZE in 3_draw_tree.R, or clades can appear in the
+# tree/functional figures there but silently drop out of the plots here.
+MIN_CLADE_N  <- 5
 clade_levels <- tip_meta_clades %>%
   count(clade) %>%
   filter(n >= MIN_CLADE_N) %>%
