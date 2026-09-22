@@ -294,8 +294,13 @@ clade_nodes <- map_dfr(sort(unique(tip_clusters)), function(cl) {
 # for group-wise stats (n_tips >= MIN_CLADE_SIZE), numbered by descending
 # size so Clade I is the largest — this keeps the numbering contiguous
 # (I, II, III, ...) instead of skipping labels for excluded clusters.
-# Smaller clusters get a plain descriptive label instead of a roman numeral.
+# Smaller clusters get a plain descriptive label instead of a roman numeral
+# for tables/stats (`clade`), but still get a short roman-numeral label on
+# the tree figure itself (`tree_label`), continuing the same I, II, III, ...
+# sequence past the named clades — so every highlighted clade on the tree is
+# labelled, not just the ones large enough for group-wise comparisons.
 clade_nodes <- clade_nodes %>% arrange(desc(n_tips))
+clade_nodes$tree_label <- as.character(as.roman(seq_len(nrow(clade_nodes))))
 named_idx   <- which(clade_nodes$n_tips >= MIN_CLADE_SIZE)
 clade_nodes$clade <- NA_character_
 clade_nodes$clade[named_idx]  <- paste0("Clade ", as.roman(seq_along(named_idx)))
@@ -506,11 +511,13 @@ p_base <- p_base %<+%
   )
 
 # Clade labels — positioned at the mean y (angle) of each clade's tips,
-# pushed outward past the heatmap rings.
+# pushed outward past the heatmap rings. Every detected clade gets a label
+# here (not just PLOT_CLADES), using the roman-numeral tree_label — small
+# clades that are excluded from group-wise stats are still real, highlighted
+# clades on the tree and shouldn't be unlabelled.
 clade_nodes_focal <- clade_nodes %>%
-  filter(clade %in% PLOT_CLADES) %>%
   arrange(clade) %>%
-  mutate(short_label = sub("^Clade ", "", clade))
+  mutate(short_label = tree_label)
 
 # Compute mean y (= angular position) of tips per clade
 clade_tip_angles <- tibble(
@@ -519,7 +526,6 @@ clade_tip_angles <- tibble(
 ) %>%
   left_join(clade_nodes %>% dplyr::select(cluster, clade), by = "cluster") %>%
   left_join(tip_layout %>% dplyr::select(label, y), by = "label") %>%
-  filter(clade %in% PLOT_CLADES) %>%
   group_by(clade) %>%
   summarise(mean_y = mean(y, na.rm = TRUE), .groups = "drop")
 
