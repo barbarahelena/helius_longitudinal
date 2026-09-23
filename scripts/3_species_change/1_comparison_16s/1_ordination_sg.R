@@ -110,6 +110,41 @@ label_df_tp <- data.frame(
     })
 )
 
+#### Ethnicity x timepoint interaction (PERMANOVA) + dispersion (PERMDISP) ####
+# The per-timepoint PERMANOVA fits above have no test attached to their
+# difference and R² conflates centroid location with within-group
+# dispersion. Fit a single model with an EthnicityTot x timepoint
+# interaction (restricted permutation within participant), and test
+# dispersion separately with betadisper()/permutest() on the same
+# distance matrix, grouped by ethnicity x timepoint.
+set.seed(1234)
+df_eth <- df %>% filter(!is.na(EthnicityTot), EthnicityTot != "Other")
+bray_eth <- as.dist(as.matrix(bray)[df_eth$sampleID, df_eth$sampleID])
+ctrl_eth <- how(blocks = df_eth$ID, nperm = 999)
+res_interaction_sg <- adonis2(bray_eth ~ EthnicityTot * timepoint, data = df_eth,
+                               by = "terms", permutations = ctrl_eth)
+print(res_interaction_sg)
+write.csv(as.data.frame(res_interaction_sg),
+          file.path(resultsfolder, "permanova_ethnicity_timepoint_interaction_sg.csv"))
+
+disp_eth_sg <- betadisper(bray_eth,
+                          group = interaction(df_eth$EthnicityTot, df_eth$timepoint, drop = TRUE, sep = " - "),
+                          type = "centroid")
+disp_test_sg <- permutest(disp_eth_sg, permutations = ctrl_eth)
+print(disp_test_sg)
+write.csv(as.data.frame(disp_test_sg$tab),
+          file.path(resultsfolder, "betadisper_ethnicity_timepoint_sg.csv"))
+
+fmt_pval_eth_sg <- function(p) ifelse(p < 0.001, "< 0.001", format(round(p, 3), nsmall = 3))
+interaction_row_sg <- res_interaction_sg["EthnicityTot:timepoint", ]
+interaction_label_sg <- paste0(
+    "Ethnicity x timepoint: R² = ", format(round(interaction_row_sg$R2, 3), nsmall = 3),
+    ", p ", fmt_pval_eth_sg(interaction_row_sg$`Pr(>F)`)
+)
+dispersion_label_sg <- paste0(
+    "PERMDISP: p ", fmt_pval_eth_sg(disp_test_sg$tab$`Pr(>F)`[1])
+)
+
 df_tp_pcoa <- df %>%
     filter(!is.na(EthnicityTot), EthnicityTot != "Other") %>%
     mutate(timepoint = factor(timepoint, levels = c("baseline", "follow-up")))
@@ -128,7 +163,8 @@ df_tp_pcoa <- df %>%
     facet_wrap(~timepoint, scales = "free") +
     xlab(paste0('PCo1 (', round(expl_variance_bray[1], digits = 1),'%)')) +
     ylab(paste0('PCo2 (', round(expl_variance_bray[2], digits = 1),'%)')) +
-    labs(color = "", title = "PCoA Bray-Curtis — by timepoint") +
+    labs(color = "", title = "PCoA Bray-Curtis — by timepoint",
+         caption = paste0(interaction_label_sg, "  |  ", dispersion_label_sg)) +
     theme_Publication() +
     theme(legend.position = "bottom"))
 ggsave(pl_pcoa_tp, filename = file.path(resultsfolder, "PCoA_BrayCurtis_sg_timepoint.pdf"),
