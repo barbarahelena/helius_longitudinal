@@ -4,6 +4,8 @@
 library(phyloseq)
 library(vegan)
 library(permute)
+library(lme4)
+library(lmerTest)
 library(tidyverse)
 library(ggplot2)
 library(ggpubr)
@@ -182,6 +184,23 @@ write.csv(disp_paired_test,
           "results/1_longitudinal_change/ordination/betadisper_distance_to_centroid_paired_test.csv",
           row.names = FALSE)
 
+# Formal test: does the *change* in dispersion over time differ by ethnicity?
+# The six per-ethnicity paired tests above are descriptive only (six separate
+# tests, no joint significance). Test the EthnicityTot x timepoint
+# interaction on distance-to-centroid directly with a paired mixed model,
+# following the lmer(outcome ~ EthnicityTot * timepoint + (1|ID)) convention
+# used for longitudinal LMMs elsewhere in this project (e.g. scripts/5_arg).
+model_disp_int <- lmer(dist_to_centroid ~ EthnicityTot * timepoint + (1 | ID), data = disp_df)
+anova_disp_int <- anova(model_disp_int)
+print(anova_disp_int)
+write.csv(as.data.frame(anova_disp_int),
+          "results/1_longitudinal_change/ordination/betadisper_lmm_interaction.csv")
+
+disp_interaction_pval <- anova_disp_int["EthnicityTot:timepoint", "Pr(>F)"]
+disp_interaction_label <- paste0(
+    "Dispersion change x ethnicity (LMM interaction): p ", fmt_pval_eth(disp_interaction_pval)
+)
+
 (pl_disp_eth <- disp_df %>%
     mutate(timepoint = factor(timepoint, levels = c("baseline", "follow-up"),
                               labels = c("Baseline", "Follow-up"))) %>%
@@ -191,7 +210,8 @@ write.csv(disp_paired_test,
     facet_wrap(~timepoint) +
     scale_fill_manual(values = eth_colors, guide = "none") +
     labs(x = "", y = "Distance to group centroid (Bray-Curtis)",
-         title = "Within-ethnicity dispersion (PERMDISP) by timepoint") +
+         title = "Within-ethnicity dispersion (PERMDISP) by timepoint",
+         caption = disp_interaction_label) +
     theme_Publication() +
     coord_flip())
 ggsave(pl_disp_eth,
