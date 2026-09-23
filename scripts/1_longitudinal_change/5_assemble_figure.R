@@ -29,12 +29,12 @@ ht_fu_fig   <- make_core_heatmap(fu_mats_union$median, fu_mats_union$prevalence,
 heatmap_gg <- as.ggplot(function() {
     draw(ht_base_fig + ht_fu_fig,
          annotation_legend_side = "right",
-         padding = unit(c(5, 2, 5, 10), "mm"))
+         padding = unit(c(5, 7.5, 5, 10), "mm"))
 })
 
 ## Assemble Figure 1
 left_panels <- ggarrange(
-    ggarrange(pl_fig1_A, pl_fig1_B, widths = c(1, 1.1), labels = c("A", "B")),
+    ggarrange(pl_fig1_A, pl_fig1_B, widths = c(1.1, 1.1), labels = c("A", "B")),
     ggarrange(pl_fig1_C, pl_fig1_D, nrow = 1, labels = c("C", "D"), widths = c(1, 1.25)),
     ggarrange(pl_fig1_E, pl_fig1_F, widths = c(1.25, 1), labels = c("E", "F")),
     nrow = 3, heights = c(1, 1, 1.4))
