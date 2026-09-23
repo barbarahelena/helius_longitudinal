@@ -347,12 +347,18 @@ centroid_d2 <- function(w) {
     G / outer(n_g, n_g) - outer(within, within, "+") / 2
 }
 
-pair_centroid_dist <- function(w, tp) {
+pair_centroid_dist <- function(w, tp1, tp2 = tp1) {
     d <- sqrt(pmax(centroid_d2(w), 0))
-    map_dbl(eth_pairs, \(p) d[paste(p[1], tp, sep = " - "), paste(p[2], tp, sep = " - ")])
+    map_dbl(eth_pairs, \(p) d[paste(p[1], tp1, sep = " - "), paste(p[2], tp2, sep = " - ")])
 }
-pair_centroid_delta <- function(w) {
-    pair_centroid_dist(w, "follow-up") - pair_centroid_dist(w, "baseline")
+# Who moved: change in centroid distance when only group 1 (or only group 2)
+# is taken to follow-up while the other group stays at its baseline centroid.
+# The two do not sum exactly to the joint change (distances are not additive).
+pair_centroid_stats <- function(w) {
+    base <- pair_centroid_dist(w, "baseline")
+    cbind(delta_centroid = pair_centroid_dist(w, "follow-up") - base,
+          delta_group1_moves = pair_centroid_dist(w, "follow-up", "baseline") - base,
+          delta_group2_moves = pair_centroid_dist(w, "baseline", "follow-up") - base)
 }
 
 w_obs <- rep(1, nrow(dfanova_eth))
@@ -361,20 +367,29 @@ ids_by_eth <- dfanova_eth %>% distinct(ID, EthnicityTot) %>%
     mutate(ID = as.character(ID)) %>% group_split(EthnicityTot)
 set.seed(1234)
 n_boot <- 2000
-boot_delta <- replicate(n_boot, {
+boot_stats <- replicate(n_boot, {
     drawn <- unlist(map(ids_by_eth, \(g) sample(g$ID, replace = TRUE)))
     counts <- table(factor(drawn, levels = unique(id_chr)))
-    pair_centroid_delta(as.numeric(counts[id_chr]))
-})
+    pair_centroid_stats(as.numeric(counts[id_chr]))
+}, simplify = "array")
+obs_stats <- pair_centroid_stats(w_obs)
+boot_low  <- apply(boot_stats, c(1, 2), quantile, probs = 0.025)
+boot_high <- apply(boot_stats, c(1, 2), quantile, probs = 0.975)
 
 centroid_change <- tibble(
     group1 = map_chr(eth_pairs, 1),
     group2 = map_chr(eth_pairs, 2),
     dist_baseline = pair_centroid_dist(w_obs, "baseline"),
     dist_followup = pair_centroid_dist(w_obs, "follow-up"),
-    delta_centroid = dist_followup - dist_baseline,
-    conf.low = apply(boot_delta, 1, quantile, probs = 0.025),
-    conf.high = apply(boot_delta, 1, quantile, probs = 0.975),
+    delta_centroid = obs_stats[, "delta_centroid"],
+    conf.low = boot_low[, "delta_centroid"],
+    conf.high = boot_high[, "delta_centroid"],
+    delta_group1_moves = obs_stats[, "delta_group1_moves"],
+    group1_conf.low = boot_low[, "delta_group1_moves"],
+    group1_conf.high = boot_high[, "delta_group1_moves"],
+    delta_group2_moves = obs_stats[, "delta_group2_moves"],
+    group2_conf.low = boot_low[, "delta_group2_moves"],
+    group2_conf.high = boot_high[, "delta_group2_moves"],
     pair = paste(group1, "–", group2)
 ) %>%
     left_join(dplyr::select(pw_delta, group1, group2, delta_R2), by = c("group1", "group2"))
