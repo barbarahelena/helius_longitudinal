@@ -10,10 +10,6 @@ version = "0.1.0"
 datacleaning        = "Rscript scripts/0_run_workflows/3_datacleaning/datacleaning.R"
 qc-summary          = "Rscript scripts/0_run_workflows/4_qc_summary/qc_summary.R"
 
-# Strain retention (inStrain) — step 2 runs on Snellius, see the .sh script
-strain-manifest     = "Rscript scripts/0_run_workflows/2_run_shotgun_pipelines/strain_stability/1_make_instrain_manifest.R"
-strain-collect      = "Rscript scripts/0_run_workflows/2_run_shotgun_pipelines/strain_stability/3_collect_instrain_results.R"
-
 # Chapter 1 — Longitudinal change
 lc-table1           = "Rscript scripts/1_longitudinal_change/1_table1.R"
 lc-ordination-calc  = "Rscript scripts/1_longitudinal_change/2a_ordination_calc.R"
