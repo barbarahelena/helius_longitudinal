@@ -35,11 +35,37 @@ MIN_BITSCORE    <- 50
 TARGET_MODULES  <- c("M00129", "M00014")
 MIN_CLADE_SIZE  <- 5   # clades smaller than this are excluded from PLOT_CLADES (too few bins for group-wise stats)
 N_TOP_VF        <- 2   # number of top VFDB categories to display
+TREE_COMPL_MIN  <- 90  # CheckM2 completeness (%) required for a bin to enter the tree/clade analyses
+TREE_CONT_MAX   <- 5   # CheckM2 contamination (%) must be below this
 # PLOT_CLADES is set dynamically in section 8a, after clade calling, from all
 # clades with >= MIN_CLADE_SIZE tips — see that section for why.
 
 #### 1. Load tree ####
 tree <- read.iqtree(tree_file)
+
+# High-quality MAGs (>= 90% completeness, < 5% contamination) are used for the
+# tree figure and for everything that compares gene content between clades:
+# incomplete MAGs make genes look absent and contamination from related
+# strains blurs clade signals. Analyses of presence/abundance over time and of
+# clade composition keep all MAGs in the tree, because restricting them to
+# high-quality MAGs would select participants on assembly quality (which
+# depends on coverage, and differs between timepoints). Clades are called on
+# the full tree and checked against a call on the pruned tree (section 8a).
+# Pruning keeps branch lengths, so patristic distances between the remaining
+# tips are unchanged; bootstrap support is carried over by treeio::drop.tip.
+hq_bins <- map_dfr(batch_files, function(f) {
+  read.csv(f, check.names = FALSE) %>%
+    dplyr::select(bin, Completeness, Contamination)
+}) %>%
+  mutate(bin_name = sub("\\.fa$", "", bin)) %>%
+  filter(Completeness >= TREE_COMPL_MIN, Contamination < TREE_CONT_MAX) %>%
+  pull(bin_name)
+
+cat("Tips in full tree:", length(tree@phylo$tip.label),
+    "| high-quality bins (>=", TREE_COMPL_MIN, "% complete, <", TREE_CONT_MAX, "% contamination):",
+    length(hq_bins), "\n")
+tree_hq <- treeio::drop.tip(tree, setdiff(tree@phylo$tip.label, hq_bins))
+cat("Tips in tree pruned to high-quality bins:", length(tree_hq@phylo$tip.label), "\n")
 
 #### 2. Load translation sheet ####
 trans <- read.delim(trans_file, header = TRUE, sep = "\t", stringsAsFactors = FALSE) %>%
@@ -262,8 +288,11 @@ call_monophyletic_clades <- function(phylo, D, h) {
 # the same sweep shows a clean, wide plateau at 9 clades for h in
 # [0.029, 0.040] (12 consecutive grid points with no change) — by far the
 # most stable partition in the whole range — so that plateau is used as the
-# primary, data-driven cutoff. h = 0.02 (finer-grained, 26 clades) is kept
-# below purely as a sensitivity comparison, alongside the rest of the sweep.
+# primary, data-driven cutoff. On the tree pruned to high-quality bins, h =
+# 0.03 also lies in the most stable plateau ([0.025, 0.035], 5 clusters), and
+# those clusters are the full-tree clades restricted to high-quality tips
+# (checked below). h = 0.02 (finer-grained, 26 clades) is kept below purely
+# as a sensitivity comparison, alongside the rest of the sweep.
 H_CUT             <- 0.03    # primary: start of the [0.029, 0.040] plateau
 H_CUT_SENSITIVITY <- 0.02    # for comparison only, see clade_h_sensitivity.csv
 
@@ -363,13 +392,37 @@ clade_map <- tibble(
   left_join(clade_nodes %>% dplyr::select(cluster, clade), by = "cluster")
 
 tip_meta_clades <- tip_meta %>%
-  left_join(clade_map %>% dplyr::select(bin_name, clade), by = "bin_name")
+  left_join(clade_map %>% dplyr::select(bin_name, clade), by = "bin_name") %>%
+  mutate(hq = bin_name %in% hq_bins)
 
-# Run KW for all VFDB categories across PLOT_CLADES only (baseline bins only)
-# — restricted to clades with enough tips (MIN_CLADE_SIZE) so the comparison
+# Check: clades called on the tree pruned to high-quality bins must be the
+# full-tree clades restricted to high-quality tips, so both sets of analyses
+# share one set of clade labels.
+phylo_hq        <- tree_hq@phylo
+D_hq            <- ape::cophenetic.phylo(phylo_hq)
+tip_clusters_hq <- call_monophyletic_clades(phylo_hq, D_hq, H_CUT)
+hq_vs_full <- tibble(bin_name = names(tip_clusters_hq), cluster_hq = tip_clusters_hq) %>%
+  left_join(clade_map %>% dplyr::select(bin_name, clade), by = "bin_name") %>%
+  distinct(cluster_hq, clade)
+if (any(duplicated(hq_vs_full$cluster_hq)) || any(duplicated(hq_vs_full$clade))) {
+  print(hq_vs_full)
+  stop("Clades on the high-quality tree differ from the full-tree clades — review clade labels.")
+}
+cat("Clade check:", nrow(hq_vs_full), "clusters on the high-quality tree match the full-tree clades.\n")
+
+# Gene-content comparisons use high-quality bins only, in clades with at least
+# MIN_CLADE_SIZE high-quality bins. Each participant contributes one bin, so
+# bins from both timepoints are used (no pseudoreplication).
+hq_clade_n <- tip_meta_clades %>% filter(hq) %>% count(clade)
+PLOT_CLADES_HQ <- intersect(PLOT_CLADES, hq_clade_n$clade[hq_clade_n$n >= MIN_CLADE_SIZE])
+cat("PLOT_CLADES_HQ (>=", MIN_CLADE_SIZE, "high-quality bins):", paste(PLOT_CLADES_HQ, collapse = ", "), "\n")
+print(hq_clade_n)
+
+# Run KW for all VFDB categories across PLOT_CLADES_HQ only — restricted to
+# clades with enough high-quality tips (MIN_CLADE_SIZE) so the comparison
 # isn't diluted by singleton/near-singleton groups.
 tip_meta_focal <- tip_meta_clades %>%
-  filter(timepoint == "baseline", clade %in% PLOT_CLADES)
+  filter(hq, clade %in% PLOT_CLADES_HQ)
 
 vf_kw <- map_dfr(vf_cat_cols, function(cat) {
   vals  <- tip_meta_focal[[cat]]
@@ -404,7 +457,8 @@ cat("Top", N_TOP_VF, "VF categories for plots:", paste(TOP_VF_CATS, collapse = "
 # Re-derive clades at each h with the same monophyletic caller, then check
 # whether (i) the number of clades that are majority-Dutch vs majority-SAS
 # among PLOT_CLADES-sized clusters is stable, and (ii) the top VF categories
-# above stay significantly different across clades (Kruskal-Wallis).
+# above stay significantly different across clades (Kruskal-Wallis, high-quality
+# bins in clusters with >= MIN_CLADE_SIZE high-quality bins).
 H_SWEEP <- c(0.02, 0.025, 0.03, 0.035, 0.04)
 
 sensitivity_results <- map_dfr(H_SWEEP, function(h) {
@@ -431,8 +485,14 @@ sensitivity_results <- map_dfr(H_SWEEP, function(h) {
   n_sas_enriched <- eth_by_cluster %>%
     filter(EthnicityTot == "South-Asian Surinamese", prop > 0.5) %>% nrow()
 
+  meta_h_hq <- meta_h %>% filter(bin_name %in% hq_bins)
+  big_clusters_hq <- meta_h_hq %>%
+    count(cluster) %>%
+    filter(n >= MIN_CLADE_SIZE) %>%
+    pull(cluster)
+
   vf_h <- map_dfr(TOP_VF_CATS, function(cat) {
-    sub <- meta_h %>% filter(cluster %in% big_clusters, timepoint == "baseline")
+    sub <- meta_h_hq %>% filter(cluster %in% big_clusters_hq)
     if (n_distinct(sub$cluster) < 2 || var(sub[[cat]], na.rm = TRUE) == 0) {
       return(tibble(vf_category = cat, kw_p = NA_real_))
     }
@@ -456,9 +516,11 @@ write.csv(sensitivity_results, file.path(results_dir, "clade_h_sensitivity.csv")
 # Pre-compute tip layout here so we can restrict each highlight to the exact
 # angular (y) range of its own tips — prevents the largest clade from wrapping
 # around the entire circle.
-p_base <- ggtree(tree, layout = "circular", size = 0.35)
+# The tree figure shows high-quality bins only (tree pruned in section 1),
+# with the full-tree clades (identical partition, checked in 8a-ii).
+p_base <- ggtree(tree_hq, layout = "circular", size = 0.35)
 
-tree_layout <- fortify(tree)
+tree_layout <- fortify(tree_hq)
 tip_layout  <- tree_layout %>% filter(isTip)
 max_tip_x   <- max(tip_layout$x, na.rm = TRUE)
 
@@ -468,7 +530,7 @@ clade_y_ranges <- tibble(
 ) %>%
   left_join(clade_nodes %>% dplyr::select(cluster, clade), by = "cluster") %>%
   left_join(tip_layout %>% dplyr::select(label, y), by = "label") %>%
-  filter(!is.na(clade)) %>%
+  filter(!is.na(clade), !is.na(y)) %>%
   group_by(clade) %>%
   summarise(ymin = min(y) - 0.5, ymax = max(y) + 0.5, .groups = "drop")
 
@@ -530,7 +592,7 @@ clade_tip_angles <- tibble(
   summarise(mean_y = mean(y, na.rm = TRUE), .groups = "drop")
 
 # ---- 8d. Annotation strips via gheatmap ----
-all_tips <- tree@phylo$tip.label
+all_tips <- tree_hq@phylo$tip.label
 
 # Helper: build a matrix aligned to tree tips (rownames = tip labels)
 align_to_tips <- function(df) {
@@ -554,6 +616,7 @@ label_x_final <- max_tip_x * (1 + o_vfdb / max_tip_x + w_vfdb + 0.12)
 
 clade_label_df <- clade_nodes_focal %>%
   left_join(clade_tip_angles, by = "clade") %>%
+  filter(!is.na(mean_y)) %>%   # clades without high-quality tips are not on this tree
   mutate(x_pos = label_x_final,
          color = clade_colors[clade])
 
@@ -585,7 +648,7 @@ p1 <- gheatmap(
     low = "#2166AC", mid = "white", high = "#B2182B", midpoint = 0,
     name = "VFDB\n(z-score)", na.value = "grey92"
   ) +
-  ggtitle("Tree of Alistipes putredinis bins") +
+  ggtitle("Tree of Alistipes putredinis bins (high quality)") +
   theme(plot.title = element_text(hjust = 0.5, face = "bold", size = 18))
 
 ggsave(
@@ -619,9 +682,11 @@ clade_summary <- tip_meta_clades %>%
     n_sas     = sum(EthnicityTot == "South-Asian Surinamese", na.rm = TRUE),
     pct_dutch = round(n_dutch / n_total * 100, 1),
     pct_sas   = round(n_sas   / n_total * 100, 1),
+    n_hq      = sum(hq),
+    # Gene-content means over high-quality bins only
     across(all_of(TOP_VF_CATS),
-           ~ round(mean(.x, na.rm = TRUE), 5),
-           .names = "mean_{.col}"),
+           ~ round(mean(.x[hq], na.rm = TRUE), 5),
+           .names = "mean_hq_{.col}"),
     .groups = "drop"
   ) %>%
   arrange(clade)
@@ -696,20 +761,21 @@ p_eth <- ggplot(eth_clade_long, aes(x = clade, y = prop, fill = EthnicityTot)) +
 
 ## 10b. Functional proportions per clade (boxplot, one panel per top VF category)
 # Colour/pair helpers shared across functional plots
-clade_levels    <- PLOT_CLADES
+clade_levels    <- PLOT_CLADES_HQ
 clade_pairs_all <- combn(clade_levels, 2, simplify = FALSE)
-clade_fill_cols <- clade_colors[PLOT_CLADES]
+clade_fill_cols <- clade_colors[PLOT_CLADES_HQ]
 
-# Restricted to baseline bins only (avoids pseudoreplication from paired timepoints)
+# High-quality bins only; bins from both timepoints (one bin per participant,
+# so no pseudoreplication)
 func_long <- tip_meta_clades %>%
-  filter(timepoint == "baseline") %>%
+  filter(hq) %>%
   dplyr::select(clade, all_of(TOP_VF_CATS)) %>%
   pivot_longer(cols = -clade,
                names_to = "feature", values_to = "proportion")
 
 func_long_filt <- func_long %>%
-  filter(clade %in% PLOT_CLADES) %>%
-  mutate(clade = factor(clade, levels = PLOT_CLADES))
+  filter(clade %in% PLOT_CLADES_HQ) %>%
+  mutate(clade = factor(clade, levels = PLOT_CLADES_HQ))
 
 # Kruskal-Wallis per feature; pairwise Wilcoxon (BH) only where KW p < 0.05
 sig_pairs <- map_dfr(unique(func_long_filt$feature), function(feat) {

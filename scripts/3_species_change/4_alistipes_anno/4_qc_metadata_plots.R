@@ -57,9 +57,19 @@ make_clade_pairs <- function(kw_res, var_col, df) {
     { map2(.$group1, .$group2, c) }
 }
 
-#### 1. Clinical variables per clade (Age, BMI, Sex) — baseline bins only ####
+#### 1. Clinical variables per clade (Age, BMI, Sex) — high-quality bins only ####
+# Same bin set as the gene-content comparisons in 3_draw_tree.R: high-quality
+# bins (hq), in clades with >= MIN_CLADE_N of them. One bin per participant,
+# so bins from both timepoints are used; Age/BMI/Sex are taken from the sample
+# the bin was assembled from.
+clade_levels_hq <- tip_meta_clades %>%
+  filter(hq, clade %in% clade_levels) %>%
+  count(clade) %>%
+  filter(n >= MIN_CLADE_N) %>%
+  pull(clade)
 clin_clade <- tip_meta_clades %>%
-  filter(timepoint == "baseline", clade %in% clade_levels) %>%  mutate(clade = factor(clade, levels = clade_levels))
+  filter(hq, clade %in% clade_levels_hq) %>%
+  mutate(clade = factor(clade, levels = clade_levels_hq))
 
 aov_age <- aov(Age ~ clade, data = clin_clade)
 aov_bmi <- aov(BMI ~ clade, data = clin_clade)
