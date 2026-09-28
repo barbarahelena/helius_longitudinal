@@ -6,6 +6,7 @@ library(vegan)
 library(permute)
 library(lme4)
 library(lmerTest)
+library(emmeans)
 library(tidyverse)
 library(ggplot2)
 library(ggpubr)
@@ -167,29 +168,35 @@ write.csv(disp_summary,
 disp_wide <- disp_df %>%
     dplyr::select(ID, EthnicityTot, timepoint, dist_to_centroid) %>%
     pivot_wider(names_from = timepoint, values_from = dist_to_centroid) %>%
-    filter(!is.na(baseline) & !is.na(`follow-up`))
+    filter(!is.na(baseline) & !is.na(`follow-up`)) %>%
+    mutate(delta = `follow-up` - baseline)
 
-disp_paired_test <- disp_wide %>%
-    group_by(EthnicityTot) %>%
-    summarise(
-        n = n(),
-        mean_delta = mean(`follow-up` - baseline),
-        p_wilcoxon = wilcox.test(`follow-up`, baseline, paired = TRUE)$p.value,
-        .groups = "drop"
-    ) %>%
-    mutate(padj = p.adjust(p_wilcoxon, method = "BH"),
-           direction = ifelse(mean_delta < 0, "tighter (less dispersed)", "more spread out"))
-print(disp_paired_test)
-write.csv(disp_paired_test,
-          "results/1_longitudinal_change/ordination/betadisper_distance_to_centroid_paired_test.csv",
+# Per-participant change in distance-to-centroid, compared across ethnicities.
+# Per-group p-values against zero cannot say which groups differ from each
+# other (small groups just have wide CIs), so estimate each group's mean
+# change with a CI and test the pairwise contrasts on the change directly.
+aov_delta <- aov(delta ~ EthnicityTot, data = disp_wide)
+em_delta <- emmeans(aov_delta, ~ EthnicityTot)
+disp_delta <- as.data.frame(summary(em_delta, infer = TRUE)) %>%
+    transmute(EthnicityTot, mean_delta = emmean, conf.low = lower.CL,
+              conf.high = upper.CL, p_vs_zero = p.value)
+disp_delta_contrasts <- as.data.frame(summary(pairs(em_delta), infer = TRUE)) %>%
+    dplyr::select(contrast, estimate, conf.low = lower.CL, conf.high = upper.CL, p.value)
+print(disp_delta)
+print(disp_delta_contrasts)
+print(kruskal.test(delta ~ factor(EthnicityTot), data = disp_wide))
+write.csv(disp_delta,
+          "results/1_longitudinal_change/ordination/betadisper_distance_to_centroid_delta_by_ethnicity.csv",
+          row.names = FALSE)
+write.csv(disp_delta_contrasts,
+          "results/1_longitudinal_change/ordination/betadisper_distance_to_centroid_delta_contrasts.csv",
           row.names = FALSE)
 
-# Formal test: does the *change* in dispersion over time differ by ethnicity?
-# The six per-ethnicity paired tests above are descriptive only (six separate
-# tests, no joint significance). Test the EthnicityTot x timepoint
-# interaction on distance-to-centroid directly with a paired mixed model,
-# following the lmer(outcome ~ EthnicityTot * timepoint + (1|ID)) convention
-# used for longitudinal LMMs elsewhere in this project (e.g. scripts/5_arg).
+# Formal omnibus test: does the *change* in dispersion over time differ by
+# ethnicity? Same test as a one-way ANOVA on the per-participant change
+# above, fitted as a paired mixed model following the
+# lmer(outcome ~ EthnicityTot * timepoint + (1|ID)) convention used for
+# longitudinal LMMs elsewhere in this project (e.g. scripts/5_arg).
 model_disp_int <- lmer(dist_to_centroid ~ EthnicityTot * timepoint + (1 | ID), data = disp_df)
 anova_disp_int <- anova(model_disp_int)
 print(anova_disp_int)
@@ -315,6 +322,91 @@ print(pw_delta)
 
 ggsave(pl_delta_R2,
        filename = "results/1_longitudinal_change/ordination/pairwise_permanova_deltaR2.pdf",
+       width = 7, height = 6)
+
+#### Change in between-group centroid distance (independent of dispersion) ####
+# Pairwise R² = SS_between / SS_total moves with within-group dispersion, so
+# it cannot cleanly measure convergence. The distance between group
+# centroids does not. Computed from the squared distance matrix,
+# |c_a - c_b|^2 = mean_ab(d^2) - mean_aa(d^2)/2 - mean_bb(d^2)/2, which is the
+# quantity betadisper() works with (no truncation of the ordination axes,
+# negative-eigenvalue axes included). Participants are resampled within
+# ethnicity, keeping both timepoints of a participant together.
+print('Centroid distance change per ethnicity pair (bootstrap)..')
+D2 <- as.matrix(bray_eth)^2
+eth_tp_levels <- levels(dfanova_eth$eth_tp)
+grp_idx <- match(as.character(dfanova_eth$eth_tp), eth_tp_levels)
+
+centroid_d2 <- function(w) {
+    Wm <- matrix(0, length(eth_tp_levels), length(w),
+                 dimnames = list(eth_tp_levels, NULL))
+    Wm[cbind(grp_idx, seq_along(w))] <- w
+    n_g <- rowSums(Wm)
+    G <- Wm %*% D2 %*% t(Wm)
+    within <- diag(G) / n_g^2
+    G / outer(n_g, n_g) - outer(within, within, "+") / 2
+}
+
+pair_centroid_dist <- function(w, tp1, tp2 = tp1) {
+    d <- sqrt(pmax(centroid_d2(w), 0))
+    map_dbl(eth_pairs, \(p) d[paste(p[1], tp1, sep = " - "), paste(p[2], tp2, sep = " - ")])
+}
+# Who moved: change in centroid distance when only group 1 (or only group 2)
+# is taken to follow-up while the other group stays at its baseline centroid.
+# The two do not sum exactly to the joint change (distances are not additive).
+pair_centroid_stats <- function(w) {
+    base <- pair_centroid_dist(w, "baseline")
+    cbind(delta_centroid = pair_centroid_dist(w, "follow-up") - base,
+          delta_group1_moves = pair_centroid_dist(w, "follow-up", "baseline") - base,
+          delta_group2_moves = pair_centroid_dist(w, "baseline", "follow-up") - base)
+}
+
+w_obs <- rep(1, nrow(dfanova_eth))
+id_chr <- as.character(dfanova_eth$ID)
+ids_by_eth <- dfanova_eth %>% distinct(ID, EthnicityTot) %>%
+    mutate(ID = as.character(ID)) %>% group_split(EthnicityTot)
+set.seed(1234)
+n_boot <- 2000
+boot_stats <- replicate(n_boot, {
+    drawn <- unlist(map(ids_by_eth, \(g) sample(g$ID, replace = TRUE)))
+    counts <- table(factor(drawn, levels = unique(id_chr)))
+    pair_centroid_stats(as.numeric(counts[id_chr]))
+}, simplify = "array")
+obs_stats <- pair_centroid_stats(w_obs)
+boot_low  <- apply(boot_stats, c(1, 2), quantile, probs = 0.025)
+boot_high <- apply(boot_stats, c(1, 2), quantile, probs = 0.975)
+
+centroid_change <- tibble(
+    group1 = map_chr(eth_pairs, 1),
+    group2 = map_chr(eth_pairs, 2),
+    dist_baseline = pair_centroid_dist(w_obs, "baseline"),
+    dist_followup = pair_centroid_dist(w_obs, "follow-up"),
+    delta_centroid = obs_stats[, "delta_centroid"],
+    conf.low = boot_low[, "delta_centroid"],
+    conf.high = boot_high[, "delta_centroid"],
+    delta_group1_moves = obs_stats[, "delta_group1_moves"],
+    group1_conf.low = boot_low[, "delta_group1_moves"],
+    group1_conf.high = boot_high[, "delta_group1_moves"],
+    delta_group2_moves = obs_stats[, "delta_group2_moves"],
+    group2_conf.low = boot_low[, "delta_group2_moves"],
+    group2_conf.high = boot_high[, "delta_group2_moves"],
+    pair = paste(group1, "–", group2)
+) %>%
+    left_join(dplyr::select(pw_delta, group1, group2, delta_R2), by = c("group1", "group2"))
+print(as.data.frame(centroid_change))
+write.csv(centroid_change,
+          "results/1_longitudinal_change/ordination/centroid_distance_change.csv",
+          row.names = FALSE)
+
+(pl_centroid_change <- ggplot(centroid_change,
+                              aes(x = delta_centroid, y = reorder(pair, delta_centroid))) +
+    geom_vline(xintercept = 0, linetype = "dashed", colour = "grey50") +
+    geom_pointrange(aes(xmin = conf.low, xmax = conf.high)) +
+    labs(x = "Change in between-group centroid distance (follow-up – baseline)",
+         y = NULL, title = "Convergence of group centroids") +
+    theme_Publication())
+ggsave(pl_centroid_change,
+       filename = "results/1_longitudinal_change/ordination/centroid_distance_change.pdf",
        width = 7, height = 6)
 
 ## Distance between datapoints
