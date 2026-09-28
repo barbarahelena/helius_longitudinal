@@ -8,6 +8,7 @@ version = "0.1.0"
 [tasks]
 # Data cleaning (runs before all chapters)
 datacleaning        = "Rscript scripts/0_run_workflows/3_datacleaning/datacleaning.R"
+qc-summary          = "Rscript scripts/0_run_workflows/4_qc_summary/qc_summary.R"
 
 # Chapter 1 — Longitudinal change
 lc-table1           = "Rscript scripts/1_longitudinal_change/1_table1.R"
@@ -126,3 +127,4 @@ r-ggnewscale = ">=0.5.2,<0.6"
 bioconductor-ggtreeextra = ">=1.20.1,<2"
 r-ggalluvial = ">=0.12.6,<0.13"
 r-permute = ">=0.9_10,<0.10"
+r-openxlsx = ">=4.2.9,<5"
