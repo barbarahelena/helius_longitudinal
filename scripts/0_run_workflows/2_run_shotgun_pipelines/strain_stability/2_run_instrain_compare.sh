@@ -22,13 +22,14 @@
 # participants come first, hence --array=1-126 above. Set --array=1-164 to
 # include the low-coverage ones as well (they are flagged, not dropped).
 #
-# Environment (create once):
-#   conda create -n instrain -c bioconda -c conda-forge \
-#       instrain=1.9.0 bowtie2 samtools
+# Containers (pull once, on the login node):
+#   bash 0_pull_containers.sh
+# The inStrain biocontainer is Python-only and ships neither bowtie2 nor
+# samtools, so mapping uses separate images and is piped between them.
 #
 # Submit from the project root on Snellius:
 #   sbatch scripts/2_run_instrain_compare.sh
-# Check the paths below first with:
+# Check the paths and containers first with:
 #   PREFLIGHT=1 bash scripts/2_run_instrain_compare.sh
 
 set -euo pipefail
@@ -75,11 +76,26 @@ MIN_COV=5           # minimum coverage for a position to enter the comparison
 MIN_BREADTH=0.5     # minimum fraction of the genome covered in both samples
 
 THREADS="${SLURM_CPUS_PER_TASK:-8}"
-CONDA_ENV="instrain"
+
+# Containers, as pulled by 0_pull_containers.sh
+SIF_DIR="${SIF_DIR:-${BASE_DIR}/containers}"
+SIF_INSTRAIN="${SIF_DIR}/instrain.sif"
+SIF_BOWTIE2="${SIF_DIR}/bowtie2.sif"
+SIF_SAMTOOLS="${SIF_DIR}/samtools.sif"
+# On Snellius you may need to load the module in your submit environment:
+#   module load 2023 && module load Apptainer/1.2.5-GCCcore-12.3.0
+APPTAINER_BIN="${APPTAINER_BIN:-$(command -v apptainer || command -v singularity || true)}"
 
 # ---------------------------------------------------------------------------
 
 die() { echo "ERROR: $*" >&2; exit 1; }
+
+# Run a tool inside its container. BIND_DIRS is filled in once WORK exists.
+BIND_DIRS="${BASE_DIR}"
+sif_exec() {
+  local sif="$1"; shift
+  "$APPTAINER_BIN" exec --cleanenv -B "$BIND_DIRS" "$sif" "$@"
+}
 
 # Find the read pair for a sample; echoes "R1 R2" or dies with the paths tried.
 find_reads() {
@@ -113,18 +129,28 @@ if [[ "${PREFLIGHT:-0}" == "1" ]]; then
       echo "  reads ${s}  MISSING — adjust READS_DIRS / READS_PATTERNS"
     fi
   done
-  command -v inStrain >/dev/null 2>&1 || echo "  inStrain not on PATH (activate the ${CONDA_ENV} env)"
+  if [[ -z "$APPTAINER_BIN" ]]; then
+    echo "  apptainer/singularity NOT on PATH — load the module first, e.g."
+    echo "     module load 2023 && module load Apptainer/1.2.5-GCCcore-12.3.0"
+  else
+    echo "  container runtime  OK  ${APPTAINER_BIN}"
+    for s in "$SIF_INSTRAIN" "$SIF_BOWTIE2" "$SIF_SAMTOOLS"; do
+      [[ -s "$s" ]] && echo "  image  OK  ${s}" \
+                    || echo "  image  MISSING  ${s} — run 0_pull_containers.sh"
+    done
+    if [[ -s "$SIF_INSTRAIN" ]]; then
+      echo -n "  inStrain version: "; sif_exec "$SIF_INSTRAIN" inStrain --version 2>&1 | head -1
+    fi
+  fi
   exit 0
 fi
 
 [[ -n "${SLURM_ARRAY_TASK_ID:-}" ]] || die "not a job array; submit with sbatch"
 
-eval "$(conda shell.bash hook)"
-conda activate "$CONDA_ENV"
-
-# Fail here rather than halfway through mapping if the env is not what we expect
-for tool in bowtie2 bowtie2-build samtools inStrain; do
-  command -v "$tool" >/dev/null 2>&1 || die "${tool} not found after activating '${CONDA_ENV}'"
+# Fail here rather than halfway through mapping if the runtime or images are missing
+[[ -n "$APPTAINER_BIN" ]] || die "apptainer/singularity not on PATH — load the module before submitting"
+for s in "$SIF_INSTRAIN" "$SIF_BOWTIE2" "$SIF_SAMTOOLS"; do
+  [[ -s "$s" ]] || die "container image not found: ${s} (run 0_pull_containers.sh)"
 done
 
 # ---- Manifest row for this array task (row 1 = header) ----
@@ -153,6 +179,10 @@ mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "${OUT_DIR}/compare" "${OUT_DIR}/profile"
 
+# The containers need the project tree (bins, reads) and the node-local work dir.
+# The read files may sit outside BASE_DIR, so bind their parents too.
+BIND_DIRS="${BASE_DIR},${WORK},$(dirname "$R1_BL"),$(dirname "$R1_FU")"
+
 # ---- Scaffold-to-bin file: every scaffold belongs to this one genome ----
 STB="${WORK}/${BIN}.stb"
 awk -v g="${BIN}.fa" '/^>/{print substr($1,2)"\t"g}' "$FASTA" > "$STB"
@@ -160,13 +190,15 @@ echo "    scaffolds in MAG: $(wc -l < "$STB")"
 
 # ---- Map each timepoint's reads to this participant's own MAG ----
 IDX="${WORK}/idx"
-bowtie2-build --threads "$THREADS" -q "$FASTA" "$IDX"
+sif_exec "$SIF_BOWTIE2" bowtie2-build --threads "$THREADS" -q "$FASTA" "$IDX"
 
 map_sample() {
   local tag="$1" r1="$2" r2="$3" bam="${WORK}/${1}.bam"
-  bowtie2 -x "$IDX" -1 "$r1" -2 "$r2" -p "$THREADS" 2> "${WORK}/${tag}.bowtie2.log" \
-    | samtools sort -@ "$THREADS" -o "$bam" -
-  samtools index "$bam"
+  # bowtie2 and samtools live in different images; the host shell pipes between them
+  sif_exec "$SIF_BOWTIE2" bowtie2 -x "$IDX" -1 "$r1" -2 "$r2" -p "$THREADS" \
+      2> "${WORK}/${tag}.bowtie2.log" \
+    | sif_exec "$SIF_SAMTOOLS" samtools sort -@ "$THREADS" -o "$bam" -
+  sif_exec "$SIF_SAMTOOLS" samtools index "$bam"
   echo "    ${tag} alignment rate: $(grep 'overall alignment rate' "${WORK}/${tag}.bowtie2.log" || echo NA)"
 }
 map_sample baseline  "$R1_BL" "$R2_BL"
@@ -174,7 +206,7 @@ map_sample followup  "$R1_FU" "$R2_FU"
 
 # ---- inStrain profile per timepoint ----
 for tag in baseline followup; do
-  inStrain profile "${WORK}/${tag}.bam" "$FASTA" \
+  sif_exec "$SIF_INSTRAIN" inStrain profile "${WORK}/${tag}.bam" "$FASTA" \
     -o "${WORK}/${tag}.IS" \
     -p "$THREADS" \
     -s "$STB" \
@@ -183,7 +215,7 @@ for tag in baseline followup; do
 done
 
 # ---- inStrain compare: baseline vs follow-up ----
-inStrain compare \
+sif_exec "$SIF_INSTRAIN" inStrain compare \
   -i "${WORK}/baseline.IS" "${WORK}/followup.IS" \
   -o "${WORK}/compare.IS" \
   -p "$THREADS" \
