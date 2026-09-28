@@ -22,14 +22,14 @@
 # participants come first, hence --array=1-126 above. Set --array=1-164 to
 # include the low-coverage ones as well (they are flagged, not dropped).
 #
-# Containers (pull once, on the login node):
-#   bash 0_pull_containers.sh
-# The inStrain biocontainer is Python-only and ships neither bowtie2 nor
-# samtools, so mapping uses separate images and is piped between them.
+# Container: set CONTAINER below (or export it) to a .sif providing inStrain,
+# bowtie2 and samtools. Note that the plain inStrain biocontainer is
+# Python-only and ships neither bowtie2 nor samtools, so an image built from
+# just that will not work here — the preflight names any missing tool.
 #
 # Submit from the project root on Snellius:
 #   sbatch scripts/2_run_instrain_compare.sh
-# Check the paths and containers first with:
+# Check the paths and the container first with:
 #   PREFLIGHT=1 bash scripts/2_run_instrain_compare.sh
 
 set -euo pipefail
@@ -77,11 +77,10 @@ MIN_BREADTH=0.5     # minimum fraction of the genome covered in both samples
 
 THREADS="${SLURM_CPUS_PER_TASK:-8}"
 
-# Containers, as pulled by 0_pull_containers.sh
-SIF_DIR="${SIF_DIR:-${BASE_DIR}/containers}"
-SIF_INSTRAIN="${SIF_DIR}/instrain.sif"
-SIF_BOWTIE2="${SIF_DIR}/bowtie2.sif"
-SIF_SAMTOOLS="${SIF_DIR}/samtools.sif"
+# Container image. It must provide inStrain, bowtie2 and samtools; the
+# preflight below checks all three and names any that are missing.
+# Override without editing this file by exporting CONTAINER=/path/to/image.sif
+CONTAINER="${CONTAINER:-${BASE_DIR}/containers/instrain.sif}"
 # On Snellius you may need to load the module in your submit environment:
 #   module load 2023 && module load Apptainer/1.2.5-GCCcore-12.3.0
 APPTAINER_BIN="${APPTAINER_BIN:-$(command -v apptainer || command -v singularity || true)}"
@@ -90,11 +89,10 @@ APPTAINER_BIN="${APPTAINER_BIN:-$(command -v apptainer || command -v singularity
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 
-# Run a tool inside its container. BIND_DIRS is filled in once WORK exists.
+# Run a tool inside the container. BIND_DIRS is extended once WORK exists.
 BIND_DIRS="${BASE_DIR}"
 sif_exec() {
-  local sif="$1"; shift
-  "$APPTAINER_BIN" exec --cleanenv -B "$BIND_DIRS" "$sif" "$@"
+  "$APPTAINER_BIN" exec --cleanenv -B "$BIND_DIRS" "$CONTAINER" "$@"
 }
 
 # Find the read pair for a sample; echoes "R1 R2" or dies with the paths tried.
@@ -134,12 +132,18 @@ if [[ "${PREFLIGHT:-0}" == "1" ]]; then
     echo "     module load 2023 && module load Apptainer/1.2.5-GCCcore-12.3.0"
   else
     echo "  container runtime  OK  ${APPTAINER_BIN}"
-    for s in "$SIF_INSTRAIN" "$SIF_BOWTIE2" "$SIF_SAMTOOLS"; do
-      [[ -s "$s" ]] && echo "  image  OK  ${s}" \
-                    || echo "  image  MISSING  ${s} — run 0_pull_containers.sh"
-    done
-    if [[ -s "$SIF_INSTRAIN" ]]; then
-      echo -n "  inStrain version: "; sif_exec "$SIF_INSTRAIN" inStrain --version 2>&1 | head -1
+    if [[ -s "$CONTAINER" ]]; then
+      echo "  image  OK  ${CONTAINER}"
+      # Every tool the job needs must be inside the image
+      for tool in inStrain bowtie2 bowtie2-build samtools; do
+        if sif_exec command -v "$tool" >/dev/null 2>&1; then
+          echo "    ${tool}  OK  $(sif_exec "$tool" --version 2>&1 | head -1)"
+        else
+          echo "    ${tool}  MISSING from the image"
+        fi
+      done
+    else
+      echo "  image  MISSING  ${CONTAINER} — set CONTAINER=/path/to/image.sif"
     fi
   fi
   exit 0
@@ -149,8 +153,11 @@ fi
 
 # Fail here rather than halfway through mapping if the runtime or images are missing
 [[ -n "$APPTAINER_BIN" ]] || die "apptainer/singularity not on PATH — load the module before submitting"
-for s in "$SIF_INSTRAIN" "$SIF_BOWTIE2" "$SIF_SAMTOOLS"; do
-  [[ -s "$s" ]] || die "container image not found: ${s} (run 0_pull_containers.sh)"
+[[ -s "$CONTAINER" ]] || die "container image not found: ${CONTAINER} (set CONTAINER=/path/to/image.sif)"
+# Fail here rather than halfway through mapping if the image is missing a tool
+for tool in inStrain bowtie2 bowtie2-build samtools; do
+  sif_exec command -v "$tool" >/dev/null 2>&1 \
+    || die "'${tool}' not found inside ${CONTAINER}"
 done
 
 # ---- Manifest row for this array task (row 1 = header) ----
@@ -190,15 +197,15 @@ echo "    scaffolds in MAG: $(wc -l < "$STB")"
 
 # ---- Map each timepoint's reads to this participant's own MAG ----
 IDX="${WORK}/idx"
-sif_exec "$SIF_BOWTIE2" bowtie2-build --threads "$THREADS" -q "$FASTA" "$IDX"
+sif_exec bowtie2-build --threads "$THREADS" -q "$FASTA" "$IDX"
 
 map_sample() {
   local tag="$1" r1="$2" r2="$3" bam="${WORK}/${1}.bam"
   # bowtie2 and samtools live in different images; the host shell pipes between them
-  sif_exec "$SIF_BOWTIE2" bowtie2 -x "$IDX" -1 "$r1" -2 "$r2" -p "$THREADS" \
+  sif_exec bowtie2 -x "$IDX" -1 "$r1" -2 "$r2" -p "$THREADS" \
       2> "${WORK}/${tag}.bowtie2.log" \
-    | sif_exec "$SIF_SAMTOOLS" samtools sort -@ "$THREADS" -o "$bam" -
-  sif_exec "$SIF_SAMTOOLS" samtools index "$bam"
+    | sif_exec samtools sort -@ "$THREADS" -o "$bam" -
+  sif_exec samtools index "$bam"
   echo "    ${tag} alignment rate: $(grep 'overall alignment rate' "${WORK}/${tag}.bowtie2.log" || echo NA)"
 }
 map_sample baseline  "$R1_BL" "$R2_BL"
@@ -206,7 +213,7 @@ map_sample followup  "$R1_FU" "$R2_FU"
 
 # ---- inStrain profile per timepoint ----
 for tag in baseline followup; do
-  sif_exec "$SIF_INSTRAIN" inStrain profile "${WORK}/${tag}.bam" "$FASTA" \
+  sif_exec inStrain profile "${WORK}/${tag}.bam" "$FASTA" \
     -o "${WORK}/${tag}.IS" \
     -p "$THREADS" \
     -s "$STB" \
@@ -215,7 +222,7 @@ for tag in baseline followup; do
 done
 
 # ---- inStrain compare: baseline vs follow-up ----
-sif_exec "$SIF_INSTRAIN" inStrain compare \
+sif_exec inStrain compare \
   -i "${WORK}/baseline.IS" "${WORK}/followup.IS" \
   -o "${WORK}/compare.IS" \
   -p "$THREADS" \
