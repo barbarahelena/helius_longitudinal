@@ -480,21 +480,24 @@ for (i in seq_len(nrow(clade_y_ranges))) {
              alpha = 0.2)
 }
 
+# Tips are not shaped by timepoint: each tip is one co-assembled MAG (pooled
+# baseline + follow-up reads), and 139 of 180 (77%) are detected at both
+# timepoints. The "dominant sample" concept used elsewhere in this script
+# (whichever timepoint had higher re-mapped depth) reflects relative
+# abundance, not presence — among both-timepoint tips, the higher:lower depth
+# ratio is < 2x for 54% of them. Shaping tips by it would visually imply a
+# per-timepoint presence/absence pattern (as in a proper 2-tips-per-person
+# tree) that the design of these MAGs doesn't support.
 p_base <- p_base %<+%
   (tip_meta %>% rename(label = bin_name)) +
   geom_tippoint(
-    aes(color = EthnicityTot, shape = timepoint),
+    aes(color = EthnicityTot),
     size = 2.5, na.rm = TRUE
   ) +
   scale_color_manual(
     values   = eth_colors,
     name     = "Ethnicity",
     na.value = "grey70"
-  ) +
-  scale_shape_manual(
-    values   = c("baseline" = 16, "follow-up" = 17),
-    name     = "Timepoint",
-    na.value = 1
   ) +
   theme_tree() +
   theme(
