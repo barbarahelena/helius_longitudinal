@@ -57,19 +57,9 @@ make_clade_pairs <- function(kw_res, var_col, df) {
     { map2(.$group1, .$group2, c) }
 }
 
-#### 1. Clinical variables per clade (Age, BMI, Sex) — high-quality bins only ####
-# Same bin set as the gene-content comparisons in 3_draw_tree.R: high-quality
-# bins (hq), in clades with >= MIN_CLADE_N of them. One bin per participant,
-# so bins from both timepoints are used; Age/BMI/Sex are taken from the sample
-# the bin was assembled from.
-clade_levels_hq <- tip_meta_clades %>%
-  filter(hq, clade %in% clade_levels) %>%
-  count(clade) %>%
-  filter(n >= MIN_CLADE_N) %>%
-  pull(clade)
+#### 1. Clinical variables per clade (Age, BMI, Sex) — baseline bins only ####
 clin_clade <- tip_meta_clades %>%
-  filter(hq, clade %in% clade_levels_hq) %>%
-  mutate(clade = factor(clade, levels = clade_levels_hq))
+  filter(timepoint == "baseline", clade %in% clade_levels) %>%  mutate(clade = factor(clade, levels = clade_levels))
 
 aov_age <- aov(Age ~ clade, data = clin_clade)
 aov_bmi <- aov(BMI ~ clade, data = clin_clade)
@@ -246,35 +236,6 @@ ggsave(
 )
 cat("Bin quality per clade saved to:",
     file.path(results_dir, "bin_quality_per_clade.pdf"), "\n")
-
-# Same check on the high-quality bins used for the gene-content comparisons
-# (3_draw_tree.R): if quality differs between clades, it could drive the VFDB
-# differences.
-quality_clade_hq <- quality_clade %>%
-  filter(bin_name %in% tip_meta_clades$bin_name[tip_meta_clades$hq],
-         clade %in% clade_levels_hq) %>%
-  mutate(clade = factor(clade, levels = clade_levels_hq))
-
-kw_comp_clade_hq <- kruskal.test(Completeness ~ clade, data = quality_clade_hq)
-kw_cont_clade_hq <- kruskal.test(Contamination ~ clade, data = quality_clade_hq)
-cat("\nHigh-quality bins — Kruskal-Wallis Completeness ~ clade: p =", signif(kw_comp_clade_hq$p.value, 3), "\n")
-cat("High-quality bins — Kruskal-Wallis Contamination ~ clade: p =", signif(kw_cont_clade_hq$p.value, 3), "\n")
-
-quality_clade_tests <- bind_rows(
-  quality_clade %>% mutate(set = "All bins in tree"),
-  quality_clade_hq %>% mutate(set = "High-quality bins")
-) %>%
-  mutate(clade = as.character(clade)) %>%
-  group_by(set, clade) %>%
-  summarise(n = n(),
-            median_completeness  = median(Completeness),
-            median_contamination = median(Contamination),
-            .groups = "drop") %>%
-  left_join(tibble(set = c("All bins in tree", "High-quality bins"),
-                   kw_p_completeness  = c(kw_comp_clade$p.value, kw_comp_clade_hq$p.value),
-                   kw_p_contamination = c(kw_cont_clade$p.value, kw_cont_clade_hq$p.value)),
-            by = "set")
-write.csv(quality_clade_tests, file.path(results_dir, "bin_quality_per_clade_tests.csv"), row.names = FALSE)
 
 #### 4. Bin abundance per ethnicity × timepoint ####
 abund_long <- tip_meta_clades %>%

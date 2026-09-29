@@ -19,6 +19,73 @@ library(ggpubr)
 # timepoint is genuinely colonised.
 PRESENCE_THRESHOLD <- 1
 
+#### MAG quality as a covariate ####
+# Gene-content measures depend on assembly quality: an incomplete MAG makes
+# genes look absent, and contamination from a co-occurring organism adds genes
+# that are not the genome's own. Quality is not evenly distributed — Dutch MAGs
+# are less complete (median 92.7% vs 95.5%, p = 6.6e-4) and more contaminated
+# (7.20% vs 4.34%, p = 1.8e-7) than South-Asian Surinamese ones, so for the
+# ethnicity comparison it is a genuine confounder. It does not differ by clade
+# (p = 0.67 and 0.74).
+#
+# Rather than discard the ~72% of MAGs that fall below a high-quality cutoff,
+# completeness and contamination are carried as covariates in the models. Use
+# this to attach them to a per-bin table keyed on locus_prefix.
+add_bin_quality <- function(df, trans, batch_files) {
+  q <- map_dfr(batch_files, function(f) {
+    read.csv(f, check.names = FALSE) %>%
+      dplyr::select(bin, Completeness, Contamination)
+  }) %>%
+    mutate(bin_name = sub("\\.fa$", "", bin)) %>%
+    inner_join(trans %>% dplyr::select(bin_name, locus_prefix), by = "bin_name") %>%
+    dplyr::select(locus_prefix, Completeness, Contamination)
+  if (any(duplicated(q$locus_prefix)))
+    stop("duplicate locus prefixes in the batch quality tables")
+  df %>% left_join(q, by = "locus_prefix")
+}
+
+#### Gene-content denominator ####
+# Proportions are expressed per predicted protein-coding gene, rather than per
+# gene that eggNOG could assign a KEGG module or COG category (only ~76% of
+# them, excluding a quarter of each genome for reasons unrelated to virulence
+# factors).
+#
+# Two sources, in order of preference:
+#  1. Bakta's own CDS count, if bakta_cds_counts.tsv is present. This is exactly
+#     the set of proteins DIAMOND searched against VFDB, so numerator and
+#     denominator come from the same gene prediction. Produced on Snellius by
+#     alistipes_bins_annotation/extract_bakta_cds_counts.sh.
+#  2. Otherwise CheckM2's Total_Coding_Sequences from the batch tables, which is
+#     CheckM2's internal prodigal call. Close to Bakta's but not the same caller.
+# Whichever is used is printed, so it is never ambiguous which denominator a run
+# was built on.
+BAKTA_CDS_FILE <- "data/shotgun/alistipes_annotation/bakta_cds_counts.tsv"
+
+load_gene_counts <- function(trans, batch_files, file = BAKTA_CDS_FILE) {
+  if (file.exists(file)) {
+    cds <- read.delim(file, stringsAsFactors = FALSE)
+    if (!all(c("locus_prefix", "cds_count") %in% names(cds)))
+      stop(file, " must have columns 'locus_prefix' and 'cds_count'")
+    if (any(duplicated(cds$locus_prefix)))
+      stop("duplicate locus prefixes in ", file)
+    cat("Gene-content denominator: Bakta CDS counts from", file, "\n")
+    return(cds %>%
+             dplyr::select(locus_prefix, total_cds = cds_count) %>%
+             dplyr::filter(!is.na(total_cds), total_cds > 0))
+  }
+  cat("Gene-content denominator: CheckM2 (prodigal) Total_Coding_Sequences.\n",
+      "  For Bakta's own counts, run extract_bakta_cds_counts.sh on Snellius\n",
+      "  and copy the result to ", file, "\n", sep = "")
+  map_dfr(batch_files, function(f) {
+    read.csv(f, check.names = FALSE) %>%
+      dplyr::select(bin, Total_Coding_Sequences)
+  }) %>%
+    mutate(bin_name = sub("\\.fa$", "", bin)) %>%
+    inner_join(trans %>% dplyr::select(bin_name, locus_prefix), by = "bin_name") %>%
+    dplyr::select(locus_prefix, total_cds = Total_Coding_Sequences) %>%
+    dplyr::filter(!is.na(total_cds), total_cds > 0)
+}
+
 #### Theme ####
 theme_Publication <- function(base_size = 14, base_family = "sans") {
   library(grid)
@@ -107,6 +174,62 @@ load_bin_clin <- function(trans, batch_files, clin_file) {
 }
 
 #### Statistics ####
+# Bin-level comparison of a gene-content measure between ethnic groups.
+#
+# Gene content is a property of the assembled genome, and each participant has
+# exactly one MAG, so it has no baseline and follow-up value: expanding to
+# bin x timepoint rows duplicates each bin's value and leaves zero within-bin
+# variance. A mixed model with timepoint and (1 | locus_prefix) is then
+# degenerate — the timepoint terms are exactly zero and the random intercept
+# absorbs the rest, leaving no residual degrees of freedom. So this takes one
+# row per bin and fits a plain linear model.
+#
+# Completeness and contamination are adjusted for because both bias gene-content
+# measures and both differ between ethnic groups (see add_bin_quality).
+# The unadjusted Wilcoxon is kept alongside as a descriptive comparison.
+# Expects one row per bin per feature, with columns: locus_prefix, EthnicityTot,
+# proportion, Completeness, Contamination. Returns one row per feature.
+run_bin_stats <- function(df, feature_col) {
+  stopifnot(!any(duplicated(df[c("locus_prefix", feature_col)])))
+  features <- unique(df[[feature_col]])
+
+  results <- map_dfr(features, function(feat) {
+    sub_df <- df %>% filter(.data[[feature_col]] == feat)
+    dutch <- sub_df$proportion[sub_df$EthnicityTot == "Dutch"]
+    sas   <- sub_df$proportion[sub_df$EthnicityTot == "South-Asian Surinamese"]
+
+    wx <- tryCatch(wilcox.test(dutch, sas, exact = FALSE),
+                   error = function(e) list(statistic = NA_real_, p.value = NA_real_))
+
+    fit <- tryCatch({
+      mod <- lm(proportion ~ EthnicityTot + Completeness + Contamination, data = sub_df)
+      ct  <- summary(mod)$coefficients
+      row <- grep("^EthnicityTot", rownames(ct))
+      if (length(row) != 1) stop("expected one ethnicity term")
+      list(estimate = ct[row, "Estimate"],
+           se       = ct[row, "Std. Error"],
+           pval     = ct[row, "Pr(>|t|)"])
+    }, error = function(e) list(estimate = NA_real_, se = NA_real_, pval = NA_real_))
+
+    tibble(
+      feature        = feat,
+      n_dutch        = length(dutch),
+      n_sas          = length(sas),
+      median_dutch   = median(dutch),
+      median_sas     = median(sas),
+      wilcox_stat    = unname(wx$statistic),
+      wilcox_p       = wx$p.value,
+      adj_estimate   = fit$estimate,   # SAS vs Dutch, adjusted for MAG quality
+      adj_se         = fit$se,
+      adj_p          = fit$pval
+    )
+  })
+
+  results %>%
+    mutate(wilcox_fdr = p.adjust(wilcox_p, method = "BH"),
+           adj_fdr    = p.adjust(adj_p,    method = "BH"))
+}
+
 # Runs Wilcoxon (baseline + follow-up) and optionally LMM (ethnicity main effect +
 # ethnicity × timepoint interaction) for each level of feature_col.
 # Set lmm = FALSE to skip the LMM (faster, Wilcoxon only).
@@ -132,8 +255,18 @@ run_stats <- function(df, feature_col, lmm = TRUE) {
 
     if (lmm) {
       lmm_res <- tryCatch({
+        # Completeness and contamination are adjusted for rather than filtered
+        # on: they differ systematically between ethnic groups and both bias
+        # gene-content measures. Added only when present, so callers that do
+        # not supply them still get the unadjusted model.
+        fml <- if (all(c("Completeness", "Contamination") %in% names(sub_df))) {
+          proportion ~ EthnicityTot * timepoint + Completeness + Contamination +
+            (1 | locus_prefix)
+        } else {
+          proportion ~ EthnicityTot * timepoint + (1 | locus_prefix)
+        }
         mod <- lmer(
-          proportion ~ EthnicityTot * timepoint + (1 | locus_prefix),
+          fml,
           data = sub_df, REML = FALSE,
           control = lmerControl(optimizer = "bobyqa")
         )
