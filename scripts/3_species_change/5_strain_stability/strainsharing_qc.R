@@ -288,7 +288,7 @@ ggplot(data = dftot %>% filter(!is.na(FUtime)), aes(x = FUtime, y = sharing_perc
     geom_smooth(color = "black", method = "lm") +
     scale_color_simpsons(guide = "none") +
     stat_cor() +
-    labs(y = "Percentage of stable strains", x = "FU time (years)", title = "FU time and strain sharing") +
+    labs(y = "Strain stability (%)", x = "FU time (years)", title = "FU time and strain stability") +
     facet_wrap(~EthnicityTot) +
     theme_Publication()
 ggsave("results/3_species_change/3_strain_stability/futime_ethnicity.pdf", width = 6, height = 5)
