@@ -2,7 +2,7 @@
 #SBATCH --job-name=instrain_ap
 #SBATCH --cpus-per-task=16
 #SBATCH --mem=24G
-#SBATCH --time=04:00:00
+#SBATCH --time=10:00:00
 #SBATCH --array=1-126%20
 #SBATCH --output=logs/instrain_%A_%a.out
 #SBATCH --error=logs/instrain_%A_%a.err
@@ -37,8 +37,8 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # CONFIG — verify these against the layout on Snellius before submitting
 # ---------------------------------------------------------------------------
-BASE_DIR="/projects/prjs1784/heliuspaired"
-MANIFEST="${BASE_DIR}/data/instrain_manifest.csv"
+BASE_DIR="/projects/0/prjs1784/heliuspaired"
+MANIFEST="${BASE_DIR}/helius_longitudinal/results/3_species_change/5_strain_stability/instrain_manifest.csv"
 OUT_DIR="${BASE_DIR}/instrain_ap"
 
 # Per-batch nf-core/mag result directories holding the refined bin FASTAs.
@@ -47,22 +47,27 @@ OUT_DIR="${BASE_DIR}/instrain_ap"
 # bash 3.2 on macOS when preflighting locally.)
 bin_dir_for_batch() {
   case "$1" in
-    1) echo "${BASE_DIR}/results_batch1/GenomeBinning/DASTool/bins" ;;
-    2) echo "${BASE_DIR}/results_batch2/GenomeBinning/DASTool/bins" ;;
-    3) echo "${BASE_DIR}/results_batch3/GenomeBinning/DASTool/bins" ;;
+    1) echo "${BASE_DIR}/mag_results/results_batch1/GenomeBinning/DASTool/bins" ;;
+    2) echo "${BASE_DIR}/mag_results/results_batch2/GenomeBinning/DASTool/bins" ;;
+    3) echo "${BASE_DIR}/mag_results/results_batch3/GenomeBinning/DASTool/bins" ;;
     *) die "unknown batch: $1" ;;
   esac
 }
 
 # Where the QC'd (host-removed) reads live, and how they are named.
-# Candidate patterns are tried in order; {SAMPLE} and {R} are substituted.
-# {R} is 1 or 2. The first pattern that matches both mates is used.
+# Candidate patterns are tried in order; {SAMPLE}, {ID}, {TP} and {R} are
+# substituted ({SAMPLE}=HELIBA_100043 -> {ID}=100043, {TP}=BA; {R} is 1 or 2).
+# The first pattern that matches both mates is used. nf-core/mag did not keep
+# the host-removed fastqs, so in practice the raw reads are used; human reads
+# do not align to a bacterial MAG at MIN_READ_ANI, so this is harmless.
 READS_DIRS=(
-  "${BASE_DIR}/results_batch1/QC_shortreads/remove_host"
-  "${BASE_DIR}/results_batch2/QC_shortreads/remove_host"
-  "${BASE_DIR}/results_batch3/QC_shortreads/remove_host"
+  "${BASE_DIR}/mag_results/results_batch1/QC_shortreads/remove_host"
+  "${BASE_DIR}/mag_results/results_batch2/QC_shortreads/remove_host"
+  "${BASE_DIR}/mag_results/results_batch3/QC_shortreads/remove_host"
+  "${BASE_DIR}/data/fastqsraw"
 )
 READS_PATTERNS=(
+  "HELIUS.Metagenome.{ID}.Fecal.{TP}.NA.{R}.fq.gz"
   "{SAMPLE}_run0_host_removed_{R}.fastq.gz"
   "{SAMPLE}_run1_host_removed_{R}.fastq.gz"
   "{SAMPLE}_host_removed_{R}.fastq.gz"
@@ -80,7 +85,7 @@ THREADS="${SLURM_CPUS_PER_TASK:-8}"
 # Container image. It must provide inStrain, bowtie2 and samtools; the
 # preflight below checks all three and names any that are missing.
 # Override without editing this file by exporting CONTAINER=/path/to/image.sif
-CONTAINER="${CONTAINER:-${BASE_DIR}/containers/instrain.sif}"
+CONTAINER="${CONTAINER:-/home/bverhaar/singularity_images/instrain_bowtie2_samtools.img}"
 # On Snellius you may need to load the module in your submit environment:
 #   module load 2023 && module load Apptainer/1.2.5-GCCcore-12.3.0
 APPTAINER_BIN="${APPTAINER_BIN:-$(command -v apptainer || command -v singularity || true)}"
@@ -90,18 +95,22 @@ APPTAINER_BIN="${APPTAINER_BIN:-$(command -v apptainer || command -v singularity
 die() { echo "ERROR: $*" >&2; exit 1; }
 
 # Run a tool inside the container. BIND_DIRS is extended once WORK exists.
+# --no-mount hostfs: Snellius mounts every host filesystem into containers,
+# including /opt, which hides the image's /opt/conda (where the tools live).
 BIND_DIRS="${BASE_DIR}"
 sif_exec() {
-  "$APPTAINER_BIN" exec --cleanenv -B "$BIND_DIRS" "$CONTAINER" "$@"
+  "$APPTAINER_BIN" exec --cleanenv --no-mount hostfs -B "$BIND_DIRS" "$CONTAINER" "$@"
 }
 
 # Find the read pair for a sample; echoes "R1 R2" or dies with the paths tried.
 find_reads() {
-  local sample="$1" dir pat r1 r2 tried=""
+  local sample="$1" dir pat base r1 r2 tried=""
+  local id="${sample#*_}" tp="${sample:4:2}"
   for dir in "${READS_DIRS[@]}"; do
     for pat in "${READS_PATTERNS[@]}"; do
-      r1="${dir}/${pat//\{SAMPLE\}/$sample}"; r1="${r1//\{R\}/1}"
-      r2="${dir}/${pat//\{SAMPLE\}/$sample}"; r2="${r2//\{R\}/2}"
+      base="${pat//\{SAMPLE\}/$sample}"; base="${base//\{ID\}/$id}"; base="${base//\{TP\}/$tp}"
+      r1="${dir}/${base//\{R\}/1}"
+      r2="${dir}/${base//\{R\}/2}"
       if [[ -s "$r1" && -s "$r2" ]]; then echo "$r1 $r2"; return 0; fi
       tried+="  ${r1}"$'\n'
     done
@@ -136,7 +145,7 @@ if [[ "${PREFLIGHT:-0}" == "1" ]]; then
       echo "  image  OK  ${CONTAINER}"
       # Every tool the job needs must be inside the image
       for tool in inStrain bowtie2 bowtie2-build samtools; do
-        if sif_exec command -v "$tool" >/dev/null 2>&1; then
+        if sif_exec sh -c "command -v $tool" >/dev/null 2>&1; then
           echo "    ${tool}  OK  $(sif_exec "$tool" --version 2>&1 | head -1)"
         else
           echo "    ${tool}  MISSING from the image"
@@ -156,7 +165,7 @@ fi
 [[ -s "$CONTAINER" ]] || die "container image not found: ${CONTAINER} (set CONTAINER=/path/to/image.sif)"
 # Fail here rather than halfway through mapping if the image is missing a tool
 for tool in inStrain bowtie2 bowtie2-build samtools; do
-  sif_exec command -v "$tool" >/dev/null 2>&1 \
+  sif_exec sh -c "command -v $tool" >/dev/null 2>&1 \
     || die "'${tool}' not found inside ${CONTAINER}"
 done
 
@@ -201,7 +210,6 @@ sif_exec bowtie2-build --threads "$THREADS" -q "$FASTA" "$IDX"
 
 map_sample() {
   local tag="$1" r1="$2" r2="$3" bam="${WORK}/${1}.bam"
-  # bowtie2 and samtools live in different images; the host shell pipes between them
   sif_exec bowtie2 -x "$IDX" -1 "$r1" -2 "$r2" -p "$THREADS" \
       2> "${WORK}/${tag}.bowtie2.log" \
     | sif_exec samtools sort -@ "$THREADS" -o "$bam" -

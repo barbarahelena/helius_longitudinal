@@ -1,7 +1,14 @@
-## Collect the inStrain baseline vs follow-up comparisons
-## Reads the per-participant tables written by 2_run_instrain_compare.sh
+## Alistipes putredinis strain retention (inStrain) — baseline vs follow-up
+## Reads the per-participant popANI comparisons produced on Snellius by:
+##   scripts/0_run_workflows/2_run_shotgun_pipelines/strain_stability/
+##     1_make_instrain_manifest.R      (participant manifest, run locally)
+##     2_run_instrain_compare.sh       (SLURM array, run on Snellius)
 ## (copy instrain_ap/ back from Snellius into data/shotgun/ first) and
-## reports strain retention per ethnicity and per clade.
+## reports strain retention per ethnicity and per clade — the direct test of
+## whether the clade shared at baseline and follow-up (necessarily identical,
+## since each participant has one MAG; see 3_draw_tree.R / 4_qc_metadata_plots.R)
+## reflects genuine strain persistence rather than an artefact of one MAG per
+## participant.
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
 ## Libraries
@@ -121,28 +128,41 @@ write.csv(res, file.path(out_dir, "instrain_strain_retention.csv"), row.names = 
 write.csv(by_eth, file.path(out_dir, "instrain_retention_by_ethnicity.csv"), row.names = FALSE)
 
 #### Plot ####
-pl_popani <- ggplot(valid %>% filter(!is.na(EthnicityTot)),
-                    aes(x = EthnicityTot, y = popANI, fill = EthnicityTot)) +
-    geom_hline(yintercept = POPANI_SAME_STRAIN, linetype = "dashed", colour = "firebrick") +
-    geom_violin(alpha = 0.6, colour = NA) +
-    geom_boxplot(width = 0.15, outlier.shape = NA, fill = "white") +
-    geom_jitter(width = 0.12, size = 0.8, alpha = 0.5) +
+# popANI is almost always squeezed into [0.999, 1], so a violin/linear scale
+# is uninformative and boxplot+jitter+violin all overplot each other at the
+# same handful of positions. Instead plot the genetic distance (1 - popANI)
+# on a log10 scale, which spreads out "same strain" vs "diverged" comparisons,
+# and drop the violin (no meaningful density shape with this few, spike-like
+# values) so the boxplot and jitter don't visually duplicate.
+dist_breaks <- c(1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1)
+
+pl_popani <- ggplot(valid %>% filter(!is.na(EthnicityTot)) %>%
+                        mutate(popANI_dist = pmax(1 - popANI, 1e-6)),
+                    aes(x = EthnicityTot, y = popANI_dist, fill = EthnicityTot)) +
+    geom_hline(yintercept = 1 - POPANI_SAME_STRAIN, linetype = "dashed", colour = "firebrick") +
+    geom_boxplot(width = 0.4, outlier.shape = NA, alpha = 0.6) +
+    geom_jitter(width = 0.15, size = 1, alpha = 0.6, shape = 21, colour = "black") +
+    scale_y_log10(breaks = dist_breaks,
+                  labels = scales::label_number(accuracy = 0.000001)) +
     scale_fill_manual(values = c("Dutch" = "#4E79A7",
                                  "South-Asian Surinamese" = "#F28E2B"), guide = "none") +
-    labs(x = "", y = "popANI (baseline vs follow-up)",
+    labs(x = "", y = "Genetic distance (1 - popANI, log scale)",
          title = sprintf("A. putredinis strain retention (n = %d)", nrow(valid)),
          caption = sprintf("Dashed line: popANI = %s, conventional same-strain threshold",
                            POPANI_SAME_STRAIN)) +
     theme_Publication()
 
-pl_cov <- ggplot(res, aes(x = percent_genome_compared, y = popANI,
-                          colour = enough_compared)) +
-    geom_hline(yintercept = POPANI_SAME_STRAIN, linetype = "dashed", colour = "firebrick") +
+pl_cov <- ggplot(res %>% mutate(popANI_dist = pmax(1 - popANI, 1e-6)),
+                 aes(x = percent_genome_compared, y = popANI_dist,
+                     colour = enough_compared)) +
+    geom_hline(yintercept = 1 - POPANI_SAME_STRAIN, linetype = "dashed", colour = "firebrick") +
     geom_vline(xintercept = MIN_GENOME_COMPARED, linetype = "dashed", colour = "grey50") +
     geom_point(size = 1.8, alpha = 0.8) +
+    scale_y_log10(breaks = dist_breaks,
+                  labels = scales::label_number(accuracy = 0.000001)) +
     scale_colour_manual(values = c("TRUE" = "#1F78B4", "FALSE" = "grey65"),
                         name = "Enough genome compared") +
-    labs(x = "Fraction of genome compared", y = "popANI",
+    labs(x = "Fraction of genome compared", y = "Genetic distance (1 - popANI, log scale)",
          title = "Comparison quality") +
     theme_Publication()
 
