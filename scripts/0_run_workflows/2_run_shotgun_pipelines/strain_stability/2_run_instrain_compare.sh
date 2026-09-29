@@ -160,7 +160,7 @@ fi
 
 [[ -n "${SLURM_ARRAY_TASK_ID:-}" ]] || die "not a job array; submit with sbatch"
 
-# Fail here rather than halfway through mapping if the runtime or images are missing
+# Fail here rather than halfway through mapping if the runtime or image is missing
 [[ -n "$APPTAINER_BIN" ]] || die "apptainer/singularity not on PATH — load the module before submitting"
 [[ -s "$CONTAINER" ]] || die "container image not found: ${CONTAINER} (set CONTAINER=/path/to/image.sif)"
 # Fail here rather than halfway through mapping if the image is missing a tool
@@ -195,7 +195,7 @@ mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT
 mkdir -p "${OUT_DIR}/compare" "${OUT_DIR}/profile"
 
-# The containers need the project tree (bins, reads) and the node-local work dir.
+# The container needs the project tree (bins, reads) and the node-local work dir.
 # The read files may sit outside BASE_DIR, so bind their parents too.
 BIND_DIRS="${BASE_DIR},${WORK},$(dirname "$R1_BL"),$(dirname "$R1_FU")"
 
