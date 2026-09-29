@@ -42,10 +42,18 @@ N_TOP_VF        <- 2   # number of top VFDB categories to display
 tree <- read.iqtree(tree_file)
 
 #### 2. Load translation sheet ####
-trans <- read.delim(trans_file, header = TRUE, sep = "\t", stringsAsFactors = FALSE) %>%
+trans_all <- read.delim(trans_file, header = TRUE, sep = "\t", stringsAsFactors = FALSE) %>%
   rename(locus_prefix = locus_tag_prefix)
+cat("Bins in translation table:", nrow(trans_all), "\n")
 
-cat("Bins in translation table:", nrow(trans), "\n")
+# Restrict to >= MIN_COMPLETENESS (see utils.R): for this tree this is a no-op
+# in practice (every bin the external Panaroo/IQTree3 pipeline included is
+# already >= MIN_COMPLETENESS, and every bin it excluded is below it) — the
+# stopifnot makes that explicit rather than left as a silent coincidence.
+eligible <- eligible_locus_prefixes(trans_all, batch_files)
+trans <- trans_all %>% filter(locus_prefix %in% eligible)
+cat("Bins with completeness >=", MIN_COMPLETENESS, "%:", nrow(trans), "\n")
+stopifnot(setequal(trans$bin_name, tree@phylo$tip.label))
 
 #### 3. Subject ID, ethnicity, timepoint per bin ####
 # Determine dominant sample (max depth) per bin → subject_id + timepoint

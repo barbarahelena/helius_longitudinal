@@ -44,6 +44,33 @@ add_bin_quality <- function(df, trans, batch_files) {
   df %>% left_join(q, by = "locus_prefix")
 }
 
+#### Minimum completeness for inclusion ####
+# All 184 bins that passed annotation QC (>70% completeness, <10% contamination,
+# filter_samplesheets_by_quality.py) meet the exact same tree membership rule:
+# alistipes_new.treefile (built externally with Panaroo/IQTree3) contains 180
+# of these 184 bins, and the 4 missing ones are exactly the 4 with completeness
+# < 80% (70.7-80.0%; the least complete tree tip is 80.1%). Rather than let the
+# analysis silently inherit whatever that external pipeline did, completeness
+# >= 80% is applied here explicitly, so every Alistipes script uses the same,
+# stated inclusion rule instead of implicitly matching tree membership. For
+# 3_draw_tree.R this changes nothing (it already only sees tree tips); for
+# 2_vfdb_comparison.R, which does not reference the tree, it does — see the
+# stopifnot() at its call site for the exact bins/participants this drops.
+MIN_COMPLETENESS <- 80
+
+# Locus prefixes meeting MIN_COMPLETENESS, i.e. eligible for the Alistipes
+# analyses (not a quality *covariate* — that's add_bin_quality(), above; this
+# is a basic eligibility filter, independent of ethnicity or clade).
+eligible_locus_prefixes <- function(trans, batch_files, min_completeness = MIN_COMPLETENESS) {
+  map_dfr(batch_files, function(f) {
+    read.csv(f, check.names = FALSE) %>% dplyr::select(bin, Completeness)
+  }) %>%
+    mutate(bin_name = sub("\\.fa$", "", bin)) %>%
+    filter(Completeness >= min_completeness) %>%
+    inner_join(trans %>% dplyr::select(bin_name, locus_prefix), by = "bin_name") %>%
+    pull(locus_prefix)
+}
+
 #### Gene-content denominator ####
 # Proportions are expressed per predicted protein-coding gene, rather than per
 # gene that eggNOG could assign a KEGG module or COG category (only ~76% of

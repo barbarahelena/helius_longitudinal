@@ -18,11 +18,17 @@ results_dir <- "results/3_species_change/4_alistipes_anno"
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### 1. Load bin translation table ####
-trans <- read.delim(trans_file, header = TRUE, sep = "\t",
-                    stringsAsFactors = FALSE) %>%
+trans_all <- read.delim(trans_file, header = TRUE, sep = "\t",
+                        stringsAsFactors = FALSE) %>%
   rename(locus_prefix = locus_tag_prefix)
+cat("Bins in translation table:", nrow(trans_all), "\n")
 
-cat("Bins in translation table:", nrow(trans), "\n")
+# Restrict to >= MIN_COMPLETENESS (see utils.R), the same eligibility rule
+# 3_draw_tree.R applies (there it reproduces tree membership exactly; here,
+# unlike the tree, there is no external pipeline already enforcing it).
+eligible <- eligible_locus_prefixes(trans_all, batch_files)
+trans <- trans_all %>% filter(locus_prefix %in% eligible)
+cat("Bins with completeness >=", MIN_COMPLETENESS, "%:", nrow(trans), "\n")
 
 #### 2. Parse VFDB FASTA headers → annotation lookup ####
 # Header format:
