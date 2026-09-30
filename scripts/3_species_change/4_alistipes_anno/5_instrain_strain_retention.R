@@ -69,13 +69,17 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 POPANI_SAME_STRAIN <- 0.99999
 # Minimum fraction of the genome compared for the popANI call to be trusted.
 MIN_GENOME_COMPARED <- 0.5
-# Same eligibility rule as MIN_COMPLETENESS in utils.R (3_draw_tree.R,
-# 2_vfdb_comparison.R): the tree-derived clade shown alongside these results
-# only exists for bins >= 80% complete, so bins below that are excluded here
-# too, for consistency, even though the manifest itself doesn't require it.
-# Duplicated rather than sourced from utils.R so this script/PR stays
-# independently reviewable — keep this value in sync with utils.R by hand.
-MIN_COMPLETENESS <- 80
+# Same QC threshold used for the annotation-track bin set overall
+# (filter_samplesheets_by_quality.py: Completeness > 70%, Contamination < 10%)
+# rather than the stricter >=80% rule in utils.R (which exists only to match
+# external tree membership for 3_draw_tree.R / 2_vfdb_comparison.R). inStrain
+# doesn't need tree membership, so it uses the broader QC set, in line with
+# the rest of the findings. Participants whose MAG is 70-80% complete will
+# therefore have no `clade` (tree tips are still restricted to >=80%; see
+# utils.R) but are otherwise included here.
+# Duplicated rather than sourced so this script/PR stays independently
+# reviewable — keep this value in sync with filter_samplesheets_by_quality.py.
+MIN_COMPLETENESS <- 70
 
 #### Load ####
 files <- list.files(in_dir, pattern = "_genomeWide_compare\\.tsv$", full.names = TRUE)
@@ -103,14 +107,14 @@ res <- cmp %>%
     left_join(tip_meta, by = "subject_id") %>%
     mutate(
         enough_compared    = percent_genome_compared >= MIN_GENOME_COMPARED,
-        eligible_completeness = completeness >= MIN_COMPLETENESS,
+        eligible_completeness = completeness > MIN_COMPLETENESS,
         same_strain        = popANI >= POPANI_SAME_STRAIN
     )
 
 cat("\nComparisons with >=", MIN_GENOME_COMPARED * 100, "% of the genome compared:",
     sum(res$enough_compared), "of", nrow(res), "\n")
-cat("Comparisons with MAG completeness >=", MIN_COMPLETENESS, "% (same rule as",
-    "3_draw_tree.R / 2_vfdb_comparison.R):", sum(res$eligible_completeness), "of", nrow(res), "\n")
+cat("Comparisons with MAG completeness >", MIN_COMPLETENESS, "% (same rule as",
+    "filter_samplesheets_by_quality.py):", sum(res$eligible_completeness), "of", nrow(res), "\n")
 
 valid <- res %>% filter(enough_compared, eligible_completeness)
 cat("Valid comparisons meeting both criteria:", nrow(valid), "\n")

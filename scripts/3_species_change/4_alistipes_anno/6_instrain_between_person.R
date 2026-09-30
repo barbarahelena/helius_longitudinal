@@ -59,6 +59,8 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 # sourced so this script/PR stays independently reviewable; keep in sync by hand.
 POPANI_SAME_STRAIN  <- 0.99999  # conventional "same strain" threshold (Olm et al. 2021, Science)
 MIN_GENOME_COMPARED <- 0.5      # minimum fraction of the genome compared for the popANI call to be trusted
+MIN_COMPLETENESS    <- 70       # broader QC threshold (filter_samplesheets_by_quality.py), not the
+                                 # stricter tree-membership rule in utils.R — see 5_instrain_strain_retention.R
 
 #### Load between-person comparisons ####
 files <- list.files(in_dir, pattern = "_genomeWide_compare\\.tsv$", full.names = TRUE)
@@ -91,11 +93,11 @@ if (any(completion$n_completed == 0))
         "background below, not because of any filter, but because no output exists yet.\n", sep = "")
 
 # All 5 anchors are >90% complete (see instrain_between_person_manifest.csv,
-# anchor_completeness) — the MIN_COMPLETENESS>=80 rule from
-# 5_instrain_strain_retention.R / utils.R is a no-op here by construction
-# (anchors are chosen as the highest-completeness bin per clade), so it is
-# not re-applied; this stopifnot makes that explicit.
-stopifnot(all(unique(manifest_between[, c("clade", "anchor_completeness")])$anchor_completeness >= 80))
+# anchor_completeness) — the MIN_COMPLETENESS rule from
+# 5_instrain_strain_retention.R is a no-op here by construction (anchors are
+# chosen as the highest-completeness bin per clade), so it is not re-applied;
+# this stopifnot makes that explicit.
+stopifnot(all(unique(manifest_between[, c("clade", "anchor_completeness")])$anchor_completeness > MIN_COMPLETENESS))
 
 btwn <- btwn %>%
     mutate(
