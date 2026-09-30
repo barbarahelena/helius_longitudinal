@@ -47,7 +47,11 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 
 #### Paths ####
 in_dir  <- "data/shotgun/instrain_ap_between/compare"
-out_dir <- "results/3_species_change/5_strain_stability"
+# instrain_between_person_manifest.csv is produced by
+# 3_make_between_person_manifest.R, which writes into the shared
+# strain_stability results folder, not here.
+manifest_dir <- "results/3_species_change/5_strain_stability"
+out_dir      <- "results/3_species_change/4_alistipes_anno"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### Constants ####
@@ -74,7 +78,7 @@ if (!"percent_genome_compared" %in% names(btwn) && "percent_compared" %in% names
 cat("\nCompleted comparisons by clade (of those planned in instrain_between_person_manifest.csv):\n")
 print(count(btwn, clade))
 
-manifest_between <- read.csv("results/3_species_change/5_strain_stability/instrain_between_person_manifest.csv")
+manifest_between <- read.csv(file.path(manifest_dir, "instrain_between_person_manifest.csv"))
 planned_by_clade <- count(manifest_between, clade, name = "n_planned")
 completion <- planned_by_clade %>%
     left_join(count(btwn, clade, name = "n_completed"), by = "clade") %>%
@@ -170,11 +174,7 @@ pl_within_vs_between <- ggplot(combined %>% mutate(popANI_dist = pmax(1 - popANI
                       guide = "none") +
     scale_x_discrete(labels = scales::label_wrap(15)) +
     labs(x = "", y = "Genetic distance (1 - popANI, log scale)",
-         title = sprintf("A. putredinis strain identity: within- vs between-person (n = %d vs %d)",
-                          sum(combined$group == levels(combined$group)[1]),
-                          sum(combined$group == levels(combined$group)[2])),
-         caption = sprintf("Dashed line: popANI = %s, conventional same-strain threshold",
-                           POPANI_SAME_STRAIN)) +
+         title = "A. putredinis strain identity: within- vs between-person") +
     theme_Publication()
 
 ggsave(file.path(out_dir, "instrain_within_vs_between.pdf"), pl_within_vs_between, width = 6, height = 6)

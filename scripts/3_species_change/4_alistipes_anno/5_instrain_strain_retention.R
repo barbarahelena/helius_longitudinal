@@ -14,6 +14,16 @@
 ## Libraries
 library(tidyverse)
 library(ggpubr)
+library(ggsci)
+
+# Same Dutch/SAS colours used throughout 4_alistipes_anno/ (utils.R
+# jco_palette()) — duplicated rather than sourced so this script stays
+# independently reviewable; keep in sync with utils.R by hand.
+jco_palette <- function() {
+    cols <- pal_jco()(2)
+    names(cols) <- c("Dutch", "South-Asian Surinamese")
+    cols
+}
 
 theme_Publication <- function(base_size=14, base_family="sans") {
     library(grid)
@@ -47,8 +57,11 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 }
 
 #### Paths ####
-in_dir  <- "data/shotgun/instrain_ap/compare"
-out_dir <- "results/3_species_change/5_strain_stability"
+in_dir       <- "data/shotgun/instrain_ap/compare"
+# instrain_manifest.csv is produced by 1_make_instrain_manifest.R, which
+# writes into the shared strain_stability results folder, not here.
+manifest_dir <- "results/3_species_change/5_strain_stability"
+out_dir      <- "results/3_species_change/4_alistipes_anno"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### Constants ####
@@ -78,7 +91,7 @@ cmp <- map_dfr(files, read_tsv, show_col_types = FALSE) %>%
 if (!"percent_genome_compared" %in% names(cmp) && "percent_compared" %in% names(cmp))
     cmp <- cmp %>% rename(percent_genome_compared = percent_compared)
 
-manifest <- read.csv(file.path(out_dir, "instrain_manifest.csv"), colClasses = c(subject_id = "character"))
+manifest <- read.csv(file.path(manifest_dir, "instrain_manifest.csv"), colClasses = c(subject_id = "character"))
 
 #### Join clade and ethnicity ####
 tip_meta <- readRDS("results/3_species_change/4_alistipes_anno/tip_meta_clades.RDS") %>%
@@ -153,14 +166,12 @@ pl_popani <- ggplot(valid %>% filter(!is.na(EthnicityTot)) %>%
     geom_hline(yintercept = 1 - POPANI_SAME_STRAIN, linetype = "dashed", colour = "firebrick") +
     geom_boxplot(width = 0.4, outlier.shape = NA, alpha = 0.6) +
     geom_jitter(width = 0.15, size = 1, alpha = 0.6, shape = 21, colour = "black") +
+    stat_compare_means(method = "wilcox.test", label = "p.format") +
     scale_y_log10(breaks = dist_breaks,
                   labels = scales::label_number(accuracy = 0.000001)) +
-    scale_fill_manual(values = c("Dutch" = "#4E79A7",
-                                 "South-Asian Surinamese" = "#F28E2B"), guide = "none") +
+    scale_fill_manual(values = jco_palette(), guide = "none") +
     labs(x = "", y = "Genetic distance (1 - popANI, log scale)",
-         title = sprintf("A. putredinis strain retention (n = %d)", nrow(valid)),
-         caption = sprintf("Dashed line: popANI = %s, conventional same-strain threshold",
-                           POPANI_SAME_STRAIN)) +
+         title = "A. putredinis strain retention") +
     theme_Publication()
 
 pl_cov <- ggplot(res %>% mutate(popANI_dist = pmax(1 - popANI, 1e-6)),
@@ -172,7 +183,7 @@ pl_cov <- ggplot(res %>% mutate(popANI_dist = pmax(1 - popANI, 1e-6)),
     scale_y_log10(breaks = dist_breaks,
                   labels = scales::label_number(accuracy = 0.000001)) +
     scale_colour_manual(values = c("TRUE" = "#1F78B4", "FALSE" = "grey65"),
-                        name = "Enough genome compared") +
+                        name = "Included in comparison") +
     labs(x = "Fraction of genome compared", y = "Genetic distance (1 - popANI, log scale)",
          title = "Comparison quality") +
     theme_Publication()

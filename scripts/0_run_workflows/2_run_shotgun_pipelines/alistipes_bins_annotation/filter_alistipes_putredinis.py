@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Filter bin_summary.tsv for bins classified as Parabacteroides distasonis
+Filter bin_summary.tsv for bins classified as Alistipes putredinis
 and save results to a new CSV file in the same directory.
 """
 
@@ -12,18 +12,18 @@ output_file = Path(__file__).parent.parent / "mag_results/results_batch3/GenomeB
 
 df = pd.read_csv(input_file, sep="\t", low_memory=False)
 
-# Search for Parabacteroides distasonis in all taxonomy/classification columns
+# Search for Alistipes putredinis in all taxonomy/classification columns
 taxonomy_cols = [col for col in df.columns if any(
     kw in col.lower() for kw in ["classification", "taxonomy"]
 )]
 
 mask = df[taxonomy_cols].apply(
-    lambda col: col.astype(str).str.contains("Parabacteroides distasonis", case=False, na=False)
+    lambda col: col.astype(str).str.contains("Alistipes putredinis", case=False, na=False)
 ).any(axis=1)
 
 filtered = df[mask]
 
-print(f"Found {len(filtered)} bins classified as Parabacteroides distasonis")
+print(f"Found {len(filtered)} bins classified as Alistipes putredinis")
 print(f"Taxonomy columns searched: {taxonomy_cols}")
 
 if len(filtered) > 0:
