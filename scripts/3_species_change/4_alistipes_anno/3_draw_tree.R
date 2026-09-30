@@ -457,6 +457,53 @@ cat("\nSensitivity of clade calling across h:\n")
 print(sensitivity_results, n = Inf)
 write.csv(sensitivity_results, file.path(results_dir, "clade_h_sensitivity.csv"), row.names = FALSE)
 
+# ---- 8a-iv. Sensitivity: clade assignment on a high-quality-only pruned tree ----
+# Re-derive clades with the same monophyletic caller (same H_CUT) after
+# pruning the tree to only the high-quality MAGs (completeness >= 90%,
+# contamination < 5%), then check that every HQ tip's clade assignment
+# matches what it got from the full 180-tip clustering above. This is a
+# robustness check only: the primary clade-level gene-content comparisons
+# (8a-ii above, section 10b below) still use all bins in PLOT_CLADES, not
+# just this HQ subset.
+HQ_COMPLETENESS_MIN  <- 90
+HQ_CONTAMINATION_MAX <- 5
+
+tip_quality <- add_bin_quality(
+  tip_meta_clades %>% dplyr::select(bin_name, locus_prefix, clade),
+  trans, batch_files
+)
+hq_tips <- tip_quality %>%
+  filter(Completeness >= HQ_COMPLETENESS_MIN, Contamination < HQ_CONTAMINATION_MAX) %>%
+  pull(bin_name)
+cat("\nHigh-quality MAGs (completeness >=", HQ_COMPLETENESS_MIN,
+    "%, contamination <", HQ_CONTAMINATION_MAX, "%):", length(hq_tips), "\n")
+
+phylo_tree_hq   <- ape::keep.tip(phylo_tree, hq_tips)
+D_hq            <- ape::cophenetic.phylo(phylo_tree_hq)
+tip_clusters_hq <- call_monophyletic_clades(phylo_tree_hq, D_hq, H_CUT)
+cat("Monophyletic clades on HQ-pruned tree at h =", H_CUT, ":",
+    n_distinct(tip_clusters_hq), "\n")
+
+# "Unchanged" means every original clade's HQ tips fall into exactly one
+# HQ-tree cluster, and every HQ-tree cluster's tips come from exactly one
+# original clade — i.e. no clade is split or merged by pruning to HQ-only.
+hq_compare <- tibble(bin_name = names(tip_clusters_hq), hq_cluster = tip_clusters_hq) %>%
+  left_join(tip_quality %>% dplyr::select(bin_name, clade), by = "bin_name")
+
+clade_to_hq_clusters <- hq_compare %>%
+  group_by(clade) %>%
+  summarise(hq_clusters = n_distinct(hq_cluster), n_tips = n(), .groups = "drop")
+hq_cluster_to_clades <- hq_compare %>%
+  group_by(hq_cluster) %>%
+  summarise(source_clades = n_distinct(clade), n_tips = n(), .groups = "drop")
+
+hq_assignment_unchanged <- all(clade_to_hq_clusters$hq_clusters == 1) &&
+  all(hq_cluster_to_clades$source_clades == 1)
+cat("Clade assignment unchanged on HQ-pruned tree:", hq_assignment_unchanged, "\n")
+print(clade_to_hq_clusters)
+
+write.csv(hq_compare, file.path(results_dir, "clade_hq_sensitivity.csv"), row.names = FALSE)
+
 # ---- 8b. Base tree with clade highlights ----
 # Pre-compute tip layout here so we can restrict each highlight to the exact
 # angular (y) range of its own tips — prevents the largest clade from wrapping
