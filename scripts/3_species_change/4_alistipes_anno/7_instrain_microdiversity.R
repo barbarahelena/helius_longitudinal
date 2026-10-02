@@ -283,6 +283,61 @@ ggsave(file.path(out_dir, "instrain_microdiversity_crosssectional_ethnicity.pdf"
 cat("Cross-sectional plot saved to:",
     file.path(out_dir, "instrain_microdiversity_crosssectional_ethnicity.pdf"), "\n")
 
+#### Covariate check: does the ethnicity difference in diversity hold once sequencing depth is accounted for? ####
+# "coverage" here is inStrain's per-sample average read depth across the
+# genome (same column used for the MIN_COV QC filter above), not breadth.
+# Checked because higher depth could, in principle, let inStrain detect more
+# low-frequency variants and inflate nucl_diversity — if that were driving
+# the ethnic difference rather than true biology, it would show up as a
+# strong diversity~coverage correlation and as the ethnicity term losing
+# significance once coverage is added to the model.
+cat("\nCorrelation of nucl_diversity with sequencing depth (coverage):\n")
+cor_baseline_cov <- cor.test(div_eth$nucl_diversity_baseline, div_eth$coverage_baseline, method = "spearman")
+cor_followup_cov <- cor.test(div_eth$nucl_diversity_followup, div_eth$coverage_followup, method = "spearman")
+cat("  Baseline:  rho =", signif(cor_baseline_cov$estimate, 3), " p =", signif(cor_baseline_cov$p.value, 3), "\n")
+cat("  Follow-up: rho =", signif(cor_followup_cov$estimate, 3), " p =", signif(cor_followup_cov$p.value, 3), "\n")
+
+mod_cov_baseline <- lm(nucl_diversity_baseline ~ EthnicityTot + coverage_baseline, data = div_eth)
+mod_cov_followup <- lm(nucl_diversity_followup ~ EthnicityTot + coverage_followup, data = div_eth)
+cat("\nModel: nucl_diversity_baseline ~ Ethnicity + coverage_baseline\n")
+print(summary(mod_cov_baseline)$coefficients)
+cat("n used (complete cases):", nobs(mod_cov_baseline), "\n")
+cat("\nModel: nucl_diversity_followup ~ Ethnicity + coverage_followup\n")
+print(summary(mod_cov_followup)$coefficients)
+cat("n used (complete cases):", nobs(mod_cov_followup), "\n")
+
+write.csv(
+  bind_rows(
+    as.data.frame(summary(mod_cov_baseline)$coefficients) %>%
+      tibble::rownames_to_column("term") %>% mutate(timepoint = "baseline"),
+    as.data.frame(summary(mod_cov_followup)$coefficients) %>%
+      tibble::rownames_to_column("term") %>% mutate(timepoint = "followup")
+  ),
+  file.path(out_dir, "microdiversity_coverage_model.csv"), row.names = FALSE
+)
+
+pl_coverage <- ggplot(long_div_eth %>%
+                         left_join(div_eth %>%
+                                     dplyr::select(subject_id, coverage_baseline, coverage_followup) %>%
+                                     pivot_longer(starts_with("coverage"), names_to = "timepoint2", values_to = "coverage") %>%
+                                     mutate(timepoint = factor(if_else(timepoint2 == "coverage_baseline", "Baseline", "Follow-up"),
+                                                               levels = c("Baseline", "Follow-up"))) %>%
+                                     dplyr::select(subject_id, timepoint, coverage),
+                                   by = c("subject_id", "timepoint")),
+                       aes(x = coverage, y = nucl_diversity)) +
+    geom_point(aes(fill = EthnicityTot), shape = 21, colour = "black", size = 2, alpha = 0.8) +
+    geom_smooth(method = "lm", colour = "grey30", se = TRUE) +
+    stat_cor(method = "spearman", label.x.npc = "left", label.y.npc = "top") +
+    facet_wrap(~timepoint) +
+    scale_y_log10() +
+    scale_fill_manual(values = jco_palette(), name = "Ethnicity") +
+    labs(x = "Sequencing depth (coverage)", y = "Nucleotide diversity (log scale)",
+         title = "A. putredinis microdiversity vs sequencing depth") +
+    theme_Publication()
+
+ggsave(file.path(out_dir, "microdiversity_vs_coverage.pdf"), pl_coverage, width = 9, height = 5)
+cat("Coverage correlation plot saved to:", file.path(out_dir, "microdiversity_vs_coverage.pdf"), "\n")
+
 #### Covariate check: does the ethnicity difference in diversity hold once HbA1c is accounted for? ####
 # All QC-passing participants (div, not just retained strains) — this is
 # about what predicts baseline diversity, not about change over time.
