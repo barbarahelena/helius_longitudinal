@@ -113,10 +113,11 @@ message("dfsame_long rows: ", nrow(dfsame_long),
 # With n > 50 (pooled across both ethnicities), the pooled total can pass
 # while one ethnicity group is still tiny (e.g. 49 Dutch / 2 SAS) — the
 # ethnicity OR would then be unstable even though nrow(df_sgb) looks fine.
-# MIN_N_PER_ETHNICITY requires both groups to individually clear this floor,
-# same order of magnitude as the nrow() >= 10 gate already used for the
-# chi-square sanity check below.
-MIN_N_PER_ETHNICITY <- 10
+# A per-group floor of 10 still let through cases like SGB14991 (Dutch
+# n=84, SAS n=34), where SAS's "not shared" cell was just 1 subject, giving
+# a technically-finite but absurd 95% CI (0.8-91.6). MIN_N_PER_ETHNICITY
+# requires both groups to individually clear a much higher floor.
+MIN_N_PER_ETHNICITY <- 50
 
 message("Running per-SGB logistic regressions: shared ~ EthnicityTot + Age_z + FUtime_z ...")
 persgb_results <- purrr::map_dfr(sgbs_use, function(sgb) {
