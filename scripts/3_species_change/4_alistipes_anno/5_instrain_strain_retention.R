@@ -116,8 +116,60 @@ cat("\nComparisons with >=", MIN_GENOME_COMPARED * 100, "% of the genome compare
 cat("Comparisons with MAG completeness >", MIN_COMPLETENESS, "% (same rule as",
     "filter_samplesheets_by_quality.py):", sum(res$eligible_completeness), "of", nrow(res), "\n")
 
+#### Divergence classification: distinguish likely replacement from in-situ evolution ####
+# POPANI_SAME_STRAIN (0.99999) is the conventional short-interval threshold
+# (Olm et al. 2021, Science) for calling two samples "the same strain" — it
+# assumes a persisting lineage accumulates too few mutations between
+# comparisons to cross it. That assumption is much weaker over this cohort's
+# ~6-year follow-up: a persisting lineage can plausibly accumulate enough de
+# novo mutations in 6 years to drop below 0.99999 without ever being replaced
+# by an unrelated strain. popANI alone cannot distinguish "replaced" from
+# "evolved in place", but the SCALE of divergence can: an unrelated genomic
+# background introduces far more population-level differences than a few
+# years of mutation in a single lineage would.
+#
+# SNPS_PER_MB_DRIFT_MAX is read off this cohort's own distribution of
+# population_SNPs among popANI < POPANI_SAME_STRAIN comparisons, which form a
+# gradient rather than two clean clusters: ~70% sit within a few dozen
+# SNPs/Mb of the threshold (consistent with ordinary within-host evolution
+# over 6 years), while a smaller tail shows hundreds to >10,000 SNPs/Mb (far
+# more consistent with an unrelated, newly-introduced genome). This is a
+# descriptive cutoff read from this dataset's own distribution, not a
+# validated threshold from the literature — the resulting counts should be
+# treated as approximate, not a precise replacement rate.
+SNPS_PER_MB_DRIFT_MAX <- 100
+
+res <- res %>%
+    mutate(
+        snps_per_mb = population_SNPs / (compared_bases_count / 1e6),
+        divergence_class = case_when(
+            same_strain                                         ~ "Stable",
+            !same_strain & snps_per_mb <  SNPS_PER_MB_DRIFT_MAX  ~ "Modest divergence (consistent with in-situ evolution)",
+            !same_strain & snps_per_mb >= SNPS_PER_MB_DRIFT_MAX  ~ "Substantial divergence (consistent with replacement)",
+            TRUE ~ NA_character_
+        )
+    )
+
 valid <- res %>% filter(enough_compared, eligible_completeness)
 cat("Valid comparisons meeting both criteria:", nrow(valid), "\n")
+
+cat("\nDivergence classification (valid comparisons):\n")
+divergence_summary <- valid %>%
+    count(divergence_class) %>%
+    mutate(pct = round(100 * n / sum(n), 1))
+print(divergence_summary)
+
+cat("\nDivergence classification by ethnicity:\n")
+divergence_by_eth <- valid %>%
+    filter(!is.na(EthnicityTot)) %>%
+    count(EthnicityTot, divergence_class) %>%
+    group_by(EthnicityTot) %>%
+    mutate(pct = round(100 * n / sum(n), 1)) %>%
+    ungroup()
+print(divergence_by_eth)
+
+write.csv(divergence_summary, file.path(out_dir, "instrain_divergence_classification.csv"), row.names = FALSE)
+write.csv(divergence_by_eth, file.path(out_dir, "instrain_divergence_classification_by_ethnicity.csv"), row.names = FALSE)
 
 #### Strain retention ####
 cat("\npopANI summary (valid comparisons):\n")
@@ -192,6 +244,27 @@ pl_cov <- ggplot(res %>% mutate(popANI_dist = pmax(1 - popANI, 1e-6)),
          title = "Comparison quality") +
     theme_Publication()
 
-(pl_strain <- ggarrange(pl_popani, pl_cov, ncol = 2, labels = c("A", "B")))
-ggsave(file.path(out_dir, "instrain_strain_retention.pdf"), pl_strain, width = 11, height = 5)
+pl_divergence <- ggplot(
+    valid %>% filter(!is.na(divergence_class)) %>%
+      mutate(divergence_class = factor(divergence_class,
+             levels = c("Stable",
+                        "Modest divergence (consistent with in-situ evolution)",
+                        "Substantial divergence (consistent with replacement)"))),
+    aes(x = divergence_class, fill = divergence_class)
+  ) +
+    geom_bar() +
+    geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.3) +
+    scale_fill_manual(values = c("Stable" = "#59A14F",
+                                 "Modest divergence (consistent with in-situ evolution)" = "#F28E2B",
+                                 "Substantial divergence (consistent with replacement)" = "#E15759"),
+                      guide = "none") +
+    scale_x_discrete(labels = scales::label_wrap(18)) +
+    labs(x = "", y = "n comparisons",
+         title = "Divergence classification",
+         subtitle = sprintf("Threshold: %d SNPs/Mb among popANI < %g comparisons",
+                            SNPS_PER_MB_DRIFT_MAX, POPANI_SAME_STRAIN)) +
+    theme_Publication()
+
+(pl_strain <- ggarrange(pl_popani, pl_cov, pl_divergence, ncol = 3, labels = c("A", "B", "C")))
+ggsave(file.path(out_dir, "instrain_strain_retention.pdf"), pl_strain, width = 15, height = 5)
 cat("\nPlot saved to:", file.path(out_dir, "instrain_strain_retention.pdf"), "\n")
