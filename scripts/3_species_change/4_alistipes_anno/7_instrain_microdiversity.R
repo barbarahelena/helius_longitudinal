@@ -234,6 +234,28 @@ print(cross_sectional_eth)
 write.csv(cross_sectional_eth, file.path(out_dir, "instrain_microdiversity_crosssectional_ethnicity.csv"),
           row.names = FALSE)
 
+long_div_eth <- div_eth %>%
+    dplyr::select(subject_id, EthnicityTot, nucl_diversity_baseline, nucl_diversity_followup) %>%
+    pivot_longer(starts_with("nucl_diversity"), names_to = "timepoint", values_to = "nucl_diversity") %>%
+    mutate(timepoint = factor(if_else(timepoint == "nucl_diversity_baseline", "Baseline", "Follow-up"),
+                              levels = c("Baseline", "Follow-up")))
+
+pl_crosssectional <- ggplot(long_div_eth, aes(x = EthnicityTot, y = nucl_diversity, fill = EthnicityTot)) +
+    geom_boxplot(width = 0.4, outlier.shape = NA, alpha = 0.6) +
+    geom_jitter(width = 0.15, size = 1, alpha = 0.6, shape = 21, colour = "black") +
+    stat_compare_means(method = "wilcox.test", label = "p.format") +
+    facet_wrap(~timepoint) +
+    scale_y_log10() +
+    scale_fill_manual(values = jco_palette(), guide = "none") +
+    labs(x = "", y = "Nucleotide diversity (log scale)",
+         title = "A. putredinis microdiversity by ethnicity") +
+    theme_Publication()
+
+ggsave(file.path(out_dir, "instrain_microdiversity_crosssectional_ethnicity.pdf"),
+       pl_crosssectional, width = 7, height = 5)
+cat("Cross-sectional plot saved to:",
+    file.path(out_dir, "instrain_microdiversity_crosssectional_ethnicity.pdf"), "\n")
+
 #### Covariate check: does the ethnicity difference in diversity hold once HbA1c is accounted for? ####
 # All QC-passing participants (div, not just retained strains) — this is
 # about what predicts baseline diversity, not about change over time.
