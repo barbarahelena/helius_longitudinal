@@ -175,11 +175,7 @@ print(by_clade)
 write.csv(res, file.path(out_dir, "instrain_strain_retention.csv"), row.names = FALSE)
 write.csv(by_eth, file.path(out_dir, "instrain_retention_by_ethnicity.csv"), row.names = FALSE)
 
-#### Plot ####
-# popANI is almost always squeezed into [0.999, 1], so a violin/linear scale
-# is uninformative and boxplot+jitter+violin all overplot each other at the
-# same handful of positions. Instead plot the genetic distance (1 - popANI)
-# on a log10 scale, which spreads out "same strain" vs "diverged" comparisons
+#### Plot of genetic distance (instead of popANI) ####
 dist_breaks <- c(1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1)
 
 pl_popani <- ggplot(valid %>% filter(!is.na(EthnicityTot)) %>%
