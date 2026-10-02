@@ -296,12 +296,16 @@ cor_followup_cov <- cor.test(div_eth$nucl_diversity_followup, div_eth$coverage_f
 cat("  Baseline:  rho =", signif(cor_baseline_cov$estimate, 3), " p =", signif(cor_baseline_cov$p.value, 3), "\n")
 cat("  Follow-up: rho =", signif(cor_followup_cov$estimate, 3), " p =", signif(cor_followup_cov$p.value, 3), "\n")
 
-mod_cov_baseline <- lm(nucl_diversity_baseline ~ EthnicityTot + coverage_baseline, data = div_eth)
-mod_cov_followup <- lm(nucl_diversity_followup ~ EthnicityTot + coverage_followup, data = div_eth)
-cat("\nModel: nucl_diversity_baseline ~ Ethnicity + coverage_baseline\n")
+# log(), not raw scale, matching how nucl_diversity is treated everywhere
+# else in this script (LMM, all plots use scale_y_log10()) — it's right-
+# skewed, so a linear model on the raw scale is unduly sensitive to the
+# upper tail.
+mod_cov_baseline <- lm(log(nucl_diversity_baseline) ~ EthnicityTot + coverage_baseline, data = div_eth)
+mod_cov_followup <- lm(log(nucl_diversity_followup) ~ EthnicityTot + coverage_followup, data = div_eth)
+cat("\nModel: log(nucl_diversity_baseline) ~ Ethnicity + coverage_baseline\n")
 print(summary(mod_cov_baseline)$coefficients)
 cat("n used (complete cases):", nobs(mod_cov_baseline), "\n")
-cat("\nModel: nucl_diversity_followup ~ Ethnicity + coverage_followup\n")
+cat("\nModel: log(nucl_diversity_followup) ~ Ethnicity + coverage_followup\n")
 print(summary(mod_cov_followup)$coefficients)
 cat("n used (complete cases):", nobs(mod_cov_followup), "\n")
 
