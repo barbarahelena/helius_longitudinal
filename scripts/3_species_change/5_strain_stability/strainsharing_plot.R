@@ -119,6 +119,7 @@ dftot <- dftot %>% left_join(., bray_alphadiv)
     geom_violin(colour = NA, aes(fill = EthnicityTot)) +
     geom_boxplot(fill = "white", width = 0.2) +
     scale_fill_manual(values = rev(pal_simpsons()(2)), guide = "none") +
+    stat_compare_means(method = "wilcox.test", label = "p.format") +
     labs(y = "Strain stability (%)", title = "Strain stability by ethnicity", x = "") +
     theme_Publication())
 ggsave("results/3_species_change/5_strain_stability/ethnicities.pdf", width = 4.5, height = 5)
