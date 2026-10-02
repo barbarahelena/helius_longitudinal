@@ -61,7 +61,6 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 #### Paths ####
 profile_dir    <- "data/shotgun/instrain_ap/profile"
 retention_path <- "results/3_species_change/4_alistipes_anno/instrain_strain_retention.csv"
-clin_file      <- "data/clinicaldata/clinicaldata_long.RDS"
 out_dir        <- "results/3_species_change/4_alistipes_anno"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
@@ -337,49 +336,3 @@ pl_coverage <- ggplot(long_div_eth %>%
 
 ggsave(file.path(out_dir, "microdiversity_vs_coverage.pdf"), pl_coverage, width = 9, height = 5)
 cat("Coverage correlation plot saved to:", file.path(out_dir, "microdiversity_vs_coverage.pdf"), "\n")
-
-#### Covariate check: does the ethnicity difference in diversity hold once HbA1c is accounted for? ####
-# All QC-passing participants (div, not just retained strains) — this is
-# about what predicts baseline diversity, not about change over time.
-# Ethnicity and HbA1c are both checked because they're entangled here, not
-# because HbA1c is assumed to be the explanation: HbA1c differs sharply by
-# ethnicity in this subsample (median 36 Dutch vs 41.5 SAS), so a model with
-# both terms can't cleanly attribute the diversity association to one or the
-# other at this sample size. Age was checked separately and added nothing,
-# so it's left out here for a simpler, more interpretable model.
-hba1c_lookup <- readRDS(clin_file) %>%
-    filter(timepoint == "baseline") %>%
-    mutate(subject_id = as.character(str_extract(ID, "[0-9]+$"))) %>%
-    distinct(subject_id, HbA1c)
-
-div_hba1c <- div %>% left_join(hba1c_lookup, by = "subject_id")
-
-cat("\nHbA1c by ethnicity (QC-passing participants):\n")
-print(div_hba1c %>% filter(!is.na(HbA1c)) %>% group_by(EthnicityTot) %>%
-        summarise(n = n(), median_hba1c = median(HbA1c), .groups = "drop"))
-cat("Wilcoxon HbA1c ~ ethnicity: p =",
-    signif(wilcox.test(HbA1c ~ EthnicityTot, data = div_hba1c, exact = FALSE)$p.value, 3), "\n")
-
-mod_hba1c <- lm(nucl_diversity_baseline ~ EthnicityTot + HbA1c, data = div_hba1c)
-cat("\nModel: nucl_diversity_baseline ~ Ethnicity + HbA1c\n")
-print(summary(mod_hba1c)$coefficients)
-cat("n used (complete cases):", nobs(mod_hba1c), "\n")
-
-write.csv(
-  as.data.frame(summary(mod_hba1c)$coefficients) %>% tibble::rownames_to_column("term"),
-  file.path(out_dir, "microdiversity_hba1c_model.csv"), row.names = FALSE
-)
-
-pl_hba1c <- ggplot(div_hba1c %>% filter(!is.na(HbA1c)),
-                    aes(x = HbA1c, y = nucl_diversity_baseline)) +
-    geom_point(aes(fill = EthnicityTot), shape = 21, colour = "black", size = 2.5, alpha = 0.8) +
-    geom_smooth(method = "lm", colour = "grey30", se = TRUE) +
-    stat_cor(method = "spearman", label.x.npc = "left", label.y.npc = "top") +
-    scale_y_log10() +
-    scale_fill_manual(values = jco_palette(), name = "Ethnicity") +
-    labs(x = "HbA1c (mmol/mol)", y = "Baseline nucleotide diversity (log scale)",
-         title = "A. putredinis microdiversity vs HbA1c") +
-    theme_Publication()
-
-ggsave(file.path(out_dir, "microdiversity_vs_hba1c.pdf"), pl_hba1c, width = 6, height = 5)
-cat("HbA1c correlation plot saved to:", file.path(out_dir, "microdiversity_vs_hba1c.pdf"), "\n")
