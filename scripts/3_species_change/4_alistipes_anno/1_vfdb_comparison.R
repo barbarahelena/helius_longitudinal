@@ -25,7 +25,7 @@ cat("Bins in translation table:", nrow(trans_all), "\n")
 
 # Restrict to >= VFDB_MIN_COMPLETENESS: the broader annotation QC threshold
 # (>70% completeness, <10% contamination; filter_samplesheets_by_quality.py),
-# same as 5_instrain_strain_retention.R and 6_instrain_between_person.R. Not
+# same as 1_instrain_strain_retention.R and 2_instrain_between_person.R. Not
 # utils.R's stricter MIN_COMPLETENESS (80%) — that exists only to reproduce
 # external tree membership for 3_draw_tree.R and has no equivalent constraint
 # here, so there is no reason to inherit it.

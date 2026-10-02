@@ -48,8 +48,8 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 
 #### Paths ####
 profile_dir    <- "data/shotgun/instrain_ap/profile"
-retention_path <- "results/3_species_change/4_alistipes_anno/instrain_strain_retention.csv"
-out_dir        <- "results/3_species_change/4_alistipes_anno"
+retention_path <- "results/3_species_change/5_instrain/instrain_strain_retention.csv"
+out_dir        <- "results/3_species_change/5_instrain"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### Constants ####
@@ -93,7 +93,7 @@ tip_meta <- readRDS("results/3_species_change/4_alistipes_anno/tip_meta_clades.R
     dplyr::select(subject_id, clade, EthnicityTot, Age, BMI, FUtime)
 
 if (!file.exists(retention_path))
-    stop("Run 5_instrain_strain_retention.R first — ", retention_path, " not found.")
+    stop("Run 1_instrain_strain_retention.R first — ", retention_path, " not found.")
 retention <- read.csv(retention_path, colClasses = c(subject_id = "character")) %>%
     dplyr::select(subject_id, same_strain, enough_compared, eligible_completeness)
 
@@ -102,7 +102,7 @@ div <- wide %>%
     left_join(tip_meta, by = "subject_id") %>%
     left_join(retention, by = "subject_id") %>%
     # Align to the same n=120 population used throughout
-    # 5_instrain_strain_retention.R (enough_compared: >=50% of the genome
+    # 1_instrain_strain_retention.R (enough_compared: >=50% of the genome
     # compared between timepoints; eligible_completeness: MAG >70% complete),
     # rather than this script's own, slightly looser profile-based qc_pass
     # (coverage/breadth per sample independently). 3 participants pass

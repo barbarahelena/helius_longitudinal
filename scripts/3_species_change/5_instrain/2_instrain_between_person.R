@@ -42,14 +42,14 @@ in_dir  <- "data/shotgun/instrain_ap_between/compare"
 # 3_make_between_person_manifest.R, which writes into the shared
 # strain_stability results folder, not here.
 manifest_dir <- "results/3_species_change/5_strain_stability"
-out_dir      <- "results/3_species_change/4_alistipes_anno"
+out_dir      <- "results/3_species_change/5_instrain"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### Constants ####
 POPANI_SAME_STRAIN  <- 0.99999  # conventional "same strain" threshold (Olm et al. 2021, Science)
 MIN_GENOME_COMPARED <- 0.5      # minimum fraction of the genome compared for the popANI call to be trusted
 MIN_COMPLETENESS    <- 70       # broader QC threshold (filter_samplesheets_by_quality.py), not the
-                                 # stricter tree-membership rule in utils.R — see 5_instrain_strain_retention.R
+                                 # stricter tree-membership rule in utils.R — see 1_instrain_strain_retention.R
 
 #### Load between-person comparisons ####
 files <- list.files(in_dir, pattern = "_genomeWide_compare\\.tsv$", full.names = TRUE)
@@ -88,14 +88,14 @@ cat("\nBetween-person comparisons with >=", MIN_GENOME_COMPARED * 100,
 
 valid_between <- btwn %>% filter(enough_compared)
 
-#### Load within-person comparisons (5_instrain_strain_retention.R output) ####
+#### Load within-person comparisons (1_instrain_strain_retention.R output) ####
 within_path <- file.path(out_dir, "instrain_strain_retention.csv")
 if (!file.exists(within_path))
-    stop("Run 5_instrain_strain_retention.R first — ", within_path, " not found.")
+    stop("Run 1_instrain_strain_retention.R first — ", within_path, " not found.")
 
 within_res <- read.csv(within_path, colClasses = c(subject_id = "character")) %>%
     filter(enough_compared, eligible_completeness)
-cat("\nWithin-person valid comparisons (from 5_instrain_strain_retention.R):", nrow(within_res), "\n")
+cat("\nWithin-person valid comparisons (from 1_instrain_strain_retention.R):", nrow(within_res), "\n")
 
 #### Combine and compare ####
 combined <- bind_rows(
@@ -138,7 +138,7 @@ write.csv(by_group, file.path(out_dir, "instrain_within_vs_between_summary.csv")
 
 #### Plot ####
 # Same genetic-distance (1 - popANI), log-scale convention as
-# 5_instrain_strain_retention.R, now split by within- vs between-person.
+# 1_instrain_strain_retention.R, now split by within- vs between-person.
 dist_breaks <- c(1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1)
 
 pl_within_vs_between <- ggplot(combined %>% mutate(popANI_dist = pmax(1 - popANI, 1e-6)),
