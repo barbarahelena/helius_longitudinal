@@ -47,7 +47,7 @@ resultsfolder <- "results/3_species_change/5_strain_stability/covariates"
 dir.create(resultsfolder, showWarnings = FALSE, recursive = TRUE)
 
 #### Data ####
-df <- rio::import("data/shotgun/strainsharing_merged.csv")
+df <- rio::import("data/shotgun/strainsharing_recalculated/strainsharing_recalculated_wide.csv")
 colnames(df) <- str_remove(colnames(df), "sharing_")
 
 dfsame <- df %>% filter(str_remove(sampleid_1, "HELIBA_") == str_remove(sampleid_2, "HELIFU_"))

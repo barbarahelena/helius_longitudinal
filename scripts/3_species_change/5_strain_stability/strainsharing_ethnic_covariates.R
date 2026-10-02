@@ -49,7 +49,7 @@ resultsfolder <- "results/3_species_change/5_strain_stability/ethnic_covariates"
 dir.create(resultsfolder, showWarnings = FALSE, recursive = TRUE)
 
 #### Data ####
-df <- rio::import("data/shotgun/strainsharing_merged.csv")
+df <- rio::import("data/shotgun/strainsharing_recalculated/strainsharing_recalculated_wide.csv")
 colnames(df) <- str_remove(colnames(df), "sharing_")
 
 dfsame <- df %>%

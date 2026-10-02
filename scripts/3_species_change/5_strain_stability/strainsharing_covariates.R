@@ -52,8 +52,8 @@ resultsfolder <- "results/3_species_change/5_strain_stability/covariates"
 dir.create(resultsfolder, showWarnings = FALSE, recursive = TRUE)
 
 #### Data ####
-df <- rio::import("data/shotgun/strainsharing_merged.csv")
-thres <- rio::import("data/shotgun/thresholds_merged.csv") %>%
+df <- rio::import("data/shotgun/strainsharing_recalculated/strainsharing_recalculated_wide.csv")
+thres <- rio::import("data/shotgun/strainsharing_recalculated/thresholds_recalculated.csv") %>%
     mutate(
         across(c("n_markers", "n_samples", "aln_length", "avg_gap_prop",
                  "threshold_value", "max_youden", "false_positive_rate", "false_negative_rate"),
@@ -308,7 +308,8 @@ pl_ss_bar <- ggplot(bar_data_ss, aes(x = pct, y = label, fill = category)) +
           axis.line.y  = element_blank(),
           legend.position = "bottom")
 
-(pl_ss_combined <- pl_ss_main + pl_ss_eth + pl_ss_bar + plot_layout(widths = c(0.4,0.4,0.3)))
+(pl_ss_combined <- ggarrange(pl_ss_main, pl_ss_eth, pl_ss_bar,
+                             ncol = 3, widths = c(0.4, 0.4, 0.3)))
 ggsave(file.path(resultsfolder, "overall_strainsharing_covariates.pdf"),
        plot = pl_ss_combined, width = 12, height = 10, device = cairo_pdf)
 
