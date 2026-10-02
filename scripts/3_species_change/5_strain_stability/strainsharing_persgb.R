@@ -206,7 +206,7 @@ message("SGBs significant in both logistic regression and chi-square: ", nrow(ov
 ## now covers ~150 SGBs (vs ~30 at the old n > 237 cutoff) — too many to plot
 ## legibly, so the forest plot is restricted to the TOP_N_FOREST most significant
 ## by FDR-adjusted p-value. persgb_ethnicity.csv still holds the full results.
-TOP_N_FOREST <- 20
+TOP_N_FOREST <- 30
 
 df_plot <- persgb_results %>%
     filter(!is.na(estimate)) %>%
