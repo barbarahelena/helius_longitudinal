@@ -1,26 +1,14 @@
 ## Alistipes putredinis within-strain microdiversity — baseline vs follow-up
-## Follow-up to 5_instrain_strain_retention.R: that script asks whether the
-## population at follow-up is still the SAME strain (popANI). This script
-## asks, for strains that ARE retained, whether the strain itself diversified
-## differently over time between ethnicities — a distinct question from
-## retention, using inStrain profile's nucl_diversity (nucleotide diversity)
-## per participant per timepoint rather than the compare-step popANI.
-## Reads the per-timepoint genome_info.tsv files produced by the same
-## Snellius job as 5_instrain_strain_retention.R:
-##   scripts/0_run_workflows/2_run_shotgun_pipelines/strain_stability/
-##     2_run_instrain_compare.sh   (writes profile/<subject>_<timepoint>_genome_info.tsv)
-## and instrain_strain_retention.csv (same_strain calls) written by
-## 5_instrain_strain_retention.R, which must be run first.
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
 ## Libraries
 library(tidyverse)
 library(ggpubr)
 library(ggsci)
+library(lme4)
+library(lmerTest)
 
-# Same Dutch/SAS colours used throughout 4_alistipes_anno/ (utils.R
-# jco_palette()) — duplicated rather than sourced so this script stays
-# independently reviewable; keep in sync with utils.R by hand.
+# Color palette
 jco_palette <- function() {
     cols <- pal_jco()(2)
     names(cols) <- c("Dutch", "South-Asian Surinamese")
@@ -181,19 +169,6 @@ if (nrow(by_eth_delta) == 2 && all(by_eth_delta$n >= 3)) {
 write.csv(by_eth_delta, file.path(out_dir, "instrain_microdiversity_by_ethnicity.csv"), row.names = FALSE)
 
 #### LMM: does the change over time differ by ethnicity? ####
-# The paired Wilcoxon tests above (overall/Dutch/SAS) each ask whether THAT
-# group changed over time; the delta-by-ethnicity Wilcoxon asks whether the
-# SIZE of the change differs by group, treating each participant's delta as
-# one independent observation. Neither directly models the repeated-measures
-# structure (2 observations per participant) the way the ethnicity gene-
-# content models elsewhere in this folder do (utils.R::run_stats). This LMM
-# is the analogous model here: EthnicityTot x timepoint interaction is the
-# test for differential change over time; (1 | subject_id) accounts for the
-# two correlated observations per participant. log() because nucl_diversity
-# is right-skewed (already plotted on a log scale below).
-library(lme4)
-library(lmerTest)
-
 mod_lmm <- lmer(log(nucl_diversity) ~ EthnicityTot * timepoint + (1 | subject_id),
                  data = long_retained, REML = FALSE)
 cat("\nLMM: log(nucl_diversity) ~ EthnicityTot * timepoint + (1 | subject_id)\n")
@@ -236,11 +211,6 @@ ggsave(file.path(out_dir, "instrain_microdiversity.pdf"), pl_micro, width = 11, 
 cat("\nPlot saved to:", file.path(out_dir, "instrain_microdiversity.pdf"), "\n")
 
 #### Cross-sectional: nucl_diversity by ethnicity at each timepoint ####
-# Distinct from the paired baseline-vs-follow-up test above (within-person
-# change) and from by_eth_delta (change restricted to retained strains) —
-# this asks whether Dutch and SAS participants differ in how heterogeneous
-# their A. putredinis population is AT a given timepoint, on all QC-passing
-# participants (div), not just those with a retained strain.
 div_eth <- div %>% filter(!is.na(EthnicityTot))
 
 cat("\nCross-sectional nucl_diversity by ethnicity (all QC-passing participants):\n")
@@ -285,21 +255,12 @@ cat("Cross-sectional plot saved to:",
 #### Covariate check: does the ethnicity difference in diversity hold once sequencing depth is accounted for? ####
 # "coverage" here is inStrain's per-sample average read depth across the
 # genome (same column used for the MIN_COV QC filter above), not breadth.
-# Checked because higher depth could, in principle, let inStrain detect more
-# low-frequency variants and inflate nucl_diversity — if that were driving
-# the ethnic difference rather than true biology, it would show up as a
-# strong diversity~coverage correlation and as the ethnicity term losing
-# significance once coverage is added to the model.
 cat("\nCorrelation of nucl_diversity with sequencing depth (coverage):\n")
 cor_baseline_cov <- cor.test(div_eth$nucl_diversity_baseline, div_eth$coverage_baseline, method = "spearman")
 cor_followup_cov <- cor.test(div_eth$nucl_diversity_followup, div_eth$coverage_followup, method = "spearman")
 cat("  Baseline:  rho =", signif(cor_baseline_cov$estimate, 3), " p =", signif(cor_baseline_cov$p.value, 3), "\n")
 cat("  Follow-up: rho =", signif(cor_followup_cov$estimate, 3), " p =", signif(cor_followup_cov$p.value, 3), "\n")
 
-# log(), not raw scale, matching how nucl_diversity is treated everywhere
-# else in this script (LMM, all plots use scale_y_log10()) — it's right-
-# skewed, so a linear model on the raw scale is unduly sensitive to the
-# upper tail.
 mod_cov_baseline <- lm(log(nucl_diversity_baseline) ~ EthnicityTot + coverage_baseline, data = div_eth)
 mod_cov_followup <- lm(log(nucl_diversity_followup) ~ EthnicityTot + coverage_followup, data = div_eth)
 cat("\nModel: log(nucl_diversity_baseline) ~ Ethnicity + coverage_baseline\n")

@@ -1,14 +1,4 @@
 ## Alistipes putredinis strain retention (inStrain) — baseline vs follow-up
-## Reads the per-participant popANI comparisons produced on Snellius by:
-##   scripts/0_run_workflows/2_run_shotgun_pipelines/strain_stability/
-##     1_make_instrain_manifest.R      (participant manifest, run locally)
-##     2_run_instrain_compare.sh       (SLURM array, run on Snellius)
-## (copy instrain_ap/ back from Snellius into data/shotgun/ first) and
-## reports strain retention per ethnicity and per clade — the direct test of
-## whether the clade shared at baseline and follow-up (necessarily identical,
-## since each participant has one MAG; see 3_draw_tree.R / 4_qc_metadata_plots.R)
-## reflects genuine strain persistence rather than an artefact of one MAG per
-## participant.
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
 ## Libraries
@@ -16,9 +6,7 @@ library(tidyverse)
 library(ggpubr)
 library(ggsci)
 
-# Same Dutch/SAS colours used throughout 4_alistipes_anno/ (utils.R
-# jco_palette()) — duplicated rather than sourced so this script stays
-# independently reviewable; keep in sync with utils.R by hand.
+# Color palette
 jco_palette <- function() {
     cols <- pal_jco()(2)
     names(cols) <- c("Dutch", "South-Asian Surinamese")

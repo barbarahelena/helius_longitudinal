@@ -1,24 +1,4 @@
 ## Alistipes putredinis acquisition — read-level (MetaPhlAn), full cohort
-## Follow-up to 4_qc_metadata_plots.R's MAG-based acquisition analysis.
-##
-## That analysis defines "acquired" from MAG presence (independently re-mapped
-## depth against a co-assembled bin), which only exists for the ~184
-## participants who had a MAG assembled in the first place — anyone with zero
-## detectable signal at BOTH timepoints never gets a bin and is invisible to
-## that analysis. This script redefines presence from MetaPhlAn relative
-## abundance instead (data/shotgun/shotgun_abundance.RDS, traced to
-## scripts/0_run_workflows/3_data_cleaning/datacleaning.R: s__-level rows from
-## combined_table_fixedlab.tsv), which covers the full sequenced cohort
-## regardless of whether a MAG ever assembled.
-##
-## It also runs the comparison the naive OR actually needs: conditioned on
-## being baseline-negative (the true at-risk population), not unconditional
-## on the whole cohort. Unconditionally, "fraction of the cohort newly
-## detected at follow-up" is inflated for whichever group has lower baseline
-## prevalence, because High-baseline-prevalence groups have almost no one left
-## who COULD be scored as "acquired" — a ceiling effect on the eligible pool,
-## not a difference in per-person acquisition risk.
-##
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
 suppressMessages(library(tidyverse))
@@ -100,13 +80,7 @@ print(base_prev)
 prev_fisher <- fisher.test(table(classify_at(0)$EthnicityTot, classify_at(0)$has_bl))
 cat("Fisher exact, baseline prevalence x ethnicity: p =", signif(prev_fisher$p.value, 3), "\n")
 
-#### 6. Conditioned on at-risk (baseline-negative) — the proper incidence test ####
-# This is the comparison the naive OR above conflates with baseline
-# prevalence: among people who did NOT have detectable A. putredinis at
-# baseline, does the rate of becoming detectable at follow-up differ by
-# ethnicity? High baseline-prevalence groups (Dutch) have a small eligible
-# pool almost by definition, which inflates the unconditional OR without
-# reflecting a real difference in acquisition risk.
+#### 6. Conditioned on at-risk (baseline-negative) ####
 cat("\n=== Conditioned on baseline-negative (at-risk population) ===\n")
 atrisk_results <- map_dfr(DETECTION_THRESHOLDS, function(thr) {
   d <- classify_at(thr) %>% filter(!has_bl)

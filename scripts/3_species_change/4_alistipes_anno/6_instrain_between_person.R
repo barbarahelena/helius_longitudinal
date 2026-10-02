@@ -1,13 +1,4 @@
 ## Alistipes putredinis strain retention (inStrain) — between-person background
-## Positive control for 5_instrain_strain_retention.R: compares the within-person
-## (baseline vs follow-up) popANI distribution against a between-person, same-clade
-## background, to test whether "same strain" retention is distinguishable from the
-## baseline similarity of unrelated members of the same clade.
-## Reads the star-design comparisons produced on Snellius by:
-##   scripts/0_run_workflows/2_run_shotgun_pipelines/strain_stability/
-##     3_make_between_person_manifest.R  (anchor + other participants per clade, run locally)
-##     4_run_instrain_between_person.sh  (SLURM array, run on Snellius)
-## (copy instrain_ap_between/ back from Snellius into data/shotgun/ first).
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
 ## Libraries
@@ -55,8 +46,6 @@ out_dir      <- "results/3_species_change/4_alistipes_anno"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### Constants ####
-# Same thresholds as 5_instrain_strain_retention.R — duplicated rather than
-# sourced so this script/PR stays independently reviewable; keep in sync by hand.
 POPANI_SAME_STRAIN  <- 0.99999  # conventional "same strain" threshold (Olm et al. 2021, Science)
 MIN_GENOME_COMPARED <- 0.5      # minimum fraction of the genome compared for the popANI call to be trusted
 MIN_COMPLETENESS    <- 70       # broader QC threshold (filter_samplesheets_by_quality.py), not the
@@ -71,11 +60,8 @@ cat("Between-person comparisons found:", length(files), "\n")
 
 btwn <- map_dfr(files, read_tsv, show_col_types = FALSE) %>%
     mutate(anchor_subject_id = as.character(anchor_subject_id),
-           other_subject_id  = as.character(other_subject_id))
-
-# inStrain names this column percent_genome_compared in some versions
-if (!"percent_genome_compared" %in% names(btwn) && "percent_compared" %in% names(btwn))
-    btwn <- btwn %>% rename(percent_genome_compared = percent_compared)
+           other_subject_id  = as.character(other_subject_id)) |>
+    rename(percent_genome_compared = percent_compared)
 
 cat("\nCompleted comparisons by clade (of those planned in instrain_between_person_manifest.csv):\n")
 print(count(btwn, clade))
@@ -91,13 +77,6 @@ if (any(completion$n_completed == 0))
     cat("\nNOTE: ", paste(completion$clade[completion$n_completed == 0], collapse = ", "),
         " has/have zero completed between-person comparisons — excluded from the\n",
         "background below, not because of any filter, but because no output exists yet.\n", sep = "")
-
-# All 5 anchors are >90% complete (see instrain_between_person_manifest.csv,
-# anchor_completeness) — the MIN_COMPLETENESS rule from
-# 5_instrain_strain_retention.R is a no-op here by construction (anchors are
-# chosen as the highest-completeness bin per clade), so it is not re-applied;
-# this stopifnot makes that explicit.
-stopifnot(all(unique(manifest_between[, c("clade", "anchor_completeness")])$anchor_completeness > MIN_COMPLETENESS))
 
 btwn <- btwn %>%
     mutate(
