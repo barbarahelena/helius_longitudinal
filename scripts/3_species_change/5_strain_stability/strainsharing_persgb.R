@@ -244,10 +244,7 @@ pl_persgb <- ggplot(df_plot, aes(x = estimate, y = Species, color = qval <= 0.05
         name = NULL) +
     labs(x = "OR South-Asian Surinamese vs Dutch (95% CI)",
          y = NULL,
-         title = "Ethnicity and per-SGB strain stability",
-         caption = sprintf(
-             "Logistic regression adjusted for Age and follow-up time. Outcome: strain retained (1) vs lost (0).\nTop %d SGBs by FDR-adjusted p-value shown; full results in persgb_ethnicity.csv.",
-             TOP_N_FOREST)) +
+         title = "Ethnicity and per-SGB strain stability") +
     theme_Publication() +
     theme(legend.position = "bottom")
 
