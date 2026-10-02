@@ -209,6 +209,31 @@ pl_delta <- ggplot(retained, aes(x = EthnicityTot, y = delta_nucl_diversity, fil
 ggsave(file.path(out_dir, "instrain_microdiversity.pdf"), pl_micro, width = 11, height = 5)
 cat("\nPlot saved to:", file.path(out_dir, "instrain_microdiversity.pdf"), "\n")
 
+#### Cross-sectional: nucl_diversity by ethnicity at each timepoint ####
+# Distinct from the paired baseline-vs-follow-up test above (within-person
+# change) and from by_eth_delta (change restricted to retained strains) —
+# this asks whether Dutch and SAS participants differ in how heterogeneous
+# their A. putredinis population is AT a given timepoint, on all QC-passing
+# participants (div), not just those with a retained strain.
+div_eth <- div %>% filter(!is.na(EthnicityTot))
+
+cat("\nCross-sectional nucl_diversity by ethnicity (all QC-passing participants):\n")
+wt_baseline_eth <- wilcox.test(nucl_diversity_baseline ~ EthnicityTot, data = div_eth, exact = FALSE)
+wt_followup_eth <- wilcox.test(nucl_diversity_followup ~ EthnicityTot, data = div_eth, exact = FALSE)
+cat("  Baseline:  p =", signif(wt_baseline_eth$p.value, 3), "\n")
+cat("  Follow-up: p =", signif(wt_followup_eth$p.value, 3), "\n")
+
+cross_sectional_eth <- div_eth %>%
+    group_by(EthnicityTot) %>%
+    summarise(n = n(),
+              median_baseline = median(nucl_diversity_baseline),
+              median_followup = median(nucl_diversity_followup), .groups = "drop") %>%
+    mutate(wilcox_p_baseline = wt_baseline_eth$p.value,
+           wilcox_p_followup = wt_followup_eth$p.value)
+print(cross_sectional_eth)
+write.csv(cross_sectional_eth, file.path(out_dir, "instrain_microdiversity_crosssectional_ethnicity.csv"),
+          row.names = FALSE)
+
 #### Covariate check: does the ethnicity difference in diversity hold once HbA1c is accounted for? ####
 # All QC-passing participants (div, not just retained strains) — this is
 # about what predicts baseline diversity, not about change over time.
