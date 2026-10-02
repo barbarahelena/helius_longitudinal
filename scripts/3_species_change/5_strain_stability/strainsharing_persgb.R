@@ -69,10 +69,10 @@ dfsame_long_all <- dfsame %>%
 sgb_n <- dfsame_long_all %>%
     group_by(SGB) %>%
     summarise(n = sum(!is.na(shared)), .groups = "drop") %>%
-    filter(n > 237)
+    filter(n > 50)
 
 sgbs_use <- sgb_n$SGB
-message(length(sgbs_use), " SGBs retained (n > 237)")
+message(length(sgbs_use), " SGBs retained (n > 50)")
 
 cladesplit_match <- cladesplit %>%
     mutate(SGB_num = str_extract(SGB, "[0-9]+")) %>%
@@ -181,9 +181,16 @@ message("SGBs significant in both logistic regression and chi-square: ", nrow(ov
 #### Plots ####
 
 ## Forest plot: OR for South-Asian Surinamese vs Dutch, per SGB
-## Species ordered by OR; significant hits highlighted
+## Species ordered by OR; significant hits highlighted. With n > 50, persgb_results
+## now covers ~150 SGBs (vs ~30 at the old n > 237 cutoff) — too many to plot
+## legibly, so the forest plot is restricted to the TOP_N_FOREST most significant
+## by FDR-adjusted p-value. persgb_ethnicity.csv still holds the full results.
+TOP_N_FOREST <- 20
+
 df_plot <- persgb_results %>%
     filter(!is.na(estimate)) %>%
+    arrange(qval, p.value) %>%
+    slice_head(n = TOP_N_FOREST) %>%
     mutate(Species = str_replace_all(Species, "_", " ")) %>%
     add_count(Species, name = "n_species") %>%
     mutate(Species = case_when(
@@ -205,7 +212,9 @@ pl_persgb <- ggplot(df_plot, aes(x = estimate, y = Species, color = qval <= 0.05
     labs(x = "OR South-Asian Surinamese vs Dutch (95% CI)",
          y = NULL,
          title = "Ethnicity and per-SGB strain sharing",
-         caption = "Logistic regression adjusted for Age and follow-up time. Outcome: strain retained (1) vs lost (0).") +
+         caption = sprintf(
+             "Logistic regression adjusted for Age and follow-up time. Outcome: strain retained (1) vs lost (0).\nTop %d SGBs by FDR-adjusted p-value shown; full results in persgb_ethnicity.csv.",
+             TOP_N_FOREST)) +
     theme_Publication() +
     theme(legend.position = "bottom")
 
