@@ -69,10 +69,10 @@ dfsame_long_all <- dfsame %>%
 sgb_n <- dfsame_long_all %>%
     group_by(SGB) %>%
     summarise(n = sum(!is.na(shared)), .groups = "drop") %>%
-    filter(n > 237)
+    filter(n > 50)
 
 sgbs_use <- sgb_n$SGB
-message(length(sgbs_use), " SGBs retained (n > 237)")
+message(length(sgbs_use), " SGBs retained (n > 50)")
 
 cladesplit_match <- cladesplit %>%
     mutate(SGB_num = str_extract(SGB, "[0-9]+")) %>%
@@ -80,6 +80,16 @@ cladesplit_match <- cladesplit %>%
     filter(!is.na(SGB_key)) %>%
     dplyr::select(SGB = SGB_key, Species) %>%
     distinct(SGB, .keep_all = TRUE)
+
+# Exclude GGB-labelled SGBs: "Species" like "GGB1420_SGB1957" means MetaPhlAn
+# could not assign this SGB to a named species, only a provisional
+# genus-level bin — not interpretable as a species-level finding.
+n_before_ggb <- length(sgbs_use)
+ggb_sgbs <- cladesplit_match$SGB[str_starts(cladesplit_match$Species, "GGB")]
+sgbs_use <- setdiff(sgbs_use, ggb_sgbs)
+cladesplit_match <- cladesplit_match %>% filter(SGB %in% sgbs_use)
+message(n_before_ggb - length(sgbs_use), " GGB-labelled SGBs excluded; ",
+        length(sgbs_use), " SGBs remain")
 
 dfsame_long <- dfsame_long_all %>%
     filter(SGB %in% sgbs_use) %>%
@@ -99,6 +109,15 @@ message("dfsame_long rows: ", nrow(dfsame_long),
 # Predictor: EthnicityTot (South-Asian Surinamese vs Dutch as reference)
 # Adjustment: Age (z-scored), FUtime (z-scored)
 # Model:     logistic regression, one model per SGB
+#
+# With n > 50 (pooled across both ethnicities), the pooled total can pass
+# while one ethnicity group is still tiny (e.g. 49 Dutch / 2 SAS) — the
+# ethnicity OR would then be unstable even though nrow(df_sgb) looks fine.
+# A per-group floor of 10 still let through cases like SGB14991 (Dutch
+# n=84, SAS n=34), where SAS's "not shared" cell was just 1 subject, giving
+# a technically-finite but absurd 95% CI (0.8-91.6). MIN_N_PER_ETHNICITY
+# requires both groups to individually clear a much higher floor.
+MIN_N_PER_ETHNICITY <- 50
 
 message("Running per-SGB logistic regressions: shared ~ EthnicityTot + Age_z + FUtime_z ...")
 persgb_results <- purrr::map_dfr(sgbs_use, function(sgb) {
@@ -106,7 +125,10 @@ persgb_results <- purrr::map_dfr(sgbs_use, function(sgb) {
         filter(SGB == sgb, !is.na(shared), !is.na(EthnicityTot),
                !is.na(Age_z), !is.na(FUtime_z))
 
-    if (nrow(df_sgb) < 30 || length(unique(df_sgb$shared)) < 2) {
+    n_per_eth <- table(df_sgb$EthnicityTot)
+    underpowered <- length(n_per_eth) < 2 || any(n_per_eth < MIN_N_PER_ETHNICITY)
+
+    if (nrow(df_sgb) < 30 || length(unique(df_sgb$shared)) < 2 || underpowered) {
         return(tibble(SGB = sgb, n = nrow(df_sgb)))
     }
 
@@ -145,7 +167,7 @@ chisq_results <- purrr::map_dfr(sgbs_use, function(sgb) {
     if (nrow(df_sgb) < 10) return(NULL)
 
     tbl <- table(df_sgb$EthnicityTot, df_sgb$shared)
-    if (any(dim(tbl) < 2)) return(NULL)
+    if (any(dim(tbl) < 2) || any(rowSums(tbl) < MIN_N_PER_ETHNICITY)) return(NULL)
 
     tryCatch({
         ct <- chisq.test(tbl)
@@ -181,13 +203,31 @@ message("SGBs significant in both logistic regression and chi-square: ", nrow(ov
 #### Plots ####
 
 ## Forest plot: OR for South-Asian Surinamese vs Dutch, per SGB
-## Species ordered by OR; significant hits highlighted
-df_plot <- persgb_results %>%
-    filter(!is.na(estimate)) %>%
+## Species ordered by OR; significant hits highlighted. With n > 50, persgb_results
+## now covers ~150 SGBs (vs ~30 at the old n > 237 cutoff) — too many to plot
+## legibly, so the forest plot is restricted to the TOP_N_FOREST most significant
+## by FDR-adjusted p-value. persgb_ethnicity.csv still holds the full results.
+TOP_N_FOREST <- 30
+
+## A handful of SGBs hit complete separation (e.g. every Dutch participant
+## retained the strain, 0 "lost" cases) — glm()'s MLE for the ethnicity term
+## then diverges, giving an astronomically large or literally infinite OR/CI.
+## These are numerical artifacts, not meaningful estimates, so they're
+## dropped from the plot (kept in persgb_ethnicity.csv) rather than letting
+## them blow out the x-axis for every other SGB.
+n_before_separation <- sum(!is.na(persgb_results$estimate))
+persgb_results_finite <- persgb_results %>%
+    filter(!is.na(estimate), is.finite(estimate), is.finite(conf.low), is.finite(conf.high))
+message(n_before_separation - nrow(persgb_results_finite),
+        " SGB(s) excluded from the plot for non-finite OR/CI (complete separation)")
+
+df_plot <- persgb_results_finite %>%
+    arrange(qval, p.value) %>%
+    slice_head(n = TOP_N_FOREST) %>%
     mutate(Species = str_replace_all(Species, "_", " ")) %>%
     add_count(Species, name = "n_species") %>%
     mutate(Species = case_when(
-        n_species > 1 ~ paste0(Species, " (SGB", SGB, ")"),
+        n_species > 1 ~ paste0(Species, " (", SGB, ")"),
         TRUE          ~ Species
     )) %>%
     dplyr::select(-n_species) %>%
@@ -204,8 +244,7 @@ pl_persgb <- ggplot(df_plot, aes(x = estimate, y = Species, color = qval <= 0.05
         name = NULL) +
     labs(x = "OR South-Asian Surinamese vs Dutch (95% CI)",
          y = NULL,
-         title = "Ethnicity and per-SGB strain sharing",
-         caption = "Logistic regression adjusted for Age and follow-up time. Outcome: strain retained (1) vs lost (0).") +
+         title = "Ethnicity and per-SGB strain stability") +
     theme_Publication() +
     theme(legend.position = "bottom")
 

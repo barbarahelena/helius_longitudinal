@@ -3,7 +3,7 @@
 ## Panels:
 ##   A — LMM forest plot: species with significant ethnicity x timepoint interaction
 ##   B — Ethnicity composition per clade (barplot)
-##   C — Baseline abundance per clade, Dutch vs SAS (boxplot)
+##   C — Abundance per clade, Dutch vs SAS (boxplot, baseline + follow-up facets)
 ##   D — VFDB boxplot 1
 ##   E — VFDB boxplot 2
 ##   F — Alistipes phylogenetic tree (full width)
@@ -38,10 +38,13 @@ eth_abund_col <- ggarrange(
 panel_A <- as_ggplot(as.grob(pl_forest_heatmap))
 
 # Row 1: [forest + heatmap] | [eth bar / abundance] | VF boxplot 1 | VF boxplot 2
+# eth_abund_col's width bumped up (1.2 -> 2.2): panel C (p_abund_clade) now
+# facets Baseline | Follow-up side by side, so it needs roughly twice the
+# horizontal room it did as a single panel, or the two facets get cramped.
 top_row <- ggarrange(
   panel_A, eth_abund_col, feat_plots[[1]], feat_plots[[2]],
   ncol   = 4,
-  widths = c(2.5, 1.2, 1, 1),
+  widths = c(2.5, 2.2, 1, 1),
   labels = c("A", "", "D", "E")
 )
 
@@ -55,8 +58,11 @@ fig3 <- ggarrange(
 )
 
 dir.create("results/3_species_change", showWarnings = FALSE, recursive = TRUE)
+# Width bumped 18 -> 21 in proportion to the eth_abund_col widening above, so
+# panel A/D/E keep roughly their previous absolute size instead of shrinking
+# to make room for panel C's second facet.
 ggsave(fig3, filename = "results/3_species_change/figure3.pdf",
-       width = 18, height = 16, device = cairo_pdf)
+       width = 21, height = 16, device = cairo_pdf)
 
 ## Supplementary figure: strain stability panels (G–J) ----
 suppl_strain <- ggarrange(

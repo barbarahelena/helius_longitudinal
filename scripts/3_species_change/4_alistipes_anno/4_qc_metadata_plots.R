@@ -332,7 +332,9 @@ eth_tp_clade <- bind_rows(clade_at_bl, clade_at_fu) %>%
   mutate(prop = n / sum(n)) %>%
   ungroup()
 
-# Chi-square per timepoint
+# Fisher exact per timepoint (not chi-square: Clade IV has only 6 bins total,
+# so several expected cell counts fall well below the chi-square approximation's
+# validity threshold)
 for (tp in c("baseline", "follow-up")) {
   mat <- eth_tp_clade %>%
     filter(timepoint == tp) %>%
@@ -340,9 +342,8 @@ for (tp in c("baseline", "follow-up")) {
     pivot_wider(names_from = EthnicityTot, values_from = n, values_fill = 0L) %>%
     tibble::column_to_rownames("clade") %>%
     as.matrix()
-  chi <- chisq.test(mat)
-  cat(sprintf("\nChi-square clade × ethnicity at %s: chi2 = %.2f, df = %d, p = %.4f\n",
-              tp, chi$statistic, chi$parameter, chi$p.value))
+  ft <- fisher.test(mat)
+  cat(sprintf("\nFisher exact clade × ethnicity at %s: p = %.4f\n", tp, ft$p.value))
 }
 
 p_eth_tp <- ggplot(eth_tp_clade,
@@ -537,12 +538,33 @@ detect_subj <- detect_pat %>%
   )
 
 # Simple 2x2 Fisher exact: is "follow-up only" enriched in SAS vs Dutch?
+#
+# CAUTION — this is the unconditional comparison only, and it is confounded
+# by baseline prevalence, not a test of acquisition RISK. tip_meta_clades only
+# contains participants who had a MAG assembled from at least one timepoint,
+# so anyone with zero detectable A. putredinis at BOTH timepoints has no row
+# here at all — the "never colonised" category is structurally invisible to
+# this dataset. That means the proper at-risk denominator (baseline-negative,
+# including true never-carriers) cannot be built from MAG data: fu_only
+# already IS the full baseline-negative group with no not-acquired comparison
+# group available alongside it. A large OR here mostly reflects how many
+# people are even eligible to be "fu_only" (which depends on baseline
+# prevalence, itself very different by ethnicity — 90.7% Dutch vs 56.5% SAS),
+# not a difference in per-person acquisition rate.
+#
+# The properly conditioned test — restricted to baseline-negative participants
+# only, using the full sequenced cohort (not just MAG carriers), from MetaPhlAn
+# relative abundance — lives in 8_acquisition_readlevel.R. It finds NO
+# significant ethnicity difference in acquisition rate among the at-risk
+# population (Dutch 31.8% vs SAS 39.8%, Fisher p = 0.63), despite this
+# unconditional comparison below looking highly significant. Use that script's
+# result for any claim about acquisition risk; treat this one as descriptive.
 fu_tab <- table(ethnicity = detect_subj$EthnicityTot,
                 fu_only   = detect_subj$fu_only)
-cat("\nFollow-up only detection by ethnicity:\n")
+cat("\nFollow-up only detection by ethnicity (unconditional; see 8_acquisition_readlevel.R for the at-risk-conditioned test):\n")
 print(fu_tab)
 ft_fu <- fisher.test(fu_tab)
-cat(sprintf("Fisher exact test (fu_only × ethnicity): OR = %.2f, p = %.4f\n",
+cat(sprintf("Fisher exact test (fu_only × ethnicity, unconditional): OR = %.2f, p = %.4f\n",
             ft_fu$estimate, ft_fu$p.value))
 
 # Which clade(s) are being newly acquired at follow-up?
@@ -712,15 +734,16 @@ tp_clade <- tip_meta_clades %>%
   mutate(prop = n / sum(n)) %>%
   ungroup()
 
-# Chi-square: is timepoint distribution independent of clade?
+# Fisher exact (not chi-square): is timepoint distribution independent of
+# clade? Clade IV's small n (6 bins total) puts several expected cell counts
+# below the chi-square approximation's validity threshold.
 tp_mat <- tp_clade %>%
   dplyr::select(clade, timepoint, n) %>%
   pivot_wider(names_from = timepoint, values_from = n, values_fill = 0L) %>%
   tibble::column_to_rownames("clade") %>%
   as.matrix()
-chi_tp <- chisq.test(tp_mat)
-cat(sprintf("\nChi-square dominant timepoint × clade: chi2 = %.2f, df = %d, p = %.4f\n",
-            chi_tp$statistic, chi_tp$parameter, chi_tp$p.value))
+ft_tp <- fisher.test(tp_mat)
+cat(sprintf("\nFisher exact dominant timepoint × clade: p = %.4f\n", ft_tp$p.value))
 
 # Stratified by ethnicity: does the timepoint × clade pattern hold within each group?
 tp_clade_eth <- tip_meta_clades %>%
@@ -737,9 +760,8 @@ for (eth in c("Dutch", "South-Asian Surinamese")) {
     pivot_wider(names_from = timepoint, values_from = n, values_fill = 0L) %>%
     tibble::column_to_rownames("clade") %>%
     as.matrix()
-  chi_eth <- chisq.test(mat_eth)
-  cat(sprintf("  %s — chi2 = %.2f, df = %d, p = %.4f\n",
-              eth, chi_eth$statistic, chi_eth$parameter, chi_eth$p.value))
+  ft_eth <- fisher.test(mat_eth)
+  cat(sprintf("  %s — Fisher exact p = %.4f\n", eth, ft_eth$p.value))
 }
 
 # Plot stratified by ethnicity
@@ -784,7 +806,7 @@ p_tp_clade <- ggplot(tp_clade, aes(x = clade, y = prop, fill = timepoint)) +
   scale_y_continuous(labels = scales::percent_format()) +
   labs(
     title    = "Dominant timepoint per clade",
-    subtitle = sprintf("Chi-square p = %.4f", chi_tp$p.value),
+    subtitle = sprintf("Fisher exact p = %.4f", ft_tp$p.value),
     x        = "",
     y        = "Proportion of bins"
   ) +

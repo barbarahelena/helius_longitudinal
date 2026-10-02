@@ -14,7 +14,7 @@ library(ggnewscale)
 library(ggsci)
 
 #### Paths ####
-tree_file   <- "data/shotgun/alistipes_annotation/alistipes_new.treefile"
+tree_file   <- "data/shotgun/alistipes_c70/iqtree/alistipes_c70.treefile"
 vfdb_file   <- "data/shotgun/alistipes_annotation/all_vfdb_results.txt"
 fasta_file  <- "data/shotgun/alistipes_annotation/VFDB_setB_pro.fas"
 anno_file   <- "data/shotgun/alistipes_annotation/eggnog/all_eggnog_results.annotations"
@@ -47,8 +47,9 @@ trans_all <- read.delim(trans_file, header = TRUE, sep = "\t", stringsAsFactors 
 cat("Bins in translation table:", nrow(trans_all), "\n")
 
 # Restrict to >= MIN_COMPLETENESS (see utils.R): for this tree this is a no-op
-# in practice (every bin the external Panaroo/IQTree3 pipeline included is
-# already >= MIN_COMPLETENESS, and every bin it excluded is below it) — the
+# in practice (the external Panaroo/IQTree3 pipeline was rebuilt on exactly
+# the >=70%/<10% bin set, so every bin it included is already
+# >= MIN_COMPLETENESS, and every bin it excluded is below it) — the
 # stopifnot makes that explicit rather than left as a silent coincidence.
 eligible <- eligible_locus_prefixes(trans_all, batch_files)
 trans <- trans_all %>% filter(locus_prefix %in% eligible)
@@ -262,15 +263,50 @@ call_monophyletic_clades <- function(phylo, D, h) {
   )
 }
 
-# H_CUT: a fine sweep of h (0.001 steps, 0.015-0.05) found no natural break
-# near 0.02 for the old average-linkage method. Under the monophyletic caller
-# the same sweep shows a clean, wide plateau at 9 clades for h in
-# [0.029, 0.040] (12 consecutive grid points with no change) — by far the
-# most stable partition in the whole range — so that plateau is used as the
-# primary, data-driven cutoff. h = 0.02 (finer-grained, 26 clades) is kept
-# below purely as a sensitivity comparison, alongside the rest of the sweep.
-H_CUT             <- 0.03    # primary: start of the [0.029, 0.040] plateau
-H_CUT_SENSITIVITY <- 0.02    # for comparison only, see clade_h_sensitivity.csv
+# ---- H_CUT calibration: fine sweep for the widest stable plateau ----
+# h cuts on total patristic (branch-length) distance, which has no fixed
+# absolute scale across tree rebuilds — it rescales whenever the underlying
+# alignment/tree changes (this tree, rebuilt on the >=70%/<10% bin set, turns
+# out to need a different h than the previous 180-tip, >=80% tree: h = 0.03
+# gives 9 clades on the old tree but 20 on this one). So H_CUT is picked
+# fresh from a fine sweep (step 0.001) of whichever tree is actually loaded,
+# rather than reused as a literal from a prior run.
+#
+# Rule: take the widest run of consecutive h values giving the same cluster
+# count (the most stable partition nearby), then set H_CUT one grid step
+# inside its start. n_clusters == 1 is excluded from consideration — once h
+# exceeds the tree's root-level max pairwise distance, everything collapses
+# into one cluster and stays there for every larger h, so that "plateau" is
+# open-ended by construction and says nothing about genuine clade structure.
+H_SWEEP_GRID <- seq(0.005, 0.10, by = 0.001)
+
+h_sweep_counts <- map_dfr(H_SWEEP_GRID, function(h) {
+  tibble(h = h, n_clusters = n_distinct(call_monophyletic_clades(phylo_tree, D, h)))
+})
+write.csv(h_sweep_counts, file.path(results_dir, "h_calibration_sweep.csv"), row.names = FALSE)
+
+h_runs       <- rle(h_sweep_counts$n_clusters)
+h_run_starts <- cumsum(c(1, head(h_runs$lengths, -1)))
+h_plateaus <- tibble(
+  n_clusters = h_runs$values,
+  length     = h_runs$lengths,
+  h_start    = h_sweep_counts$h[h_run_starts],
+  h_end      = h_sweep_counts$h[h_run_starts + h_runs$lengths - 1]
+) %>%
+  filter(n_clusters > 1) %>%
+  arrange(desc(length))
+write.csv(h_plateaus, file.path(results_dir, "h_calibration_plateaus.csv"), row.names = FALSE)
+
+cat("\nH_CUT calibration: sweeping h =", min(H_SWEEP_GRID), "-", max(H_SWEEP_GRID),
+    "(step 0.001) on the loaded tree\n")
+cat("Widest non-trivial plateaus (n_clusters > 1):\n")
+print(head(h_plateaus, 5))
+
+best_plateau <- h_plateaus[1, ]
+H_CUT <- round(best_plateau$h_start + 0.001, 3)
+cat("\nSelected H_CUT =", H_CUT, "— one grid step inside the widest plateau (",
+    best_plateau$n_clusters, "clades over h in [", best_plateau$h_start, ",",
+    best_plateau$h_end, "],", best_plateau$length, "consecutive grid points)\n")
 
 tip_clusters <- call_monophyletic_clades(phylo_tree, D, H_CUT)
 cat("Monophyletic clades detected at h =", H_CUT, ":", n_distinct(tip_clusters), "\n")
@@ -332,7 +368,15 @@ print(clade_nodes %>% dplyr::select(clade, n_tips, node))
 # not a hand-picked subset — so no clade is silently dropped from the figures
 # or tables. Smaller clades are reported here (and in the CSV below) but
 # excluded from group comparisons that need reasonable group sizes.
-PLOT_CLADES <- clade_nodes %>% filter(n_tips >= MIN_CLADE_SIZE) %>% pull(clade)
+# Ordered by the roman numeral in the clade name (I, II, III, ...), not by
+# clade_nodes' current row order (tree node order, which does not follow
+# clade size/numbering) — so every downstream plot and table lists clades
+# in the same I, II, III, ... sequence rather than whatever order they
+# happen to appear in the tree.
+PLOT_CLADES <- clade_nodes %>%
+  filter(n_tips >= MIN_CLADE_SIZE) %>%
+  arrange(as.integer(as.roman(sub("^Clade ", "", clade)))) %>%
+  pull(clade)
 cat("\nPLOT_CLADES (n_tips >=", MIN_CLADE_SIZE, "):", paste(PLOT_CLADES, collapse = ", "), "\n")
 cat("Excluded from PLOT_CLADES (too few tips for group-wise stats):",
     paste(setdiff(clade_nodes$clade, PLOT_CLADES), collapse = ", "), "\n")
@@ -370,11 +414,17 @@ clade_map <- tibble(
 tip_meta_clades <- tip_meta %>%
   left_join(clade_map %>% dplyr::select(bin_name, clade), by = "bin_name")
 
-# Run KW for all VFDB categories across PLOT_CLADES only (baseline bins only)
-# — restricted to clades with enough tips (MIN_CLADE_SIZE) so the comparison
-# isn't diluted by singleton/near-singleton groups.
+# Run KW for all VFDB categories across PLOT_CLADES only — restricted to
+# clades with enough tips (MIN_CLADE_SIZE) so the comparison isn't diluted by
+# singleton/near-singleton groups. All bins are used regardless of dominant
+# timepoint: tip_meta_clades already has exactly one row per bin (gene content
+# is a property of the assembled genome, not a per-timepoint value — same
+# reasoning as 2_vfdb_comparison.R), so filtering to timepoint == "baseline"
+# would not avoid any pseudoreplication; it would only drop bins whose
+# dominant sample happened to be follow-up, which can wipe out an entire
+# clade (Clade IV's 6 bins are all follow-up-dominant).
 tip_meta_focal <- tip_meta_clades %>%
-  filter(timepoint == "baseline", clade %in% PLOT_CLADES)
+  filter(clade %in% PLOT_CLADES)
 
 vf_kw <- map_dfr(vf_cat_cols, function(cat) {
   vals  <- tip_meta_focal[[cat]]
@@ -410,7 +460,10 @@ cat("Top", N_TOP_VF, "VF categories for plots:", paste(TOP_VF_CATS, collapse = "
 # whether (i) the number of clades that are majority-Dutch vs majority-SAS
 # among PLOT_CLADES-sized clusters is stable, and (ii) the top VF categories
 # above stay significantly different across clades (Kruskal-Wallis).
-H_SWEEP <- c(0.02, 0.025, 0.03, 0.035, 0.04)
+# Bracketed around the calibrated H_CUT (not a fixed literal range) so this
+# check still spans "one step finer" to "one step coarser" than H_CUT after a
+# tree rebuild shifts the calibration.
+H_SWEEP <- sort(unique(c(H_CUT - 0.01, H_CUT - 0.005, H_CUT, H_CUT + 0.005, H_CUT + 0.01)))
 
 sensitivity_results <- map_dfr(H_SWEEP, function(h) {
   cl_h  <- call_monophyletic_clades(phylo_tree, D, h)
@@ -456,6 +509,53 @@ sensitivity_results <- map_dfr(H_SWEEP, function(h) {
 cat("\nSensitivity of clade calling across h:\n")
 print(sensitivity_results, n = Inf)
 write.csv(sensitivity_results, file.path(results_dir, "clade_h_sensitivity.csv"), row.names = FALSE)
+
+# ---- 8a-iv. Sensitivity: clade assignment on a high-quality-only pruned tree ----
+# Re-derive clades with the same monophyletic caller (same H_CUT) after
+# pruning the tree to only the high-quality MAGs (completeness >= 90%,
+# contamination < 5%), then check that every HQ tip's clade assignment
+# matches what it got from the full 180-tip clustering above. This is a
+# robustness check only: the primary clade-level gene-content comparisons
+# (8a-ii above, section 10b below) still use all bins in PLOT_CLADES, not
+# just this HQ subset.
+HQ_COMPLETENESS_MIN  <- 90
+HQ_CONTAMINATION_MAX <- 5
+
+tip_quality <- add_bin_quality(
+  tip_meta_clades %>% dplyr::select(bin_name, locus_prefix, clade),
+  trans, batch_files
+)
+hq_tips <- tip_quality %>%
+  filter(Completeness >= HQ_COMPLETENESS_MIN, Contamination < HQ_CONTAMINATION_MAX) %>%
+  pull(bin_name)
+cat("\nHigh-quality MAGs (completeness >=", HQ_COMPLETENESS_MIN,
+    "%, contamination <", HQ_CONTAMINATION_MAX, "%):", length(hq_tips), "\n")
+
+phylo_tree_hq   <- ape::keep.tip(phylo_tree, hq_tips)
+D_hq            <- ape::cophenetic.phylo(phylo_tree_hq)
+tip_clusters_hq <- call_monophyletic_clades(phylo_tree_hq, D_hq, H_CUT)
+cat("Monophyletic clades on HQ-pruned tree at h =", H_CUT, ":",
+    n_distinct(tip_clusters_hq), "\n")
+
+# "Unchanged" means every original clade's HQ tips fall into exactly one
+# HQ-tree cluster, and every HQ-tree cluster's tips come from exactly one
+# original clade — i.e. no clade is split or merged by pruning to HQ-only.
+hq_compare <- tibble(bin_name = names(tip_clusters_hq), hq_cluster = tip_clusters_hq) %>%
+  left_join(tip_quality %>% dplyr::select(bin_name, clade), by = "bin_name")
+
+clade_to_hq_clusters <- hq_compare %>%
+  group_by(clade) %>%
+  summarise(hq_clusters = n_distinct(hq_cluster), n_tips = n(), .groups = "drop")
+hq_cluster_to_clades <- hq_compare %>%
+  group_by(hq_cluster) %>%
+  summarise(source_clades = n_distinct(clade), n_tips = n(), .groups = "drop")
+
+hq_assignment_unchanged <- all(clade_to_hq_clusters$hq_clusters == 1) &&
+  all(hq_cluster_to_clades$source_clades == 1)
+cat("Clade assignment unchanged on HQ-pruned tree:", hq_assignment_unchanged, "\n")
+print(clade_to_hq_clusters)
+
+write.csv(hq_compare, file.path(results_dir, "clade_hq_sensitivity.csv"), row.names = FALSE)
 
 # ---- 8b. Base tree with clade highlights ----
 # Pre-compute tip layout here so we can restrict each highlight to the exact
@@ -606,6 +706,11 @@ cat("\nPer-sample tree saved to:", file.path(results_dir, "alistipes_tree.pdf"),
 
 #### 9. Per-clade summary ####
 ## 9a. Chi-square: clade × ethnicity association — restricted to PLOT_CLADES
+# NOTE: Clade IV has only 6 bins, so its expected cell counts (~2.7) are below
+# the usual >=5 rule of thumb for the chi-square approximation (chisq.test
+# flags this itself with a warning). Fisher's exact test gives an equivalent
+# conclusion (p = 0.084 vs chi-square's 0.089) if the approximation is a
+# concern; chi-square is used here as the primary reported test regardless.
 clade_eth_tab <- table(
   clade    = tip_meta_clades$clade[tip_meta_clades$clade %in% PLOT_CLADES],
   ethnicity = tip_meta_clades$EthnicityTot[tip_meta_clades$clade %in% PLOT_CLADES]
@@ -617,6 +722,23 @@ print(clade_eth_tab)
 chisq_res <- chisq.test(clade_eth_tab)
 cat("\nChi-square test (clade × ethnicity):\n")
 print(chisq_res)
+
+## 9a-ii. Fisher exact, each clade vs all others (one-vs-rest)
+# Follow-up to the omnibus test above: each clade tested individually against
+# the rest, to see which clade (if any) is driving the overall association.
+# Not corrected for multiple comparisons across the 4 clades — these are
+# reported as individual, separately-interpretable tests, not as a family of
+# simultaneous discoveries.
+clade_eth_restricted <- tip_meta_clades %>% filter(clade %in% PLOT_CLADES)
+clade_onevsrest <- map_dfr(PLOT_CLADES, function(cl) {
+  is_this_clade <- clade_eth_restricted$clade == cl
+  tab <- table(is_this_clade, clade_eth_restricted$EthnicityTot)
+  ft  <- fisher.test(tab)
+  tibble(clade = cl, OR = unname(ft$estimate), p = ft$p.value)
+})
+cat("\nFisher exact, each clade vs all others:\n")
+print(clade_onevsrest)
+write.csv(clade_onevsrest, file.path(results_dir, "clade_ethnicity_onevsrest_fisher.csv"), row.names = FALSE)
 
 ## 9b. Per-clade functional summary (counts = bins)
 clade_summary <- tip_meta_clades %>%
@@ -664,7 +786,8 @@ jco_cols <- jco_palette()
 
 ## 10a. Clade distribution per ethnicity (panel B — flipped from original)
 # Shows: for each ethnicity, what proportion of its bins fall in each clade.
-# Chi-square based on present-sample (depth > 0 at baseline) counts.
+# Fisher exact (not chi-square) based on present-sample (depth > 0 at
+# baseline) counts — same small-Clade-IV rationale as 9a above.
 sample_counts_clade <- tip_meta_clades %>%
   filter(!is.na(EthnicityTot), depth_baseline >= PRESENCE_THRESHOLD, clade %in% PLOT_CLADES) %>%
   count(clade, EthnicityTot) %>%
@@ -674,9 +797,9 @@ eth_chisq_mat <- sample_counts_clade %>%
   tibble::column_to_rownames("clade") %>%
   as.matrix()
 
-eth_chisq <- chisq.test(eth_chisq_mat)
-cat("\nChi-square test (ethnicity × clade, present-sample counts, PLOT_CLADES only):\n")
-print(eth_chisq)
+eth_fisher <- fisher.test(eth_chisq_mat)
+cat("\nFisher exact test (ethnicity × clade, present-sample counts, PLOT_CLADES only):\n")
+print(eth_fisher)
 
 # Stacked bar: proportion of each ethnicity per clade, ordered by clade name
 eth_clade_long <- tip_meta_clades %>%
@@ -698,7 +821,7 @@ p_eth <- ggplot(eth_clade_long, aes(x = clade, y = prop, fill = EthnicityTot)) +
   scale_y_continuous(labels = scales::percent_format()) +
   coord_flip() +
   labs(title    = "Ethnicity composition per clade",
-       # subtitle = paste0("Chi-square p = ", signif(eth_chisq$p.value, 3)),
+       # subtitle = paste0("Fisher exact p = ", signif(eth_fisher$p.value, 3)),
        x = "", y = "Proportion of bins", fill = "") +
   theme_Publication()
 
@@ -708,9 +831,10 @@ clade_levels    <- PLOT_CLADES
 clade_pairs_all <- combn(clade_levels, 2, simplify = FALSE)
 clade_fill_cols <- clade_colors[PLOT_CLADES]
 
-# Restricted to baseline bins only (avoids pseudoreplication from paired timepoints)
+# All bins used regardless of dominant timepoint — one row per bin already
+# (gene content has no per-timepoint value), so there is no pseudoreplication
+# to avoid by restricting to "baseline"; see tip_meta_focal above.
 func_long <- tip_meta_clades %>%
-  filter(timepoint == "baseline") %>%
   dplyr::select(clade, all_of(TOP_VF_CATS)) %>%
   pivot_longer(cols = -clade,
                names_to = "feature", values_to = "proportion")
@@ -726,6 +850,11 @@ sig_pairs <- map_dfr(unique(func_long_filt$feature), function(feat) {
   if (kw_p >= 0.05) return(NULL)
   map_dfr(clade_pairs_all, function(pair) {
     d <- sub %>% filter(clade %in% pair)
+    # A clade can have zero baseline-timepoint rows (all its bins have
+    # follow-up as the dominant sample; see the timepoint comment above
+    # func_long) — skip pairs missing one side rather than let
+    # wilcox.test.formula error on a factor with < 2 levels present.
+    if (n_distinct(d$clade) < 2) return(NULL)
     p <- wilcox.test(proportion ~ clade, data = d, exact = FALSE)$p.value
     tibble(feature = feat, group1 = pair[1], group2 = pair[2], p_raw = p)
   }) %>%
@@ -757,34 +886,46 @@ feat_plots <- purrr::map(unique(func_long_filt$feature), function(feat) {
   p
 })
 
-## 10c. Horizontal boxplot: baseline depth per clade, Dutch vs SAS
+## 10c. Horizontal boxplot: depth per clade, Dutch vs SAS, baseline + follow-up facets
 abund_clade <- tip_meta_clades %>%
-  filter(!is.na(EthnicityTot), clade %in% PLOT_CLADES, depth_baseline >= PRESENCE_THRESHOLD) %>%
+  filter(!is.na(EthnicityTot), clade %in% PLOT_CLADES) %>%
+  dplyr::select(clade, EthnicityTot, depth_baseline, depth_followup) %>%
+  pivot_longer(cols = c(depth_baseline, depth_followup),
+               names_to = "timepoint", values_to = "depth") %>%
   mutate(
+    timepoint    = recode(timepoint,
+                          depth_baseline = "Baseline", depth_followup = "Follow-up"),
+    timepoint    = factor(timepoint, levels = c("Baseline", "Follow-up")),
     EthnicityTot = factor(EthnicityTot, levels = c("South-Asian Surinamese", "Dutch")),
     clade        = factor(clade, levels = rev(PLOT_CLADES))
+  ) %>%
+  filter(depth >= PRESENCE_THRESHOLD)
+
+wx_abund_clade <- pmap_dfr(
+  tidyr::crossing(clade = PLOT_CLADES, timepoint = c("Baseline", "Follow-up")),
+  function(clade, timepoint) {
+    d <- abund_clade %>% filter(clade == .env$clade, timepoint == .env$timepoint)
+    p <- if (n_distinct(d$EthnicityTot) < 2) NA_real_ else
+      wilcox.test(depth ~ EthnicityTot, data = d, exact = FALSE)$p.value
+    tibble(clade = clade, timepoint = timepoint, p = p)
+  }
+) %>%
+  mutate(
+    timepoint = factor(timepoint, levels = c("Baseline", "Follow-up")),
+    p_label   = case_when(
+      is.na(p)  ~ "",
+      p < 0.001 ~ "***",
+      p < 0.01  ~ "**",
+      p < 0.05  ~ "*",
+      TRUE      ~ ""
+    )
   )
 
-wx_abund_clade <- map_dfr(PLOT_CLADES, function(cl) {
-  d <- abund_clade %>% filter(clade == cl)
-  if (n_distinct(d$EthnicityTot) < 2) return(NULL)
-  p <- wilcox.test(depth_baseline ~ EthnicityTot, data = d, exact = FALSE)$p.value
-  tibble(clade = cl, p = p)
-}) %>%
-  mutate(p_label = case_when(
-    p < 0.001 ~ "***",
-    p < 0.01  ~ "**",
-    p < 0.05  ~ "*",
-    TRUE      ~ ""
-  ))
-
-cat("\nWilcoxon baseline depth per clade (Dutch vs SAS):\n")
+cat("\nWilcoxon depth per clade x timepoint (Dutch vs SAS):\n")
 print(wx_abund_clade)
 
-x_max_abund <- max(abund_clade$depth_baseline, na.rm = TRUE)
-
 p_abund_clade <- ggplot(abund_clade,
-                        aes(x = depth_baseline, y = clade, fill = EthnicityTot)) +
+                        aes(x = depth, y = clade, fill = EthnicityTot)) +
   geom_boxplot(outlier.size = 0.5, width = 0.55, alpha = 0.8,
                position = position_dodge(0.65)) +
   geom_text(
@@ -796,9 +937,10 @@ p_abund_clade <- ggplot(abund_clade,
   ) +
   scale_fill_manual(values = rev(jco_cols[1:2]), name = "") +
   scale_x_continuous(expand = expansion(mult = c(0.02, 0.18))) +
+  facet_wrap(~ timepoint) +
   labs(
-    title = "Baseline abundance per clade",
-    x     = "Sequencing depth (baseline)",
+    title = "Abundance per clade",
+    x     = "Sequencing depth",
     y     = ""
   ) +
   theme_Publication() +

@@ -23,12 +23,17 @@ trans_all <- read.delim(trans_file, header = TRUE, sep = "\t",
   rename(locus_prefix = locus_tag_prefix)
 cat("Bins in translation table:", nrow(trans_all), "\n")
 
-# Restrict to >= MIN_COMPLETENESS (see utils.R), the same eligibility rule
-# 3_draw_tree.R applies (there it reproduces tree membership exactly; here,
-# unlike the tree, there is no external pipeline already enforcing it).
-eligible <- eligible_locus_prefixes(trans_all, batch_files)
+# Restrict to >= VFDB_MIN_COMPLETENESS: the broader annotation QC threshold
+# (>70% completeness, <10% contamination; filter_samplesheets_by_quality.py),
+# same as 5_instrain_strain_retention.R and 6_instrain_between_person.R. Not
+# utils.R's stricter MIN_COMPLETENESS (80%) — that exists only to reproduce
+# external tree membership for 3_draw_tree.R and has no equivalent constraint
+# here, so there is no reason to inherit it.
+VFDB_MIN_COMPLETENESS <- 70
+eligible <- eligible_locus_prefixes(trans_all, batch_files,
+                                    min_completeness = VFDB_MIN_COMPLETENESS)
 trans <- trans_all %>% filter(locus_prefix %in% eligible)
-cat("Bins with completeness >=", MIN_COMPLETENESS, "%:", nrow(trans), "\n")
+cat("Bins with completeness >=", VFDB_MIN_COMPLETENESS, "%:", nrow(trans), "\n")
 
 #### 2. Parse VFDB FASTA headers → annotation lookup ####
 # Header format:

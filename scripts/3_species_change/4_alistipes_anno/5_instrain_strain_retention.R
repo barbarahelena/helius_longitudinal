@@ -14,6 +14,16 @@
 ## Libraries
 library(tidyverse)
 library(ggpubr)
+library(ggsci)
+
+# Same Dutch/SAS colours used throughout 4_alistipes_anno/ (utils.R
+# jco_palette()) — duplicated rather than sourced so this script stays
+# independently reviewable; keep in sync with utils.R by hand.
+jco_palette <- function() {
+    cols <- pal_jco()(2)
+    names(cols) <- c("Dutch", "South-Asian Surinamese")
+    cols
+}
 
 theme_Publication <- function(base_size=14, base_family="sans") {
     library(grid)
@@ -47,8 +57,11 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 }
 
 #### Paths ####
-in_dir  <- "data/shotgun/instrain_ap/compare"
-out_dir <- "results/3_species_change/5_strain_stability"
+in_dir       <- "data/shotgun/instrain_ap/compare"
+# instrain_manifest.csv is produced by 1_make_instrain_manifest.R, which
+# writes into the shared strain_stability results folder, not here.
+manifest_dir <- "results/3_species_change/5_strain_stability"
+out_dir      <- "results/3_species_change/4_alistipes_anno"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### Constants ####
@@ -56,13 +69,17 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 POPANI_SAME_STRAIN <- 0.99999
 # Minimum fraction of the genome compared for the popANI call to be trusted.
 MIN_GENOME_COMPARED <- 0.5
-# Same eligibility rule as MIN_COMPLETENESS in utils.R (3_draw_tree.R,
-# 2_vfdb_comparison.R): the tree-derived clade shown alongside these results
-# only exists for bins >= 80% complete, so bins below that are excluded here
-# too, for consistency, even though the manifest itself doesn't require it.
-# Duplicated rather than sourced from utils.R so this script/PR stays
-# independently reviewable — keep this value in sync with utils.R by hand.
-MIN_COMPLETENESS <- 80
+# Same QC threshold used for the annotation-track bin set overall
+# (filter_samplesheets_by_quality.py: Completeness > 70%, Contamination < 10%)
+# rather than the stricter >=80% rule in utils.R (which exists only to match
+# external tree membership for 3_draw_tree.R / 2_vfdb_comparison.R). inStrain
+# doesn't need tree membership, so it uses the broader QC set, in line with
+# the rest of the findings. Participants whose MAG is 70-80% complete will
+# therefore have no `clade` (tree tips are still restricted to >=80%; see
+# utils.R) but are otherwise included here.
+# Duplicated rather than sourced so this script/PR stays independently
+# reviewable — keep this value in sync with filter_samplesheets_by_quality.py.
+MIN_COMPLETENESS <- 70
 
 #### Load ####
 files <- list.files(in_dir, pattern = "_genomeWide_compare\\.tsv$", full.names = TRUE)
@@ -78,7 +95,7 @@ cmp <- map_dfr(files, read_tsv, show_col_types = FALSE) %>%
 if (!"percent_genome_compared" %in% names(cmp) && "percent_compared" %in% names(cmp))
     cmp <- cmp %>% rename(percent_genome_compared = percent_compared)
 
-manifest <- read.csv(file.path(out_dir, "instrain_manifest.csv"), colClasses = c(subject_id = "character"))
+manifest <- read.csv(file.path(manifest_dir, "instrain_manifest.csv"), colClasses = c(subject_id = "character"))
 
 #### Join clade and ethnicity ####
 tip_meta <- readRDS("results/3_species_change/4_alistipes_anno/tip_meta_clades.RDS") %>%
@@ -90,17 +107,69 @@ res <- cmp %>%
     left_join(tip_meta, by = "subject_id") %>%
     mutate(
         enough_compared    = percent_genome_compared >= MIN_GENOME_COMPARED,
-        eligible_completeness = completeness >= MIN_COMPLETENESS,
+        eligible_completeness = completeness > MIN_COMPLETENESS,
         same_strain        = popANI >= POPANI_SAME_STRAIN
     )
 
 cat("\nComparisons with >=", MIN_GENOME_COMPARED * 100, "% of the genome compared:",
     sum(res$enough_compared), "of", nrow(res), "\n")
-cat("Comparisons with MAG completeness >=", MIN_COMPLETENESS, "% (same rule as",
-    "3_draw_tree.R / 2_vfdb_comparison.R):", sum(res$eligible_completeness), "of", nrow(res), "\n")
+cat("Comparisons with MAG completeness >", MIN_COMPLETENESS, "% (same rule as",
+    "filter_samplesheets_by_quality.py):", sum(res$eligible_completeness), "of", nrow(res), "\n")
+
+#### Divergence classification: distinguish likely replacement from in-situ evolution ####
+# POPANI_SAME_STRAIN (0.99999) is the conventional short-interval threshold
+# (Olm et al. 2021, Science) for calling two samples "the same strain" — it
+# assumes a persisting lineage accumulates too few mutations between
+# comparisons to cross it. That assumption is much weaker over this cohort's
+# ~6-year follow-up: a persisting lineage can plausibly accumulate enough de
+# novo mutations in 6 years to drop below 0.99999 without ever being replaced
+# by an unrelated strain. popANI alone cannot distinguish "replaced" from
+# "evolved in place", but the SCALE of divergence can: an unrelated genomic
+# background introduces far more population-level differences than a few
+# years of mutation in a single lineage would.
+#
+# SNPS_PER_MB_DRIFT_MAX is read off this cohort's own distribution of
+# population_SNPs among popANI < POPANI_SAME_STRAIN comparisons, which form a
+# gradient rather than two clean clusters: ~70% sit within a few dozen
+# SNPs/Mb of the threshold (consistent with ordinary within-host evolution
+# over 6 years), while a smaller tail shows hundreds to >10,000 SNPs/Mb (far
+# more consistent with an unrelated, newly-introduced genome). This is a
+# descriptive cutoff read from this dataset's own distribution, not a
+# validated threshold from the literature — the resulting counts should be
+# treated as approximate, not a precise replacement rate.
+SNPS_PER_MB_DRIFT_MAX <- 100
+
+res <- res %>%
+    mutate(
+        snps_per_mb = population_SNPs / (compared_bases_count / 1e6),
+        divergence_class = case_when(
+            same_strain                                         ~ "Stable",
+            !same_strain & snps_per_mb <  SNPS_PER_MB_DRIFT_MAX  ~ "Modest divergence (consistent with in-situ evolution)",
+            !same_strain & snps_per_mb >= SNPS_PER_MB_DRIFT_MAX  ~ "Substantial divergence (consistent with replacement)",
+            TRUE ~ NA_character_
+        )
+    )
 
 valid <- res %>% filter(enough_compared, eligible_completeness)
 cat("Valid comparisons meeting both criteria:", nrow(valid), "\n")
+
+cat("\nDivergence classification (valid comparisons):\n")
+divergence_summary <- valid %>%
+    count(divergence_class) %>%
+    mutate(pct = round(100 * n / sum(n), 1))
+print(divergence_summary)
+
+cat("\nDivergence classification by ethnicity:\n")
+divergence_by_eth <- valid %>%
+    filter(!is.na(EthnicityTot)) %>%
+    count(EthnicityTot, divergence_class) %>%
+    group_by(EthnicityTot) %>%
+    mutate(pct = round(100 * n / sum(n), 1)) %>%
+    ungroup()
+print(divergence_by_eth)
+
+write.csv(divergence_summary, file.path(out_dir, "instrain_divergence_classification.csv"), row.names = FALSE)
+write.csv(divergence_by_eth, file.path(out_dir, "instrain_divergence_classification_by_ethnicity.csv"), row.names = FALSE)
 
 #### Strain retention ####
 cat("\npopANI summary (valid comparisons):\n")
@@ -153,14 +222,12 @@ pl_popani <- ggplot(valid %>% filter(!is.na(EthnicityTot)) %>%
     geom_hline(yintercept = 1 - POPANI_SAME_STRAIN, linetype = "dashed", colour = "firebrick") +
     geom_boxplot(width = 0.4, outlier.shape = NA, alpha = 0.6) +
     geom_jitter(width = 0.15, size = 1, alpha = 0.6, shape = 21, colour = "black") +
+    stat_compare_means(method = "wilcox.test", label = "p.format") +
     scale_y_log10(breaks = dist_breaks,
                   labels = scales::label_number(accuracy = 0.000001)) +
-    scale_fill_manual(values = c("Dutch" = "#4E79A7",
-                                 "South-Asian Surinamese" = "#F28E2B"), guide = "none") +
+    scale_fill_manual(values = jco_palette(), guide = "none") +
     labs(x = "", y = "Genetic distance (1 - popANI, log scale)",
-         title = sprintf("A. putredinis strain retention (n = %d)", nrow(valid)),
-         caption = sprintf("Dashed line: popANI = %s, conventional same-strain threshold",
-                           POPANI_SAME_STRAIN)) +
+         title = "A. putredinis strain retention") +
     theme_Publication()
 
 pl_cov <- ggplot(res %>% mutate(popANI_dist = pmax(1 - popANI, 1e-6)),
@@ -172,11 +239,32 @@ pl_cov <- ggplot(res %>% mutate(popANI_dist = pmax(1 - popANI, 1e-6)),
     scale_y_log10(breaks = dist_breaks,
                   labels = scales::label_number(accuracy = 0.000001)) +
     scale_colour_manual(values = c("TRUE" = "#1F78B4", "FALSE" = "grey65"),
-                        name = "Enough genome compared") +
+                        name = "Included in comparison") +
     labs(x = "Fraction of genome compared", y = "Genetic distance (1 - popANI, log scale)",
          title = "Comparison quality") +
     theme_Publication()
 
-(pl_strain <- ggarrange(pl_popani, pl_cov, ncol = 2, labels = c("A", "B")))
-ggsave(file.path(out_dir, "instrain_strain_retention.pdf"), pl_strain, width = 11, height = 5)
+pl_divergence <- ggplot(
+    valid %>% filter(!is.na(divergence_class)) %>%
+      mutate(divergence_class = factor(divergence_class,
+             levels = c("Stable",
+                        "Modest divergence (consistent with in-situ evolution)",
+                        "Substantial divergence (consistent with replacement)"))),
+    aes(x = divergence_class, fill = divergence_class)
+  ) +
+    geom_bar() +
+    geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.3) +
+    scale_fill_manual(values = c("Stable" = "#59A14F",
+                                 "Modest divergence (consistent with in-situ evolution)" = "#F28E2B",
+                                 "Substantial divergence (consistent with replacement)" = "#E15759"),
+                      guide = "none") +
+    scale_x_discrete(labels = scales::label_wrap(18)) +
+    labs(x = "", y = "n comparisons",
+         title = "Divergence classification",
+         subtitle = sprintf("Threshold: %d SNPs/Mb among popANI < %g comparisons",
+                            SNPS_PER_MB_DRIFT_MAX, POPANI_SAME_STRAIN)) +
+    theme_Publication()
+
+(pl_strain <- ggarrange(pl_popani, pl_cov, pl_divergence, ncol = 3, labels = c("A", "B", "C")))
+ggsave(file.path(out_dir, "instrain_strain_retention.pdf"), pl_strain, width = 15, height = 5)
 cat("\nPlot saved to:", file.path(out_dir, "instrain_strain_retention.pdf"), "\n")
