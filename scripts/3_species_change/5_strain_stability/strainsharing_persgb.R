@@ -99,6 +99,14 @@ message("dfsame_long rows: ", nrow(dfsame_long),
 # Predictor: EthnicityTot (South-Asian Surinamese vs Dutch as reference)
 # Adjustment: Age (z-scored), FUtime (z-scored)
 # Model:     logistic regression, one model per SGB
+#
+# With n > 50 (pooled across both ethnicities), the pooled total can pass
+# while one ethnicity group is still tiny (e.g. 49 Dutch / 2 SAS) — the
+# ethnicity OR would then be unstable even though nrow(df_sgb) looks fine.
+# MIN_N_PER_ETHNICITY requires both groups to individually clear this floor,
+# same order of magnitude as the nrow() >= 10 gate already used for the
+# chi-square sanity check below.
+MIN_N_PER_ETHNICITY <- 10
 
 message("Running per-SGB logistic regressions: shared ~ EthnicityTot + Age_z + FUtime_z ...")
 persgb_results <- purrr::map_dfr(sgbs_use, function(sgb) {
@@ -106,7 +114,10 @@ persgb_results <- purrr::map_dfr(sgbs_use, function(sgb) {
         filter(SGB == sgb, !is.na(shared), !is.na(EthnicityTot),
                !is.na(Age_z), !is.na(FUtime_z))
 
-    if (nrow(df_sgb) < 30 || length(unique(df_sgb$shared)) < 2) {
+    n_per_eth <- table(df_sgb$EthnicityTot)
+    underpowered <- length(n_per_eth) < 2 || any(n_per_eth < MIN_N_PER_ETHNICITY)
+
+    if (nrow(df_sgb) < 30 || length(unique(df_sgb$shared)) < 2 || underpowered) {
         return(tibble(SGB = sgb, n = nrow(df_sgb)))
     }
 
@@ -145,7 +156,7 @@ chisq_results <- purrr::map_dfr(sgbs_use, function(sgb) {
     if (nrow(df_sgb) < 10) return(NULL)
 
     tbl <- table(df_sgb$EthnicityTot, df_sgb$shared)
-    if (any(dim(tbl) < 2)) return(NULL)
+    if (any(dim(tbl) < 2) || any(rowSums(tbl) < MIN_N_PER_ETHNICITY)) return(NULL)
 
     tryCatch({
         ct <- chisq.test(tbl)
