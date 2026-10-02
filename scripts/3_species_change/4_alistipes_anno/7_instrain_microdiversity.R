@@ -150,6 +150,12 @@ retained <- div %>% filter(same_strain, !is.na(EthnicityTot))
 cat("\nRetained strains with known ethnicity:", nrow(retained), "\n")
 print(count(retained, EthnicityTot))
 
+long_retained <- retained %>%
+    dplyr::select(subject_id, EthnicityTot, nucl_diversity_baseline, nucl_diversity_followup) %>%
+    pivot_longer(starts_with("nucl_diversity"), names_to = "timepoint", values_to = "nucl_diversity") %>%
+    mutate(timepoint = factor(if_else(timepoint == "nucl_diversity_baseline", "Baseline", "Follow-up"),
+                              levels = c("Baseline", "Follow-up")))
+
 cat("\nPaired baseline vs follow-up nucl_diversity, retained strains:\n")
 wt_paired_all <- wilcox.test(retained$nucl_diversity_baseline, retained$nucl_diversity_followup, paired = TRUE)
 cat("  All ethnicities: p =", signif(wt_paired_all$p.value, 3), "\n")
@@ -175,13 +181,34 @@ if (nrow(by_eth_delta) == 2 && all(by_eth_delta$n >= 3)) {
 
 write.csv(by_eth_delta, file.path(out_dir, "instrain_microdiversity_by_ethnicity.csv"), row.names = FALSE)
 
-#### Plot ####
-long_retained <- retained %>%
-    dplyr::select(subject_id, EthnicityTot, nucl_diversity_baseline, nucl_diversity_followup) %>%
-    pivot_longer(starts_with("nucl_diversity"), names_to = "timepoint", values_to = "nucl_diversity") %>%
-    mutate(timepoint = factor(if_else(timepoint == "nucl_diversity_baseline", "Baseline", "Follow-up"),
-                              levels = c("Baseline", "Follow-up")))
+#### LMM: does the change over time differ by ethnicity? ####
+# The paired Wilcoxon tests above (overall/Dutch/SAS) each ask whether THAT
+# group changed over time; the delta-by-ethnicity Wilcoxon asks whether the
+# SIZE of the change differs by group, treating each participant's delta as
+# one independent observation. Neither directly models the repeated-measures
+# structure (2 observations per participant) the way the ethnicity gene-
+# content models elsewhere in this folder do (utils.R::run_stats). This LMM
+# is the analogous model here: EthnicityTot x timepoint interaction is the
+# test for differential change over time; (1 | subject_id) accounts for the
+# two correlated observations per participant. log() because nucl_diversity
+# is right-skewed (already plotted on a log scale below).
+library(lme4)
+library(lmerTest)
 
+mod_lmm <- lmer(log(nucl_diversity) ~ EthnicityTot * timepoint + (1 | subject_id),
+                 data = long_retained, REML = FALSE)
+cat("\nLMM: log(nucl_diversity) ~ EthnicityTot * timepoint + (1 | subject_id)\n")
+lmm_coef <- summary(mod_lmm)$coefficients
+print(lmm_coef)
+cat("n participants:", n_distinct(long_retained$subject_id),
+    " | n observations:", nrow(long_retained), "\n")
+
+write.csv(
+  as.data.frame(lmm_coef) %>% tibble::rownames_to_column("term"),
+  file.path(out_dir, "instrain_microdiversity_lmm.csv"), row.names = FALSE
+)
+
+#### Plot ####
 pl_trajectory <- ggplot(long_retained, aes(x = timepoint, y = nucl_diversity)) +
     geom_line(aes(group = subject_id, colour = EthnicityTot), alpha = 0.4) +
     geom_point(aes(fill = EthnicityTot), shape = 21, colour = "black", size = 2, alpha = 0.8) +
