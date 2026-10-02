@@ -81,6 +81,16 @@ cladesplit_match <- cladesplit %>%
     dplyr::select(SGB = SGB_key, Species) %>%
     distinct(SGB, .keep_all = TRUE)
 
+# Exclude GGB-labelled SGBs: "Species" like "GGB1420_SGB1957" means MetaPhlAn
+# could not assign this SGB to a named species, only a provisional
+# genus-level bin — not interpretable as a species-level finding.
+n_before_ggb <- length(sgbs_use)
+ggb_sgbs <- cladesplit_match$SGB[str_starts(cladesplit_match$Species, "GGB")]
+sgbs_use <- setdiff(sgbs_use, ggb_sgbs)
+cladesplit_match <- cladesplit_match %>% filter(SGB %in% sgbs_use)
+message(n_before_ggb - length(sgbs_use), " GGB-labelled SGBs excluded; ",
+        length(sgbs_use), " SGBs remain")
+
 dfsame_long <- dfsame_long_all %>%
     filter(SGB %in% sgbs_use) %>%
     left_join(clin, by = "sampleID") %>%
