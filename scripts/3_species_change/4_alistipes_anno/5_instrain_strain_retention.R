@@ -57,16 +57,6 @@ dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 POPANI_SAME_STRAIN <- 0.99999
 # Minimum fraction of the genome compared for the popANI call to be trusted.
 MIN_GENOME_COMPARED <- 0.5
-# Same QC threshold used for the annotation-track bin set overall
-# (filter_samplesheets_by_quality.py: Completeness > 70%, Contamination < 10%)
-# rather than the stricter >=80% rule in utils.R (which exists only to match
-# external tree membership for 3_draw_tree.R / 2_vfdb_comparison.R). inStrain
-# doesn't need tree membership, so it uses the broader QC set, in line with
-# the rest of the findings. Participants whose MAG is 70-80% complete will
-# therefore have no `clade` (tree tips are still restricted to >=80%; see
-# utils.R) but are otherwise included here.
-# Duplicated rather than sourced so this script/PR stays independently
-# reviewable — keep this value in sync with filter_samplesheets_by_quality.py.
 MIN_COMPLETENESS <- 70
 
 #### Load ####
@@ -105,16 +95,6 @@ cat("Comparisons with MAG completeness >", MIN_COMPLETENESS, "% (same rule as",
     "filter_samplesheets_by_quality.py):", sum(res$eligible_completeness), "of", nrow(res), "\n")
 
 #### Divergence classification: distinguish likely replacement from in-situ evolution ####
-# POPANI_SAME_STRAIN (0.99999) is the conventional short-interval threshold
-# (Olm et al. 2021, Science) for calling two samples "the same strain" — it
-# assumes a persisting lineage accumulates too few mutations between
-# comparisons to cross it. That assumption is much weaker over this cohort's
-# ~6-year follow-up: a persisting lineage can plausibly accumulate enough de
-# novo mutations in 6 years to drop below 0.99999 without ever being replaced
-# by an unrelated strain. popANI alone cannot distinguish "replaced" from
-# "evolved in place", but the SCALE of divergence can: an unrelated genomic
-# background introduces far more population-level differences than a few
-# years of mutation in a single lineage would.
 #
 # SNPS_PER_MB_DRIFT_MAX is read off this cohort's own distribution of
 # population_SNPs among popANI < POPANI_SAME_STRAIN comparisons, which form a
@@ -199,9 +179,7 @@ write.csv(by_eth, file.path(out_dir, "instrain_retention_by_ethnicity.csv"), row
 # popANI is almost always squeezed into [0.999, 1], so a violin/linear scale
 # is uninformative and boxplot+jitter+violin all overplot each other at the
 # same handful of positions. Instead plot the genetic distance (1 - popANI)
-# on a log10 scale, which spreads out "same strain" vs "diverged" comparisons,
-# and drop the violin (no meaningful density shape with this few, spike-like
-# values) so the boxplot and jitter don't visually duplicate.
+# on a log10 scale, which spreads out "same strain" vs "diverged" comparisons
 dist_breaks <- c(1e-6, 1e-5, 1e-4, 1e-3, 1e-2, 1e-1)
 
 pl_popani <- ggplot(valid %>% filter(!is.na(EthnicityTot)) %>%
