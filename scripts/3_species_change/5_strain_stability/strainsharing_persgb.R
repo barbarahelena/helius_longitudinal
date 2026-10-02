@@ -208,14 +208,25 @@ message("SGBs significant in both logistic regression and chi-square: ", nrow(ov
 ## by FDR-adjusted p-value. persgb_ethnicity.csv still holds the full results.
 TOP_N_FOREST <- 30
 
-df_plot <- persgb_results %>%
-    filter(!is.na(estimate)) %>%
+## A handful of SGBs hit complete separation (e.g. every Dutch participant
+## retained the strain, 0 "lost" cases) — glm()'s MLE for the ethnicity term
+## then diverges, giving an astronomically large or literally infinite OR/CI.
+## These are numerical artifacts, not meaningful estimates, so they're
+## dropped from the plot (kept in persgb_ethnicity.csv) rather than letting
+## them blow out the x-axis for every other SGB.
+n_before_separation <- sum(!is.na(persgb_results$estimate))
+persgb_results_finite <- persgb_results %>%
+    filter(!is.na(estimate), is.finite(estimate), is.finite(conf.low), is.finite(conf.high))
+message(n_before_separation - nrow(persgb_results_finite),
+        " SGB(s) excluded from the plot for non-finite OR/CI (complete separation)")
+
+df_plot <- persgb_results_finite %>%
     arrange(qval, p.value) %>%
     slice_head(n = TOP_N_FOREST) %>%
     mutate(Species = str_replace_all(Species, "_", " ")) %>%
     add_count(Species, name = "n_species") %>%
     mutate(Species = case_when(
-        n_species > 1 ~ paste0(Species, " (SGB", SGB, ")"),
+        n_species > 1 ~ paste0(Species, " (", SGB, ")"),
         TRUE          ~ Species
     )) %>%
     dplyr::select(-n_species) %>%
