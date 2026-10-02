@@ -46,12 +46,12 @@ transfnum <- function(var) {
 }
 
 #### Output folder ####
-resultsfolder <- "results/3_species_change/3_strain_stability"
+resultsfolder <- "results/3_species_change/5_strain_stability"
 dir.create(resultsfolder, showWarnings = FALSE, recursive = TRUE)
 
 #### Data ####
-df <- rio::import("data/shotgun/strainsharing_merged.csv")
-thres <- rio::import("data/shotgun/thresholds_merged.csv") %>%
+df <- rio::import("data/shotgun/strainsharing_recalculated/strainsharing_recalculated_wide.csv")
+thres <- rio::import("data/shotgun/strainsharing_recalculated/thresholds_recalculated.csv") %>%
     mutate(
         across(c("n_markers", "n_samples", "aln_length", "avg_gap_prop",
                  "threshold_value", "max_youden", "false_positive_rate", "false_negative_rate"),
@@ -182,12 +182,12 @@ gghistogram(dfsame$sharing_perc, fill = "royalblue", bins = 30) +
     geom_vline(aes(xintercept = median(dfsame$sharing_perc)), color = "firebrick", linewidth = 1) +
     labs(title = "Strain sharing - paired samples", x = "percentage of SGBs") +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/pairedsamples_hist.pdf", width = 4.5, height = 5)
+ggsave("results/3_species_change/5_strain_stability/pairedsamples_hist.pdf", width = 4.5, height = 5)
 
 gghistogram(dfdiff$sharing_perc, fill = "firebrick", bins = 30) +
     labs(title = "Strain sharing - different samples", x = "percentage of SGBs") +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/difsamples_hist.pdf", width = 4.5, height = 5)
+ggsave("results/3_species_change/5_strain_stability/difsamples_hist.pdf", width = 4.5, height = 5)
 
 mean(dfsame$sharing_perc); median(dfsame$sharing_perc)
 mean(dfdiff$sharing_perc); median(dfdiff$sharing_perc)
@@ -199,7 +199,7 @@ ggplot(data = dftot, aes(x = fct_reorder(Sex, .x = sharing_perc, .fun = median),
     scale_fill_simpsons(guide = "none") +
     labs(y = "Percentage of stable strains", title = "Strain sharing between timepoints", x = "Sex") +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/sex.pdf", width = 4.5, height = 5)
+ggsave("results/3_species_change/5_strain_stability/sex.pdf", width = 4.5, height = 5)
 
 ggplot(data = dftot %>% filter(!is.na(Sex)), aes(x = Sex, y = sharing_perc)) +
     geom_violin(colour = NA, aes(fill = Sex)) +
@@ -208,7 +208,7 @@ ggplot(data = dftot %>% filter(!is.na(Sex)), aes(x = Sex, y = sharing_perc)) +
     labs(y = "Percentage of stable strains", title = "Strain sharing - sex differences", x = "Sex") +
     facet_wrap(~EthnicityTot) +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/sex_ethnicities.pdf", width = 6, height = 5)
+ggsave("results/3_species_change/5_strain_stability/sex_ethnicities.pdf", width = 6, height = 5)
 
 #### Disease outcomes ####
 dftot %>% group_by(DM_new) %>% summarise(mean_sh = mean(sharing_perc, na.rm = TRUE), n_sh = length(sharing_perc), .groups = "drop_last")
@@ -223,7 +223,7 @@ ggplot(data = dftot %>% filter(!is.na(DM_new)), aes(x = DM_new, y = sharing_perc
     stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
                        label = "p.signif", method = "t.test") +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/dmnew.pdf", width = 4.5, height = 5)
+ggsave("results/3_species_change/5_strain_stability/dmnew.pdf", width = 4.5, height = 5)
 
 ggplot(data = dftot %>% filter(!is.na(MetSyn_new)), aes(x = MetSyn_new, y = sharing_perc)) +
     geom_violin(colour = NA, aes(fill = MetSyn_new)) +
@@ -233,7 +233,7 @@ ggplot(data = dftot %>% filter(!is.na(MetSyn_new)), aes(x = MetSyn_new, y = shar
     stat_compare_means(comparisons = list(c("Yes", "No")), tip.length = 0, hide.ns = TRUE,
                        label = "p.signif", method = "t.test") +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/metsynnew.pdf", width = 4.5, height = 5)
+ggsave("results/3_species_change/5_strain_stability/metsynnew.pdf", width = 4.5, height = 5)
 
 dftot %>% group_by(EthnicityTot, DM_new) %>% summarise(mean_sh = mean(sharing_perc, na.rm = TRUE), n_sh = length(sharing_perc), .groups = "drop_last")
 ggplot(data = dftot %>% filter(!is.na(DM_new)), aes(x = DM_new, y = sharing_perc)) +
@@ -245,7 +245,7 @@ ggplot(data = dftot %>% filter(!is.na(DM_new)), aes(x = DM_new, y = sharing_perc
                        label = "p.signif", method = "t.test") +
     facet_wrap(~EthnicityTot) +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/dmnew_ethnicities.pdf", width = 6, height = 5)
+ggsave("results/3_species_change/5_strain_stability/dmnew_ethnicities.pdf", width = 6, height = 5)
 
 dftot %>% group_by(EthnicityTot, MetSyn_new) %>% summarise(mean_sh = mean(sharing_perc, na.rm = TRUE), n_sh = length(sharing_perc), .groups = "drop_last")
 ggplot(data = dftot %>% filter(!is.na(MetSyn_new)), aes(x = MetSyn_new, y = sharing_perc)) +
@@ -257,7 +257,7 @@ ggplot(data = dftot %>% filter(!is.na(MetSyn_new)), aes(x = MetSyn_new, y = shar
                        label = "p.signif", method = "t.test") +
     facet_wrap(~EthnicityTot) +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/metsynnew_ethnicities.pdf", width = 6, height = 5)
+ggsave("results/3_species_change/5_strain_stability/metsynnew_ethnicities.pdf", width = 6, height = 5)
 
 #### Alpha diversity associations ####
 ggplot(data = dftot %>% filter(!is.na(FUtime)), aes(x = shannon_delta, y = sharing_perc)) +
@@ -265,7 +265,7 @@ ggplot(data = dftot %>% filter(!is.na(FUtime)), aes(x = shannon_delta, y = shari
     geom_smooth(color = "black", method = "loess") +
     labs(y = "Percentage of stable strains", x = "Difference in Shannon index", title = "Shannon change and strain sharing") +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/shannonchange_strainsharing.pdf", width = 4.5, height = 5)
+ggsave("results/3_species_change/5_strain_stability/shannonchange_strainsharing.pdf", width = 4.5, height = 5)
 
 ggplot(data = dftot %>% filter(!is.na(FUtime)), aes(x = richness, y = sharing_perc)) +
     geom_jitter(color = "royalblue", alpha = 0.5, height = 0) +
@@ -273,14 +273,14 @@ ggplot(data = dftot %>% filter(!is.na(FUtime)), aes(x = richness, y = sharing_pe
     stat_cor() +
     labs(y = "Percentage of stable strains", x = "Richness (baseline)", title = "Richness (baseline) and strain sharing") +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/richness_strainsharing.pdf", width = 4.5, height = 5)
+ggsave("results/3_species_change/5_strain_stability/richness_strainsharing.pdf", width = 4.5, height = 5)
 
 ggplot(data = dftot %>% filter(!is.na(FUtime)), aes(x = richness_delta, y = sharing_perc)) +
     geom_jitter(color = "royalblue", alpha = 0.5, height = 0) +
     geom_smooth(color = "black", method = "loess") +
     labs(y = "Percentage of stable strains", x = "Difference in richness", title = "Richness change and strain sharing") +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/richnesschange_strainsharing.pdf", width = 4.5, height = 5)
+ggsave("results/3_species_change/5_strain_stability/richnesschange_strainsharing.pdf", width = 4.5, height = 5)
 
 #### FU time and age by ethnicity ####
 ggplot(data = dftot %>% filter(!is.na(FUtime)), aes(x = FUtime, y = sharing_perc)) +
@@ -288,10 +288,10 @@ ggplot(data = dftot %>% filter(!is.na(FUtime)), aes(x = FUtime, y = sharing_perc
     geom_smooth(color = "black", method = "lm") +
     scale_color_simpsons(guide = "none") +
     stat_cor() +
-    labs(y = "Percentage of stable strains", x = "FU time (years)", title = "FU time and strain sharing") +
+    labs(y = "Strain stability (%)", x = "FU time (years)", title = "FU time and strain stability") +
     facet_wrap(~EthnicityTot) +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/futime_ethnicity.pdf", width = 6, height = 5)
+ggsave("results/3_species_change/5_strain_stability/futime_ethnicity.pdf", width = 6, height = 5)
 
 ggplot(data = dftot %>% filter(!is.na(Age)), aes(x = Age, y = sharing_perc)) +
     geom_jitter(color = "royalblue", alpha = 0.5, width = 0) +
@@ -299,7 +299,7 @@ ggplot(data = dftot %>% filter(!is.na(Age)), aes(x = Age, y = sharing_perc)) +
     stat_cor() +
     labs(y = "Percentage of stable strains", x = "Age (years)", title = "Baseline age and strain sharing") +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/age.pdf", width = 4.5, height = 5)
+ggsave("results/3_species_change/5_strain_stability/age.pdf", width = 4.5, height = 5)
 
 ggplot(data = dftot %>% filter(!is.na(Age)), aes(x = Age, y = sharing_perc)) +
     geom_jitter(aes(color = EthnicityTot), alpha = 0.5, width = 0) +
@@ -309,7 +309,7 @@ ggplot(data = dftot %>% filter(!is.na(Age)), aes(x = Age, y = sharing_perc)) +
     labs(y = "Percentage of stable strains", x = "Age (years)", title = "Baseline age and strain sharing") +
     facet_wrap(~EthnicityTot) +
     theme_Publication()
-ggsave("results/3_species_change/3_strain_stability/age_ethnicity.pdf", width = 6, height = 5)
+ggsave("results/3_species_change/5_strain_stability/age_ethnicity.pdf", width = 6, height = 5)
 
 #### SGB-level QC ####
 gghistogram(tax$sharing_perc, fill = "firebrick", bins = 30) +
@@ -336,7 +336,7 @@ ggplot(data = taxtot %>% arrange(sharing_perc),
     labs(y = "Percentage of subjects with stable strains", x = "", title = "Strain sharing") +
     theme_Publication() +
     coord_flip()
-ggsave("results/3_species_change/3_strain_stability/allsgbs_ethnicity.pdf", width = 10, height = 20)
+ggsave("results/3_species_change/5_strain_stability/allsgbs_ethnicity.pdf", width = 10, height = 20)
 
 #### Per-SGB density (differential strains) ####
 plist <- c()
@@ -350,7 +350,7 @@ for(a in difftrue$Species) {
         theme_void()
 }
 pl_dens_qc <- ggarrange(plotlist = plist, ncol = 1, common.legend = TRUE)
-ggsave("results/3_species_change/3_strain_stability/diffsgbs_eth_dens.pdf",
+ggsave("results/3_species_change/5_strain_stability/diffsgbs_eth_dens.pdf",
        plot = pl_dens_qc, width = 4, height = 20)
 
 #### Threshold values per differential SGB ####
@@ -395,4 +395,4 @@ for(b in difftrue$Species) {
 }
 
 ngdpl <- ggarrange(plotlist = rev(plist2), ncol = 7, nrow = 6, common.legend = TRUE)
-ggsave("results/3_species_change/3_strain_stability/ngd.pdf", plot = ngdpl, width = 18, height = 12)
+ggsave("results/3_species_change/5_strain_stability/ngd.pdf", plot = ngdpl, width = 18, height = 12)

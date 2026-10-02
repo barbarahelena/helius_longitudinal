@@ -51,8 +51,8 @@ resultsfolder <- "results/3_species_change/5_strain_stability"
 dir.create(resultsfolder, showWarnings = FALSE, recursive = TRUE)
 
 #### Data ####
-df <- rio::import("data/shotgun/strainsharing_merged.csv")
-thres <- rio::import("data/shotgun/thresholds_merged.csv") %>%
+df <- rio::import("data/shotgun/strainsharing_recalculated/strainsharing_recalculated_wide.csv")
+thres <- rio::import("data/shotgun/strainsharing_recalculated/thresholds_recalculated.csv") %>%
     mutate(
         across(c("n_markers", "n_samples", "aln_length", "avg_gap_prop",
                  "threshold_value", "max_youden", "false_positive_rate", "false_negative_rate"),
