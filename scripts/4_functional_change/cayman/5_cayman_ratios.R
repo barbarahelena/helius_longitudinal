@@ -1,6 +1,5 @@
 ## Cayman Mucin/DF and GAG/DF ratios by ethnicity
 library(tidyverse)
-library(readxl)
 library(ggpubr)
 library(lme4)
 library(lmerTest)
@@ -44,62 +43,24 @@ names(eth_colors) <- c(ETH_DUTCH, ETH_SAS)
 
 dir.create("results/4_functional_change/cayman/ratios", showWarnings = FALSE, recursive = TRUE)
 
-# --- Load data ----------------------------------------------------------------
-anno <- read_excel("data/shotgun/cayman_results/mucin_df_gag_table.xlsx") |>
-  dplyr::select(Family, FUNCTION_AT_DESTINATION_1)
-
-df_raw <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |>
-  dplyr::select(-HELIBA_103370, -HELIFU_103370)
+# --- Load data ------------------------------------------------------------
+# Substrate group sums and ratios (Mucin/DF, GAG/DF) are now precomputed
+# upstream in the pipeline, not calculated here.
+df_sums <- rio::import("data/shotgun/cayman_results/oct2026_results/substrates_rpkm_table.tsv") |>
+  # S103370's baseline CAZy profile essentially failed (43 families detected,
+  # 0.13% CAZy reads), which distorts its substrate ratios (e.g. log10_GAG_DF
+  # swings from -2.77 at baseline to -0.99 at follow-up); excluded here to
+  # match the family-table exclusion used in scripts 1-4.
+  dplyr::filter(!sample %in% c("HELIBA_103370", "HELIFU_103370")) |>
+  dplyr::rename(
+    sampleID       = sample,
+    ratio_Mucin_DF = mucin_df_ratio,
+    ratio_GAG_DF   = gag_df_ratio,
+    log10_Mucin_DF = log10_mucin_df_ratio,
+    log10_GAG_DF   = log10_gag_df_ratio
+  )
 
 clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
-
-
-# --- Assign families to functional groups -------------------------------------
-# A family with comma-separated annotations (e.g. "DF,Mucin") belongs to all
-# listed groups.
-anno_clean <- anno |>
-  filter(!is.na(Family), !is.na(FUNCTION_AT_DESTINATION_1)) |>
-  mutate(
-    is_DF    = str_detect(FUNCTION_AT_DESTINATION_1, "\\bDF\\b"),
-    is_Mucin = str_detect(FUNCTION_AT_DESTINATION_1, "\\bMucin\\b"),
-    is_GAG   = str_detect(FUNCTION_AT_DESTINATION_1, "\\bGAG\\b")
-  )
-
-families_DF    <- anno_clean |> filter(is_DF)    |> pull(Family) |> unique()
-families_Mucin <- anno_clean |> filter(is_Mucin) |> pull(Family) |> unique()
-families_GAG   <- anno_clean |> filter(is_GAG)   |> pull(Family) |> unique()
-
-cat("DF families (n =", length(families_DF), "):", paste(families_DF, collapse = ", "), "\n")
-cat("Mucin families (n =", length(families_Mucin), "):", paste(families_Mucin, collapse = ", "), "\n")
-cat("GAG families (n =", length(families_GAG), "):", paste(families_GAG, collapse = ", "), "\n")
-
-# --- Compute per-sample group sums (CPM) --------------------------------------
-all_families <- df_raw$family
-df_mat <- df_raw |>
-  column_to_rownames("family") |>
-  as.matrix()
-
-sum_group <- function(mat, families) {
-  keep <- intersect(families, rownames(mat))
-  if (length(keep) == 0) return(rep(0, ncol(mat)))
-  if (length(keep) == 1) return(mat[keep, ])
-  colSums(mat[keep, ])
-}
-
-df_sums <- tibble(
-  sampleID = colnames(df_mat),
-  CPM_DF    = sum_group(df_mat, families_DF),
-  CPM_Mucin = sum_group(df_mat, families_Mucin),
-  CPM_GAG   = sum_group(df_mat, families_GAG)
-)
-
-df_sums <- df_sums |>
-  mutate(
-    ratio_Mucin_DF = CPM_Mucin / CPM_DF,
-    ratio_GAG_DF   = CPM_GAG   / CPM_DF,
-    log10_Mucin_DF = log10(ratio_Mucin_DF),
-    log10_GAG_DF   = log10(ratio_GAG_DF)
-  )
 
 # --- Merge with clinical data -------------------------------------------------
 dftot <- df_sums |>
@@ -228,9 +189,10 @@ make_matrices <- function(res, tp) {
   rownames(cor_m) <- outcome_labels[rownames(cor_m)]
   colnames(cor_m) <- ratio_labels[colnames(cor_m)]
 
+  # Heatmap stars show nominal (unadjusted) significance; nothing survives FDR here.
   pval_m <- r |>
-    dplyr::select(ratio, outcome, padj) |>
-    pivot_wider(names_from = ratio, values_from = padj) |>
+    dplyr::select(ratio, outcome, pval) |>
+    pivot_wider(names_from = ratio, values_from = pval) |>
     column_to_rownames("outcome") |>
     as.matrix()
   pval_m <- pval_m[cont_outcomes, ]
@@ -291,7 +253,7 @@ lgd_cor <- Legend(
 )
 lgd_sig <- Legend(
   pch = c("*", "**", "***"), type = "points",
-  labels = c("q < 0.05", "q < 0.01", "q < 0.001"),
+  labels = c("p < 0.05", "p < 0.01", "p < 0.001"),
   legend_gp = gpar(fontsize = 10)
 )
 lgd_packed <- packLegend(lgd_cor, lgd_sig, direction = "vertical", gap = unit(4, "mm"))
@@ -386,9 +348,10 @@ make_diet_matrix <- function(res, eth_label) {
   rownames(cor_m) <- diet_labels[rownames(cor_m)]
   colnames(cor_m) <- ratio_labels[colnames(cor_m)]
 
+  # Heatmap stars show nominal (unadjusted) significance; nothing survives FDR here.
   pval_m <- r |>
-    dplyr::select(ratio, outcome, padj) |>
-    pivot_wider(names_from = ratio, values_from = padj) |>
+    dplyr::select(ratio, outcome, pval) |>
+    pivot_wider(names_from = ratio, values_from = pval) |>
     column_to_rownames("outcome") |>
     as.matrix()
   pval_m <- pval_m[avail, , drop = FALSE]
@@ -479,9 +442,9 @@ write.csv2(prosp_df,
 
 # --- Helper: p-value label for subtitle ---------------------------------------
 plab <- function(p) {
-  if (is.na(p)) return("NA")
-  if (p < 0.001) return(formatC(p, format = "e", digits = 2))
-  formatC(p, format = "f", digits = 3)
+  ifelse(is.na(p), "NA",
+         ifelse(p < 0.001, formatC(p, format = "e", digits = 2),
+                formatC(p, format = "f", digits = 3)))
 }
 
 # --- Helper: ratio violin with per-facet paired Wilcoxon annotation -----------
@@ -501,11 +464,7 @@ make_ratio_vln <- function(df, ratio_var, y_label, title_label, interact_pval, s
       data.frame(p = p, y_pos = max(.x[[ratio_var]], na.rm = TRUE) + diff(range(.x[[ratio_var]], na.rm = TRUE)) * 0.08)
     }) %>%
     ungroup() %>%
-    mutate(label = ifelse(p < 0.05,
-                          paste0("p=", ifelse(p < 0.001,
-                                              formatC(p, format = "e", digits = 2),
-                                              formatC(p, format = "f", digits = 3))),
-                          ""))
+    mutate(label = paste0("p=", plab(p)))
 
   ggplot(df_plot, aes(x = timepoint, y = .data[[ratio_var]], fill = EthnicityTot)) +
     geom_violin(colour = NA, aes(alpha = timepoint)) +
@@ -516,6 +475,8 @@ make_ratio_vln <- function(df, ratio_var, y_label, title_label, interact_pval, s
     facet_wrap(~EthnicityTot) +
     scale_fill_manual(values = eth_colors, guide = "none") +
     scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+    # Extra headroom above the data so the baseline-to-follow-up p-value label isn't clipped
+    scale_y_continuous(expand = expansion(mult = c(0.05, if (show_pval) 0.22 else 0.05))) +
     theme_Publication() +
     labs(x = "", y = y_label, title = title_label,
          subtitle = paste0("Ethnicity × Timepoint p=", plab(interact_pval)))

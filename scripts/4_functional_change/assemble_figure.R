@@ -1,15 +1,19 @@
 ## Figure 4 — Functional shifts: HUMAnN pathways & CAZyme families
 ##
-## Panels:
+## Panels (as rendered in figure4.pdf):
 ##   A  HUMAnN forest + cross-sectional heatmap (FDR < 0.05)
-##   B  HUMAnN violin: Gluconeogenesis III
-##   C  HUMAnN violin: L-lysine biosynthesis II
-##   D  CAZyme Canberra PCoA — baseline by ethnicity
-##   (–) CAZyme Canberra PCoA — follow-up by ethnicity
-##   E  CAZyme forest + cross-sectional heatmap (FDR < 0.05)
-##   F  CAZyme violin: GH13_16
-##   G  CAZyme violin: GH5_26
-##   H  GAG-to-DF ratio
+##   B  CAZyme Canberra PCoA — baseline by ethnicity
+##   (–) CAZyme Canberra PCoA — follow-up by ethnicity (unlabelled, next to B)
+##   C  CAZyme forest + cross-sectional heatmap (FDR < 0.05)
+##   D  Mucin-to-DF ratio
+##   E  GAG-to-DF ratio
+##
+## Supplementary violins (suppl_figure_violins.pdf):
+##   A  HUMAnN violin: Gluconeogenesis III
+##   B  HUMAnN violin: L-lysine biosynthesis II
+##   C+ CAZyme violins: top FDR-significant families by padj (target_fam,
+##      computed in 3_cayman_longitudinal_lmm.R) — not hardcoded, so this
+##      tracks whichever families are currently most significant
 
 library(ggpubr)
 library(tidyverse)
@@ -58,16 +62,14 @@ source("scripts/4_functional_change/cayman/4_cayman_ordination.R")
 pl_can_bl <- if (exists("ethcan_bl")) ethcan_bl else ggplot() + theme_void()
 pl_can_fu <- if (exists("ethcan_fu")) ethcan_fu else ggplot() + theme_void()
 
-## ── 4. Source CAZyme ratios — build GAG violin immediately ────────────────────
+## ── 4. Source CAZyme ratios — reuse its Mucin/GAG violin panels ───────────────
 
 source("scripts/4_functional_change/cayman/5_cayman_ratios.R")
-# dftot (ratios), wilcox_res now in environment
+# dftot (ratios), wilcox_res now in environment; p_mucin, p_gag built with
+# show_pval = TRUE by default (baseline-to-follow-up p-value shown per facet)
 
-p_gag_vln <- make_ratio_vln(
-  dftot, "log10_GAG_DF", "GAG / DF (log₁₀ ratio)", "GAG-to-DF ratio",
-  lmm_df$pval_interact[lmm_df$ratio == "log10_GAG_DF"],
-  show_pval = FALSE
-) + theme(plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
+p_mucin_vln <- p_mucin + theme(plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
+p_gag_vln   <- p_gag   + theme(plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
 
 ## ── 5. Convert aplot composites → ggplot panels ───────────────────────────────
 
@@ -108,7 +110,10 @@ make_humann_vln <- function(partial_name) {
 pl_B <- make_humann_vln("Gluconeogenesis III")
 pl_C <- make_humann_vln("L-lysine biosynthesis II")
 
-## ── 7. Build named CAZyme violin panels (F, G) ────────────────────────────────
+## ── 7. Build CAZyme violin panels for the top FDR-significant families ───────
+## Uses target_fam (top 3 by padj among the top-20-by-|estimate| set), already
+## computed in 3_cayman_longitudinal_lmm.R — avoids hardcoding family names
+## that drift out of date as the underlying data/results change.
 
 get_cazyme_pval <- function(fam) {
   row <- statres_adj[statres_adj$family == fam, ]
@@ -116,15 +121,14 @@ get_cazyme_pval <- function(fam) {
 }
 
 make_cazyme_vln <- function(fam_name) {
-  make_boxviolin(dftot_adj, fam_name, get_cazyme_pval(fam_name), "log10(CPM + 1)",
+  make_boxviolin(dftot_adj, fam_name, get_cazyme_pval(fam_name), "log10(RPKM + 1)",
                  show_pval = FALSE) +
     labs(title = fam_name) +
     theme(plot.title    = element_text(face = "bold", size = rel(0.9), hjust = 0.5),
           plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
 }
 
-pl_F <- make_cazyme_vln("GH13_16")
-pl_G <- make_cazyme_vln("GH5_26")
+pl_cazyme_top <- lapply(target_fam, make_cazyme_vln)
 
 ## ── 8. Assemble rows ──────────────────────────────────────────────────────────
 
@@ -136,11 +140,13 @@ top_row <- ggarrange(
   widths = c(2, 1, 1)
 )
 
-# Row 2 — CAZyme forest+heatmap (C) + GAG ratio violin (D)
+# Row 2 — CAZyme forest+heatmap (C) + Mucin/DF and GAG/DF ratio violins (D, E)
+ratio_col <- ggarrange(p_mucin_vln, p_gag_vln, nrow = 2, heights = c(1, 1), labels = c("D", "E"))
+
 bottom_row <- ggarrange(
-  pl_E, ggarrange(p_gag_vln, NULL, nrow = 2, heights = c(1.5, 0.5)),
+  pl_E, ratio_col,
   ncol   = 2,
-  labels = c("C", "D"),
+  labels = c("C", ""),
   widths = c(2, 1)
 )
 
@@ -164,19 +170,23 @@ ggsave(
   device   = cairo_pdf
 )
 
-## ── 11. Supplementary figure: violin panels B, C, F, G ───────────────────────
+## ── 11. Supplementary figure: HUMAnN violins + top CAZyme violins ────────────
+
+suppl_panels <- c(list(pl_B, pl_C), pl_cazyme_top)
+suppl_ncol   <- 3
+suppl_nrow   <- ceiling(length(suppl_panels) / suppl_ncol)
 
 suppl_fig4 <- ggarrange(
-  pl_B, pl_C, pl_F, pl_G,
-  nrow   = 2,
-  ncol   = 2,
-  labels = c("A", "B", "C", "D")
+  plotlist = suppl_panels,
+  nrow     = suppl_nrow,
+  ncol     = suppl_ncol,
+  labels   = LETTERS[seq_along(suppl_panels)]
 )
 
 ggsave(
   suppl_fig4,
   filename = "results/4_functional_change/suppl_figure_violins.pdf",
-  width    = 12,
-  height   = 12,
+  width    = 5 * suppl_ncol,
+  height   = 5 * suppl_nrow,
   device   = cairo_pdf
 )

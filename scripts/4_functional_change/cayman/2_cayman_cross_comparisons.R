@@ -29,7 +29,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
            strip.text = element_text(face="bold")))
 }
 
-df_raw <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |> 
+df_raw <- rio::import("data/shotgun/cayman_results/oct2026_results/families_rpkm_table.tsv") |>
   dplyr::select(-HELIBA_103370, -HELIFU_103370)
 head(df_raw)[1:5,1:5]
 rownames(df_raw) <- df_raw$family
@@ -42,9 +42,9 @@ df$sampleID <- rownames(df)
 fam <- ncol(df)
 
 clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
-stats <- rio::import("data/shotgun/cayman_results/sample_statistics.tsv") |>
+stats <- rio::import("data/shotgun/cayman_results/oct2026_results/sample_statistics.tsv") |>
   rename(sampleID = sample) |>
-  dplyr::select(sampleID, total_reads)
+  dplyr::select(sampleID, filtered_reads)
 dftot <- left_join(df, clinical) |>
   left_join(stats, by = "sampleID") |>
   droplevels()
@@ -146,7 +146,7 @@ if (any(df_tot$timepoint == "baseline")) {
                                    "Significant" = "orange",
                                    "Not Significant" = "gray70")) +
     theme_Publication() +
-    labs(x = "log10(Abundance) Difference (South-Asian Surinamese - Dutch)",
+    labs(x = "log10(RPKM + 1) Difference (South-Asian Surinamese - Dutch)",
          y = "-log10(p-value)",
          title = "Baseline Cayman Abundance Differences Between Ethnicities", color = "")
   ggsave(file.path(cross_dir, "baseline_abundance_volcano.pdf"), p_baseline_volcano, width = 7, height = 7, device = cairo_pdf)
@@ -197,7 +197,7 @@ if (any(df_tot$timepoint == "follow-up")) {
                                    "Significant" = "orange",
                                    "Not Significant" = "gray70")) +
     theme_Publication() +
-    labs(x = "log10(Abundance) Difference (South-Asian Surinamese - Dutch)",
+    labs(x = "log10(RPKM + 1) Difference (South-Asian Surinamese - Dutch)",
          y = "-log10(p-value)",
          title = "Follow-up Cayman Abundance Differences Between Ethnicities", color = "")
   ggsave(file.path(cross_dir, "followup_abundance_volcano.pdf"), p_followup_volcano, width = 7, height = 7, device = cairo_pdf)
@@ -234,20 +234,20 @@ write.csv2(cs_combined,
            file.path(cross_dir, "crosssectional_results_combined.csv"),
            row.names = FALSE)
 
-# --- ADJUSTED MODELS: CAZy ~ EthnicityTot + Age + Sex + BMI + DM + PPI + total_reads ---
-# Merge total_reads into df_tot
+# --- ADJUSTED MODELS: CAZy ~ EthnicityTot + Age + Sex + BMI + DM + PPI + filtered_reads ---
+# Merge filtered_reads into df_tot
 df_tot <- df_tot %>%
   left_join(stats, by = "sampleID")
 
 # Baseline adjusted
 if (any(df_tot$timepoint == "baseline")) {
   df_baseline <- df_tot %>% filter(timepoint == "baseline") %>%
-    filter(!is.na(Age), !is.na(Sex), !is.na(BMI), !is.na(DM), !is.na(PPI), !is.na(total_reads))
+    filter(!is.na(Age), !is.na(Sex), !is.na(BMI), !is.na(DM), !is.na(PPI), !is.na(filtered_reads))
   statres_baseline_adj <- data.frame()
   for (gf in gene_families) {
     df_baseline$mb <- log10(df_baseline[[gf]] + 1)
     tryCatch({
-      model <- lm(mb ~ EthnicityTot + Age + Sex + BMI + DM + PPI + total_reads, data = df_baseline)
+      model <- lm(mb ~ EthnicityTot + Age + Sex + BMI + DM + PPI + filtered_reads, data = df_baseline)
       res <- summary(model)
       if (nrow(res$coefficients) >= 2) {
         ci <- confint(model)
@@ -283,7 +283,7 @@ if (any(df_tot$timepoint == "baseline")) {
                                    "Significant" = "orange",
                                    "Not Significant" = "gray70")) +
     theme_Publication() +
-    labs(x = "log10(Abundance) Difference (South-Asian Surinamese - Dutch)",
+    labs(x = "log10(RPKM + 1) Difference (South-Asian Surinamese - Dutch)",
          y = "-log10(p-value)",
          title = "Baseline (adjusted) CAZy Differences Between Ethnicities",
          subtitle = "Adjusted for age, sex, BMI, diabetes, PPI, total reads",
@@ -294,12 +294,12 @@ if (any(df_tot$timepoint == "baseline")) {
 # Follow-up adjusted
 if (any(df_tot$timepoint == "follow-up")) {
   df_followup <- df_tot %>% filter(timepoint == "follow-up") %>%
-    filter(!is.na(Age), !is.na(Sex), !is.na(BMI), !is.na(DM), !is.na(PPI), !is.na(total_reads))
+    filter(!is.na(Age), !is.na(Sex), !is.na(BMI), !is.na(DM), !is.na(PPI), !is.na(filtered_reads))
   statres_followup_adj <- data.frame()
   for (gf in gene_families) {
     df_followup$mb <- log10(df_followup[[gf]] + 1)
     tryCatch({
-      model <- lm(mb ~ EthnicityTot + Age + Sex + BMI + DM + PPI + total_reads, data = df_followup)
+      model <- lm(mb ~ EthnicityTot + Age + Sex + BMI + DM + PPI + filtered_reads, data = df_followup)
       res <- summary(model)
       if (nrow(res$coefficients) >= 2) {
         ci <- confint(model)
@@ -335,7 +335,7 @@ if (any(df_tot$timepoint == "follow-up")) {
                                    "Significant" = "orange",
                                    "Not Significant" = "gray70")) +
     theme_Publication() +
-    labs(x = "log10(Abundance) Difference (South-Asian Surinamese - Dutch)",
+    labs(x = "log10(RPKM + 1) Difference (South-Asian Surinamese - Dutch)",
          y = "-log10(p-value)",
          title = "Follow-up (adjusted) CAZy Differences Between Ethnicities",
          subtitle = "Adjusted for age, sex, BMI, diabetes, PPI, total reads",

@@ -3,6 +3,8 @@ library(tidyverse)
 library(ggsci)
 library(ggpubr)
 library(rstatix)
+library(lme4)
+library(lmerTest)
 
 theme_Publication <- function(base_size=14, base_family="sans") {
   library(grid)
@@ -29,11 +31,15 @@ theme_Publication <- function(base_size=14, base_family="sans") {
            strip.text = element_text(face="bold")))
 }
 
-df_raw <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |> select(-HELIBA_103370, -HELIFU_103370)
-stats <- rio::import("data/shotgun/cayman_results/sample_statistics.tsv") |>
+df_raw <- rio::import("data/shotgun/cayman_results/oct2026_results/families_rpkm_table.tsv") |> select(-HELIBA_103370, -HELIFU_103370)
+stats <- rio::import("data/shotgun/cayman_results/oct2026_results/sample_statistics.tsv") |>
+  # S103370's baseline CAZy profile essentially failed (43 families, 0.13% CAZy
+  # reads vs a cohort median of 350 / 3.7%, despite normal overall read depth);
+  # excluded here to match the family-table exclusion used in scripts 2-4.
+  filter(!sample %in% c("HELIBA_103370", "HELIFU_103370")) |>
   mutate(timepoint = case_when(str_detect(sample, "HELIBA") ~ "Baseline",
                                 str_detect(sample, "HELIFU") ~ "Follow-up"),
-          timepoint = as.factor(timepoint)) |> 
+          timepoint = as.factor(timepoint)) |>
   rename(sampleID = sample) |> select(-timepoint)
 names(stats)
 str(stats$sampleID)
@@ -77,74 +83,46 @@ pwc_pct <- stats %>%
     labs(title = "% CAZy Reads by Timepoint", x = "Timepoint", y = "% CAZy Reads", fill = ""))
 ggsave(file.path(qc_dir, "pct_cazy_reads_by_timepoint_ethnicity_boxplot.pdf"), gg_pct_cazy_box, width = 5, height = 6)
 
-# 3. Scatterplot of pct_cazy_reads vs total_reads with correlation
+# 3. Scatterplot of pct_cazy_reads vs filtered_reads with correlation
 
-  cor_pctcazy_total <- cor.test(stats$total_reads, stats$pct_cazy_reads, method = "spearman")
+  cor_pctcazy_total <- cor.test(stats$filtered_reads, stats$pct_cazy_reads, method = "spearman")
   subtitle_pctcazy_total <- paste0("Spearman's rho = ", round(cor_pctcazy_total$estimate, 3),
                                    ", p = ", formatC(cor_pctcazy_total$p.value, format = "e", digits = 2))
-  gg_pct_cazy_scatter <- ggplot(stats, aes(x = total_reads, y = pct_cazy_reads)) +
+  gg_pct_cazy_scatter <- ggplot(stats, aes(x = filtered_reads, y = pct_cazy_reads)) +
     geom_point(color = "#0072B2", alpha = 0.5, size = 2) +
     geom_smooth(method = "lm", se = TRUE, color = "black", linetype = "dashed") +
     theme_Publication() +
-    labs(title = "% CAZy Reads vs Total Reads", x = "Total Reads", y = "% CAZy Reads", subtitle = subtitle_pctcazy_total)
-  ggsave(file.path(qc_dir, "pct_cazy_reads_vs_total_reads.pdf"), gg_pct_cazy_scatter, width = 6, height = 4)
+    labs(title = "% CAZy Reads vs Filtered Reads", x = "Filtered Reads", y = "% CAZy Reads", subtitle = subtitle_pctcazy_total)
+  ggsave(file.path(qc_dir, "pct_cazy_reads_vs_filtered_reads.pdf"), gg_pct_cazy_scatter, width = 6, height = 4)
 
-# 4. Histogram of richness
-gg_richness_hist <- gghistogram(stats, x = "richness", bins = 30, fill = "#E69F00", color = "black") +
+# 4. Histogram of family richness (n_families; catalog size = 466 families)
+gg_richness_hist <- gghistogram(stats, x = "n_families", bins = 30, fill = "#E69F00", color = "black") +
   theme_Publication() +
   facet_wrap(~timepoint) +
-  labs(title = "Sample Richness", x = "Richness", y = "Count")
+  labs(title = "Family richness", x = "Family richness (n_families)", y = "Count")
 ggsave(file.path(qc_dir, "richness_histogram.pdf"), gg_richness_hist, width = 6, height = 4)
 
-# 5. Boxplot of richness by timepoint
-gg_richness_box <- ggboxplot(stats, x = "timepoint", y = "richness", fill = "timepoint", width = 0.4) +
-  theme_Publication() +
-  stat_compare_means() +
-  scale_fill_jco() +
-  labs(title = "Richness by Timepoint", x = "Timepoint", y = "Richness")
-ggsave(file.path(qc_dir, "richness_by_timepoint_boxplot.pdf"), gg_richness_box, width = 4, height = 6)
-
-stats <- stats |> mutate(log_richness = log10(richness))
-pwc <- stats %>%
+# 5. Boxplot of family richness by timepoint and ethnicity
+pwc_richness <- stats %>%
   group_by(timepoint) %>%
-  wilcox_test(log_richness ~ EthnicityTot) %>%          # or t_test(...)
+  wilcox_test(n_families ~ EthnicityTot) %>%
   adjust_pvalue(method = "fdr") %>%
   add_significance("p.adj") %>%
-  add_xy_position(x = "timepoint", dodge = 0.8)     # key for dodged boxes
+  add_xy_position(x = "timepoint", dodge = 0.8)
 
-(gg_richness_box <- ggboxplot(stats, x = "timepoint", y = "log_richness", fill = "EthnicityTot", width = 0.4) +
-  theme_Publication() +
-  stat_pvalue_manual(pwc, label = "p.adj.signif", tip.length = 0, size = 5) +
-  scale_fill_jco() +
-  labs(title = "Richness by Timepoint", x = "Timepoint", y = "Richness"))
-ggsave(file.path(qc_dir, "richness_by_timepoint_boxplot.pdf"), gg_richness_box, width = 4, height = 6)
+# LMM: ethnicity x timepoint interaction on family richness (repeated measures, 1|ID)
+lmm_richness   <- lmerTest::lmer(n_families ~ EthnicityTot * timepoint + (1 | ID), data = stats)
+lmm_richness_p <- summary(lmm_richness)$coefficients["EthnicityTotSouth-Asian Surinamese:timepointfollow-up", "Pr(>|t|)"]
+lmm_richness_label <- paste0("LMM: Ethnicity × Timepoint p = ",
+                              ifelse(lmm_richness_p < 0.001,
+                                     formatC(lmm_richness_p, format = "e", digits = 2),
+                                     formatC(lmm_richness_p, format = "f", digits = 3)))
 
-# 6. Scatterplot of richness vs complexity with correlation
-cor_richness_complexity <- cor.test(stats$richness, stats$complexity, method = "spearman")
-subtitle_richness_complexity <- paste0("Spearman's rho = ", round(cor_richness_complexity$estimate, 3),
-                                        ", p = ", formatC(cor_richness_complexity$p.value, format = "e", digits = 2))
-gg_richness_complexity <- ggplot(stats, aes(x = richness, y = complexity)) +
-  geom_point(color = "#D55E00", alpha = 0.5, size = 2) +
-  geom_smooth(method = "lm", se = TRUE, color = "black", linetype = "dashed") +
-  theme_Publication() +
-  labs(title = "Richness vs Complexity", x = "Richness", y = "Complexity", subtitle = subtitle_richness_complexity)
-ggsave(file.path(qc_dir, "richness_vs_complexity.pdf"), gg_richness_complexity, width = 6, height = 4)
-
-# 7. Boxplot of complexity by timepoint
-gg_complexity_box <- ggboxplot(stats, x = "timepoint", y = "complexity", fill = "timepoint", width = 0.4) +
-  theme_Publication() +
-  stat_compare_means() +
-  scale_fill_jco() +
-  labs(title = "Complexity by Timepoint", x = "Timepoint", y = "Complexity")
-ggsave(file.path(qc_dir, "complexity_by_timepoint_boxplot.pdf"), gg_complexity_box, width = 4, height = 6)
-
-# 8. Scatterplot of pct_cazy_reads vs richness with correlation
-cor_pctcazy_richness <- cor.test(stats$richness, stats$pct_cazy_reads, method = "spearman")
-subtitle_pctcazy_richness <- paste0("Spearman's rho = ", round(cor_pctcazy_richness$estimate, 3),
-                                    ", p = ", formatC(cor_pctcazy_richness$p.value, format = "e", digits = 2))
-gg_pctcazy_richness <- ggplot(stats, aes(x = richness, y = pct_cazy_reads)) +
-  geom_point(color = "#009E73", alpha = 0.5, size = 2) +
-  geom_smooth(method = "lm", se = TRUE, color = "black", linetype = "dashed") +
-  theme_Publication() +
-  labs(title = "% CAZy Reads vs Richness", x = "Richness", y = "% CAZy Reads", subtitle = subtitle_pctcazy_richness)
-ggsave(file.path(qc_dir, "pct_cazy_reads_vs_richness.pdf"), gg_pctcazy_richness, width = 6, height = 4)
+(gg_richness_box <- ggboxplot(stats, x = "timepoint", y = "n_families", fill = "EthnicityTot", width = 0.4) +
+    theme_Publication() +
+    stat_pvalue_manual(pwc_richness, label = "p.adj.signif", tip.length = 0, size = 5) +
+    scale_fill_jco() +
+    labs(title = "Family richness", x = "Timepoint", y = "Number of families detected", fill = "",
+         subtitle = lmm_richness_label) +
+    theme(plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic")))
+ggsave(file.path(qc_dir, "richness_by_timepoint_ethnicity_boxplot.pdf"), gg_richness_box, width = 5, height = 6)
