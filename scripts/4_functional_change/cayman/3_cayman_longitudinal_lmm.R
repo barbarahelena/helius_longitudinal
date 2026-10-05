@@ -35,10 +35,10 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 }
 
 # Data import ------------------------------------------------------------------
-df_raw   <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |>
+df_raw   <- rio::import("data/shotgun/cayman_results/oct2026_results/families_rpkm_table.tsv") |>
   dplyr::select(-HELIBA_103370, -HELIFU_103370)
 clinical <- readRDS("data/clinicaldata/clinicaldata_long.RDS")
-stats    <- rio::import("data/shotgun/cayman_results/sample_statistics.tsv") |>
+stats    <- rio::import("data/shotgun/cayman_results/oct2026_results/sample_statistics.tsv") |>
   dplyr::rename(sampleID = sample)
 dir.create("results/4_functional_change/cayman/longitudinal", showWarnings = FALSE, recursive = TRUE)
 
@@ -90,6 +90,59 @@ statres_adj <- as.data.frame(statres_adj) %>%
 write.csv2(statres_adj,
            "results/4_functional_change/cayman/longitudinal/lmm_ethnicity_timepoint_adjusted.csv",
            row.names = FALSE)
+
+# Diet-adjusted LMM (sensitivity) ----------------------------------------------
+# Same model as above, plus baseline fiber + carbohydrate intake, restricted to
+# participants with dietary data. Restored from a pre-RPKM-migration version of
+# this script (git dee91e3) and adapted to the current base model (FUtime, no
+# Age/Sex/BMI/Smoking/PPI terms, since those are handled by complete-case
+# restriction + cohort matching, not as covariates — see note above).
+diet_baseline <- dftot_adj %>%
+  filter(timepoint == "baseline") %>%
+  dplyr::select(ID, Fiber_BL = Fiber, Carbohydrates_BL = Carbohydrates) %>%
+  distinct(ID, .keep_all = TRUE)
+
+dftot_diet <- dftot_adj %>%
+  left_join(diet_baseline, by = "ID") %>%
+  filter(!is.na(Fiber_BL), !is.na(Carbohydrates_BL))
+
+statres_diet <- data.frame()
+for (gf in gene_families) {
+  dftot_diet$mb <- log10(dftot_diet[[gf]] + 1)
+  tryCatch({
+    model_diet <- lmer(mb ~ EthnicityTot * timepoint + FUtime + Fiber_BL + Carbohydrates_BL + (1|ID),
+                        data = dftot_diet)
+    res <- summary(model_diet)
+    ci  <- confint(model_diet, method = "Wald")
+    interaction_row <- grep("EthnicityTotSouth-Asian Surinamese:timepointfollow-up",
+                            rownames(res$coefficients))
+    ci_row <- grep("EthnicityTotSouth-Asian Surinamese:timepointfollow-up", rownames(ci))
+    statres_diet <- rbind(statres_diet, data.frame(
+      family   = gf,
+      estimate = res$coefficients[interaction_row, 1],
+      conflow  = ifelse(length(ci_row) > 0, ci[ci_row, 1], NA),
+      confhigh = ifelse(length(ci_row) > 0, ci[ci_row, 2], NA),
+      pval     = res$coefficients[interaction_row, 5]
+    ))
+  }, error = function(e) NULL)
+}
+statres_diet <- as.data.frame(statres_diet) %>%
+  arrange(pval) %>%
+  mutate(padj = p.adjust(pval, method = "fdr"))
+write.csv2(statres_diet,
+           "results/4_functional_change/cayman/longitudinal/lmm_ethnicity_timepoint_dietary.csv",
+           row.names = FALSE)
+
+# How many of the main-model FDR-significant families remain significant after diet adjustment?
+diet_overlap <- statres_adj %>%
+  filter(padj < 0.05) %>%
+  dplyr::select(family, padj_main = padj) %>%
+  left_join(statres_diet %>% dplyr::select(family, padj_diet = padj), by = "family")
+n_diet_sig <- sum(diet_overlap$padj_diet < 0.05, na.rm = TRUE)
+cat("\nDietary subgroup: n =", length(unique(dftot_diet$ID)), "participants with baseline fiber/carbohydrate data\n")
+cat("Of", nrow(diet_overlap), "FDR-significant families in the main model,",
+    n_diet_sig, "remain FDR-significant after adjustment for baseline fiber + carbohydrate intake:\n")
+print(diet_overlap %>% filter(padj_diet < 0.05))
 
 # Figure 4 panels (A, B–D) -----------------------------------------------------
 make_boxviolin <- function(df, family_name, pval, y_label, show_pval = TRUE) {
@@ -162,7 +215,7 @@ target_fam <- statres_adj_q %>%
 pl_B_panels <- lapply(target_fam, function(fam) {
   pval_row <- statres_adj %>% filter(family == fam)
   pval     <- if (nrow(pval_row) > 0) pval_row$pval[1] else NA_real_
-  make_boxviolin(dftot_adj, fam, pval, y_label = "log10(CPM + 1)") +
+  make_boxviolin(dftot_adj, fam, pval, y_label = "log10(RPKM + 1)") +
     labs(title = fam) +
     theme(plot.title = element_text(face = "bold", size = rel(0.9), hjust = 0.5))
 })
@@ -359,7 +412,7 @@ for (i in seq(1, length(supp_families), by = 9)) {
   plots <- lapply(batch, function(fam) {
     pval_row <- statres_adj %>% filter(family == fam)
     pval     <- if (nrow(pval_row) > 0) pval_row$pval[1] else NA_real_
-    make_boxviolin(dftot_adj, fam, pval, "log10(CPM + 1)") +
+    make_boxviolin(dftot_adj, fam, pval, "log10(RPKM + 1)") +
       labs(title = fam) +
       theme(plot.title = element_text(face = "bold", size = rel(0.9), hjust = 0.5))
   })

@@ -32,7 +32,7 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 }
 
 #### Load data ####
-df_raw <- rio::import("data/shotgun/cayman_results/families_cpm_table.tsv") |> dplyr::select(-HELIBA_103370, -HELIFU_103370)
+df_raw <- rio::import("data/shotgun/cayman_results/oct2026_results/families_rpkm_table.tsv") |> dplyr::select(-HELIBA_103370, -HELIFU_103370)
 rownames(df_raw) <- df_raw$family
 df_raw$family <- NULL
 caymat <- t(as.matrix(df_raw))  # samples in rows, families in columns
