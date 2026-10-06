@@ -66,7 +66,8 @@ df_wide <- df_raw %>%
 # Add sequencing depth
 sample_depth <- df_raw %>%
   group_by(Sample) %>%
-  summarise(sequencing_depth = mean(Total_Reads, na.rm = TRUE), .groups = "drop") %>%
+  summarise(sequencing_depth = mean(Total_Reads, na.rm = TRUE),
+            total_genes = mean(Total_Genes, na.rm = TRUE), .groups = "drop") %>%
   rename(sampleID = Sample)
 
 df_tot <- left_join(df_wide, clinical, by = "sampleID") %>%
@@ -75,7 +76,8 @@ df_tot <- left_join(df_wide, clinical, by = "sampleID") %>%
   mutate(timepoint = factor(timepoint, levels = c("baseline", "follow-up")),
          EthnicityTot = factor(EthnicityTot),
          ID = factor(ID),
-         log_depth = log10(sequencing_depth)) %>%
+         log_depth = log10(sequencing_depth),
+         log_totgenes = log10(total_genes)) %>%
   droplevels()
 
 saveRDS(df_tot, "data/arg_prepared_for_lmm.RDS")
@@ -92,11 +94,14 @@ total_arg_burden <- df_raw %>%
   rename(sampleID = Sample)
 
 arg_burden_clin <- left_join(total_arg_burden, clinical, by = "sampleID") %>%
+  left_join(dplyr::select(sample_depth, sampleID, total_genes), by = "sampleID") %>%
   filter(!is.na(EthnicityTot)) %>%
   mutate(timepoint = factor(timepoint, levels = c("baseline", "follow-up")),
          EthnicityTot = factor(EthnicityTot),
          ID = factor(ID),
-         log_rpm = log10(total_arg_rpm + 1)) %>%
+         log_rpm = log10(total_arg_rpm + 1),
+         log_depth = log10(sequencing_depth),
+         log_totgenes = log10(total_genes)) %>%
   droplevels()
 
 # Tests (no need for depth adjustment - RPM already normalizes for depth)
@@ -581,3 +586,107 @@ gene_panels <- lapply(key_genes, function(nm) {
          subtitle = p_str)
 })
 
+
+
+# SENSITIVITY: SEQUENCING DEPTH, ASSEMBLY YIELD AND DETECTION THRESHOLD ----
+# Total_Genes = predicted CDS summed over the participant's co-assembled bins (group-level, so
+# identical for baseline and follow-up of one participant). It captures assembly/binning yield but
+# also real gene content, so adjusted between-person models are reported next to unadjusted ones.
+# Within-person contrasts (timepoint, ethnicity x timepoint) share one ARG catalog per participant.
+extract_terms <- function(model, pattern, outcome, test, spec) {
+  co <- summary(model)$coefficients
+  rows <- grep(pattern, rownames(co))
+  data.frame(outcome = outcome, test = test, spec = spec, term = rownames(co)[rows],
+             estimate = co[rows, 1], se = co[rows, 2], pval = co[rows, ncol(co)],
+             row.names = NULL)
+}
+
+specs <- list(unadjusted = "",
+              depth = " + log_depth",
+              depth_assembly = " + log_depth + log_totgenes")
+
+# Richness and Shannon at minimum-read detection thresholds (reads summed per gene symbol)
+arg_gene_reads <- df_raw %>%
+  filter(Prevalence > 0) %>%
+  group_by(Sample, Gene_Symbol) %>%
+  summarise(reads = sum(Mapped_Reads, na.rm = TRUE), RPKM = sum(RPKM, na.rm = TRUE),
+            .groups = "drop")
+
+arg_thresholds <- map_dfr(c(1, 5, 10), function(thr) {
+  arg_gene_reads %>%
+    filter(reads >= thr) %>%
+    group_by(Sample) %>%
+    summarise(richness = n(),
+              shannon = {p <- RPKM / sum(RPKM); -sum(p * log(p))}, .groups = "drop") %>%
+    complete(Sample = unique(df_raw$Sample), fill = list(richness = 0, shannon = 0)) %>%
+    mutate(thr = thr)
+}) %>%
+  pivot_wider(names_from = thr, values_from = c(richness, shannon), names_glue = "{.value}_ge{thr}") %>%
+  rename(sampleID = Sample)
+
+sens_data <- arg_burden_clin %>%
+  dplyr::select(sampleID, ID, EthnicityTot, timepoint, FUtime, log_rpm, log_depth, log_totgenes) %>%
+  left_join(arg_thresholds, by = "sampleID")
+
+outcomes <- c("log_rpm", paste0("richness_ge", c(1, 5, 10)), paste0("shannon_ge", c(1, 5, 10)))
+
+sens_results <- map_dfr(outcomes, function(y) {
+  map_dfr(names(specs), function(sp) {
+    f_rhs <- specs[[sp]]
+    m_eth <- lm(as.formula(paste(y, "~ EthnicityTot", f_rhs)),
+                data = filter(sens_data, timepoint == "baseline"))
+    m_time <- lmer(as.formula(paste(y, "~ timepoint + FUtime", f_rhs, "+ (1|ID)")), data = sens_data)
+    m_int <- lmer(as.formula(paste(y, "~ EthnicityTot * timepoint + FUtime", f_rhs, "+ (1|ID)")),
+                  data = sens_data)
+    bind_rows(extract_terms(m_eth, "^EthnicityTot", y, "ethnicity_baseline", sp),
+              extract_terms(m_time, "^timepoint", y, "timepoint", sp),
+              extract_terms(m_int, "EthnicityTot.*:.*timepoint", y, "ethnicity_x_timepoint", sp))
+  })
+})
+write.csv2(sens_results, "results/5_arg/longitudinal/sensitivity_depth_assembly.csv", row.names = FALSE)
+
+# Depth-matched pairs: follow-up vs baseline within participants whose depth differs < 0.1 log10
+pairs_wide <- sens_data %>%
+  dplyr::select(ID, timepoint, log_rpm, log_depth, richness_ge1, richness_ge10) %>%
+  pivot_wider(names_from = timepoint, values_from = c(log_rpm, log_depth, richness_ge1, richness_ge10),
+              names_glue = "{.value}_{timepoint}") %>%
+  drop_na() %>%
+  mutate(d_depth = `log_depth_follow-up` - log_depth_baseline,
+         d_burden = `log_rpm_follow-up` - log_rpm_baseline,
+         d_richness = `richness_ge1_follow-up` - richness_ge1_baseline,
+         d_richness_ge10 = `richness_ge10_follow-up` - richness_ge10_baseline)
+
+paired_sens <- map_dfr(c(Inf, 0.3, 0.1), function(cut) {
+  pp <- filter(pairs_wide, abs(d_depth) < cut)
+  map_dfr(c("d_burden", "d_richness", "d_richness_ge10"), function(v) {
+    tt <- t.test(pp[[v]])
+    data.frame(max_abs_depth_diff_log10 = cut, n_pairs = nrow(pp), outcome = v,
+               mean_change = unname(tt$estimate), ci_low = tt$conf.int[1], ci_high = tt$conf.int[2],
+               pval = tt$p.value)
+  })
+})
+write.csv2(paired_sens, "results/5_arg/longitudinal/sensitivity_depth_matched_pairs.csv", row.names = FALSE)
+
+# Gene-level LMMs with depth and assembly yield as covariates
+gene_sens <- map_dfr(prevalent_genes, function(g) {
+  d <- df_tot
+  d$mb <- log10(d[[g]] + 1)
+  m_time <- lmer(mb ~ timepoint + FUtime + log_depth + log_totgenes + (1|ID), data = d)
+  m_int <- lmer(mb ~ EthnicityTot * timepoint + FUtime + log_depth + log_totgenes + (1|ID), data = d)
+  bind_rows(extract_terms(m_time, "^timepoint", g, "timepoint", "depth_assembly"),
+            extract_terms(m_int, "EthnicityTot.*:.*timepoint", g, "ethnicity_x_timepoint", "depth_assembly"))
+}) %>%
+  group_by(test) %>%
+  mutate(padj = p.adjust(pval, method = "fdr")) %>%
+  ungroup() %>%
+  rename(gene = outcome)
+write.csv2(gene_sens, "results/5_arg/longitudinal/sensitivity_gene_lmm_depth_assembly.csv", row.names = FALSE)
+
+gene_sens_summary <- gene_sens %>%
+  group_by(test) %>%
+  summarise(n_genes = n(), n_sig_adjusted = sum(padj < 0.05), .groups = "drop") %>%
+  left_join(tibble(test = c("timepoint", "ethnicity_x_timepoint"),
+                   n_sig_primary = c(sum(statres$padj < 0.05), sum(statres_interaction$padj < 0.05))),
+            by = "test")
+print(gene_sens_summary)
+write.csv2(gene_sens_summary, "results/5_arg/longitudinal/sensitivity_gene_lmm_summary.csv", row.names = FALSE)

@@ -279,3 +279,42 @@ n_arg_classes <- n_distinct(class_prev_dot$Class)
        title = "ARG Class Prevalence: Baseline vs Follow-up") +
   theme(axis.text.y = element_text(size = 9)))
 ggsave("results/5_arg/qc/class_prevalence_dotplot.pdf", p10, width = 8, height = 7)
+
+# QC Plot 11: ARG richness vs sequencing depth and assembly yield
+# Richness depends on how many ARGs were assembled and binned (Total_Genes = predicted CDS across the
+# participant's co-assembled bins) and on depth, unlike RPM-normalised burden
+sample_richness <- df_raw %>%
+  filter(Mapped_Reads > 0) %>%
+  group_by(Sample, timepoint) %>%
+  summarise(richness = n_distinct(Gene_Symbol), .groups = "drop") %>%
+  left_join(df_raw %>% group_by(Sample) %>%
+              summarise(sequencing_depth = first(Total_Reads), total_genes = first(Total_Genes),
+                        .groups = "drop"), by = "Sample")
+
+cor_rich <- sample_richness %>%
+  summarise(depth_rho = cor(sequencing_depth, richness, method = "spearman"),
+            totgenes_rho = cor(total_genes, richness, method = "spearman"))
+write.csv2(cor_rich, "results/5_arg/qc/richness_depth_assembly_correlation.csv", row.names = FALSE)
+
+(p11a <- ggplot(sample_richness, aes(x = sequencing_depth, y = richness, color = timepoint)) +
+  geom_point(alpha = 0.5, size = 2) +
+  geom_smooth(method = "lm", se = TRUE, aes(group = 1), color = "black", linetype = "dashed") +
+  scale_color_simpsons() +
+  scale_x_log10() +
+  theme_Publication() +
+  labs(x = "Sequencing Depth - Total Reads (log scale)", y = "ARG richness (genes detected)",
+       title = "ARG richness vs sequencing depth",
+       subtitle = paste0("Spearman's rho = ", round(cor_rich$depth_rho, 3)), color = "Timepoint"))
+
+(p11b <- ggplot(sample_richness, aes(x = total_genes, y = richness, color = timepoint)) +
+  geom_point(alpha = 0.5, size = 2) +
+  geom_smooth(method = "lm", se = TRUE, aes(group = 1), color = "black", linetype = "dashed") +
+  scale_color_simpsons() +
+  scale_x_log10() +
+  theme_Publication() +
+  labs(x = "Predicted genes in co-assembled bins (log scale)", y = "ARG richness (genes detected)",
+       title = "ARG richness vs assembly yield",
+       subtitle = paste0("Spearman's rho = ", round(cor_rich$totgenes_rho, 3)), color = "Timepoint"))
+
+p11 <- ggarrange(p11a, p11b, ncol = 2, common.legend = TRUE, legend = "bottom")
+ggsave("results/5_arg/qc/richness_vs_depth_and_assembly.pdf", p11, width = 11, height = 5.5)

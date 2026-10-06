@@ -841,3 +841,80 @@ pl_class_abund <- ggplot(class_abund_means,
   theme_Publication(base_size = BASE_SIZE) +
   labs(x = "Mean log\u2081\u2080(RPKM + 1)", y = "",
        title = "ARG class abundance by ethnicity")
+
+
+# SENSITIVITY: DEPTH, ASSEMBLY YIELD AND DETECTION THRESHOLD ----
+# Between-person comparisons use a different ARG catalog per participant (built from that participant's
+# co-assembled bins). Total_Genes = predicted CDS across those bins: it reflects assembly/binning yield
+# but also real gene content, so adjusted models are reported next to the unadjusted chi-square /
+# linear-model results above rather than replacing them.
+sample_covar <- df_raw %>%
+  group_by(Sample) %>%
+  summarise(log_depth = log10(first(Total_Reads)),
+            log_totgenes = log10(first(Total_Genes)), .groups = "drop") %>%
+  rename(sampleID = Sample)
+
+gene_reads <- df_raw %>%
+  filter(Gene_Symbol %in% prevalent_genes) %>%
+  group_by(Sample, Gene_Symbol) %>%
+  summarise(reads = sum(Mapped_Reads, na.rm = TRUE), RPKM = mean(RPKM, na.rm = TRUE), .groups = "drop") %>%
+  rename(sampleID = Sample)
+
+sens_tp <- list(baseline = "baseline", followup = "follow-up")
+cross_sens <- data.frame()
+
+for(tp_name in names(sens_tp)){
+  tp_samples <- clinical %>%
+    filter(sampleID %in% df_raw$Sample, timepoint == sens_tp[[tp_name]], !is.na(EthnicityTot)) %>%
+    left_join(sample_covar, by = "sampleID") %>%
+    dplyr::select(sampleID, EthnicityTot, log_depth, log_totgenes) %>%
+    droplevels()
+
+  full_grid <- expand_grid(sampleID = tp_samples$sampleID, Gene_Symbol = prevalent_genes) %>%
+    left_join(gene_reads, by = c("sampleID", "Gene_Symbol")) %>%
+    replace_na(list(reads = 0, RPKM = 0)) %>%
+    left_join(tp_samples, by = "sampleID")
+
+  for(gene in prevalent_genes){
+    gd <- full_grid %>% filter(Gene_Symbol == gene) %>%
+      mutate(log_rpkm = log10(RPKM + 1))
+
+    for(outcome in c("presence_ge1", "presence_ge10", "log_rpkm")){
+      y <- switch(outcome,
+                  presence_ge1 = as.numeric(gd$reads >= 1),
+                  presence_ge10 = as.numeric(gd$reads >= 10),
+                  log_rpkm = gd$log_rpkm)
+      if(outcome != "log_rpkm" && (sum(y) == 0 || sum(y) == length(y))) next
+      gd$y <- y
+
+      for(sp in c("unadjusted", "depth_assembly")){
+        rhs <- if(sp == "unadjusted") "EthnicityTot" else "EthnicityTot + log_depth + log_totgenes"
+        fit <- tryCatch(suppressWarnings(
+          if(outcome == "log_rpkm") lm(as.formula(paste("y ~", rhs)), data = gd)
+          else glm(as.formula(paste("y ~", rhs)), data = gd, family = binomial())),
+          error = function(e) NULL)
+        if(is.null(fit)) next
+        co <- summary(fit)$coefficients
+        row <- grep("^EthnicityTot", rownames(co))
+        if(length(row) == 0) next
+        cross_sens <- rbind(cross_sens, data.frame(
+          timepoint = tp_name, gene = gene, outcome = outcome, spec = sp,
+          estimate = co[row, 1], se = co[row, 2], pval = co[row, ncol(co)]))
+      }
+    }
+  }
+}
+
+cross_sens <- cross_sens %>%
+  group_by(timepoint, outcome, spec) %>%
+  mutate(padj = p.adjust(pval, method = "fdr")) %>%
+  ungroup() %>%
+  left_join(dplyr::select(gene_prevalence, gene = Gene_Symbol, class = Class, subclass = Subclass),
+            by = "gene")
+write.csv2(cross_sens, "results/5_arg/crosssectional/sensitivity_ethnicity_depth_assembly.csv", row.names = FALSE)
+
+cross_sens_summary <- cross_sens %>%
+  group_by(timepoint, outcome, spec) %>%
+  summarise(n_genes = n(), n_sig_fdr = sum(padj < 0.05, na.rm = TRUE), .groups = "drop")
+print(cross_sens_summary)
+write.csv2(cross_sens_summary, "results/5_arg/crosssectional/sensitivity_ethnicity_summary.csv", row.names = FALSE)
