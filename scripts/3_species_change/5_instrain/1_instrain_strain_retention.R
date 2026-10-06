@@ -94,26 +94,39 @@ cat("\nComparisons with >=", MIN_GENOME_COMPARED * 100, "% of the genome compare
 cat("Comparisons with MAG completeness >", MIN_COMPLETENESS, "% (same rule as",
     "filter_samplesheets_by_quality.py):", sum(res$eligible_completeness), "of", nrow(res), "\n")
 
-#### Divergence classification: distinguish likely replacement from in-situ evolution ####
+#### Divergence classification: anchored to the between-person background ####
 #
-# SNPS_PER_MB_DRIFT_MAX is read off this cohort's own distribution of
-# population_SNPs among popANI < POPANI_SAME_STRAIN comparisons, which form a
-# gradient rather than two clean clusters: ~70% sit within a few dozen
-# SNPs/Mb of the threshold (consistent with ordinary within-host evolution
-# over 6 years), while a smaller tail shows hundreds to >10,000 SNPs/Mb (far
-# more consistent with an unrelated, newly-introduced genome). This is a
-# descriptive cutoff read from this dataset's own distribution, not a
-# validated threshold from the literature — the resulting counts should be
-# treated as approximate, not a precise replacement rate.
-SNPS_PER_MB_DRIFT_MAX <- 100
+# population_SNPs/Mb among popANI < POPANI_SAME_STRAIN comparisons forms a
+# smooth gradient from ~10 to ~200 SNPs/Mb with no natural break, so no fixed
+# cutoff in that range is better justified than any other. There is a real
+# gap, though: between-person comparisons (unrelated individuals, same
+# clade; 2_instrain_between_person.R) give an empirical floor for what
+# "looks like a different person's genome" looks like. Anything below that
+# floor is too similar to be an unrelated genome, but the SNP count alone
+# cannot say whether that similarity reflects within-host evolution of the
+# persisting lineage or a shift in the relative frequency of co-resident
+# sub-lineages — so no mechanism is claimed for that group.
+between_files <- list.files("data/shotgun/instrain_ap_between/compare",
+                            pattern = "_genomeWide_compare\\.tsv$", full.names = TRUE)
+if (length(between_files) == 0)
+    stop("No between-person inStrain compare output found — run 2_instrain_between_person.R's ",
+         "upstream data first (data/shotgun/instrain_ap_between/compare).")
+between_snps_per_mb <- map_dfr(between_files, read_tsv, show_col_types = FALSE) %>%
+    rename(percent_genome_compared = percent_compared) %>%
+    filter(percent_genome_compared >= MIN_GENOME_COMPARED) %>%
+    mutate(snps_per_mb = population_SNPs / (compared_bases_count / 1e6)) %>%
+    pull(snps_per_mb)
+BETWEEN_PERSON_FLOOR <- min(between_snps_per_mb)
+cat("\nBetween-person background floor (n =", length(between_snps_per_mb),
+    "unrelated, same-clade comparisons):", round(BETWEEN_PERSON_FLOOR, 1), "SNPs/Mb\n")
 
 res <- res %>%
     mutate(
         snps_per_mb = population_SNPs / (compared_bases_count / 1e6),
         divergence_class = case_when(
-            same_strain                                         ~ "Stable",
-            !same_strain & snps_per_mb <  SNPS_PER_MB_DRIFT_MAX  ~ "Modest divergence (consistent with in-situ evolution)",
-            !same_strain & snps_per_mb >= SNPS_PER_MB_DRIFT_MAX  ~ "Substantial divergence (consistent with replacement)",
+            same_strain                                            ~ "Stable",
+            !same_strain & snps_per_mb <  BETWEEN_PERSON_FLOOR      ~ "Divergent but related (below between-person background)",
+            !same_strain & snps_per_mb >= BETWEEN_PERSON_FLOOR      ~ "Consistent with replacement (within between-person background range)",
             TRUE ~ NA_character_
         )
     )
@@ -210,23 +223,44 @@ pl_divergence <- ggplot(
     valid %>% filter(!is.na(divergence_class)) %>%
       mutate(divergence_class = factor(divergence_class,
              levels = c("Stable",
-                        "Modest divergence (consistent with in-situ evolution)",
-                        "Substantial divergence (consistent with replacement)"))),
+                        "Divergent but related (below between-person background)",
+                        "Consistent with replacement (within between-person background range)"))),
     aes(x = divergence_class, fill = divergence_class)
   ) +
     geom_bar() +
     geom_text(stat = "count", aes(label = after_stat(count)), vjust = -0.3) +
     scale_fill_manual(values = c("Stable" = "#59A14F",
-                                 "Modest divergence (consistent with in-situ evolution)" = "#F28E2B",
-                                 "Substantial divergence (consistent with replacement)" = "#E15759"),
+                                 "Divergent but related (below between-person background)" = "#F28E2B",
+                                 "Consistent with replacement (within between-person background range)" = "#E15759"),
                       guide = "none") +
     scale_x_discrete(labels = scales::label_wrap(18)) +
     labs(x = "", y = "n comparisons",
          title = "Divergence classification",
-         subtitle = sprintf("Threshold: %d SNPs/Mb among popANI < %g comparisons",
-                            SNPS_PER_MB_DRIFT_MAX, POPANI_SAME_STRAIN)) +
+         subtitle = sprintf("Cutoff: %.0f SNPs/Mb", BETWEEN_PERSON_FLOOR)) +
     theme_Publication()
 
-(pl_strain <- ggarrange(pl_popani, pl_cov, pl_divergence, ncol = 3, labels = c("A", "B", "C")))
-ggsave(file.path(out_dir, "instrain_strain_retention.pdf"), pl_strain, width = 15, height = 5)
+pl_snps_hist <- ggplot(
+    bind_rows(
+        valid %>% filter(same_strain)  %>% transmute(snps_per_mb, source = "Within-person (same strain)"),
+        valid %>% filter(!same_strain) %>% transmute(snps_per_mb, source = "Within-person (not same strain)"),
+        tibble(snps_per_mb = between_snps_per_mb, source = "Between-person (same clade)")
+    ),
+    aes(x = snps_per_mb, fill = source)
+  ) +
+    geom_histogram(position = "identity", alpha = 0.55, bins = 30) +
+    geom_vline(xintercept = BETWEEN_PERSON_FLOOR, linetype = "dashed", colour = "black") +
+    scale_x_log10(labels = scales::label_number()) +
+    scale_fill_manual(values = c("Within-person (same strain)" = "#59A14F",
+                                 "Within-person (not same strain)" = "#F28E2B",
+                                 "Between-person (same clade)" = "grey40"),
+                      name = NULL) +
+    guides(fill = guide_legend(nrow = 2)) +
+    labs(x = "Population SNPs per Mb compared (log scale)", y = "Number of comparisons",
+         title = "Divergence distribution",
+         subtitle = sprintf("Between-person floor: %.0f SNPs/Mb", BETWEEN_PERSON_FLOOR)) +
+    theme_Publication() +
+    theme(legend.position = "bottom")
+
+(pl_strain <- ggarrange(pl_popani, pl_cov, pl_divergence, pl_snps_hist, ncol = 4, labels = c("A", "B", "C", "D")))
+ggsave(file.path(out_dir, "instrain_strain_retention.pdf"), pl_strain, width = 20, height = 5)
 cat("\nPlot saved to:", file.path(out_dir, "instrain_strain_retention.pdf"), "\n")
