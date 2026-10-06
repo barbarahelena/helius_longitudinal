@@ -1,11 +1,10 @@
 ## Sensitivity analysis — exclude baseline -> follow-up "starters" per predictor
 ##
 ## For each baseline disease/medication predictor of Bray-Curtis change that has
-## a matched follow-up status, this re-fits the main-analysis model
-##   distance ~ predictor + Age_baseline + Sex + BMI_baseline +
-##              Metformin_baseline + PPI_baseline + FUtime
-## (dropping Metformin/PPI from the covariate set when either is itself the
-## predictor) after excluding participants who were "No" at baseline and
+## a matched follow-up status, this re-fits the Figure 2 model
+##   distance ~ predictor + FUtime
+## (identical to extract_lm_effect_ext() in 1_betadiversity_cmb_16s.R) after
+## excluding participants who were "No" at baseline and
 ## "Yes" at follow-up for that specific variable ("starters"). Exclusion is
 ## done separately per variable — a starter for one variable stays in the
 ## analysis for all other variables. Participants who discontinued
@@ -101,7 +100,9 @@ var_list <- tribble(
     "Alcohol_baseline",       "Alcohol_follow-up",        "Alcohol use",         "Risk factor", NA_character_
 )
 
-base_covars <- c("Age_baseline", "Sex", "BMI_baseline", "Metformin_baseline", "PPI_baseline", "FUtime")
+# Same covariate set as the Figure 2 main analysis (FUtime only), so the
+# "Main analysis" estimates here reproduce Figure 2
+base_covars <- c("FUtime")
 
 #### Helper: fit distance ~ predictor + covariates, extract the Yes-vs-No effect ####
 fit_predictor_effect <- function(df, covars) {
