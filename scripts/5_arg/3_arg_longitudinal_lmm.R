@@ -618,7 +618,7 @@ arg_thresholds <- map_dfr(c(1, 5, 10), function(thr) {
     group_by(Sample) %>%
     summarise(richness = n(),
               shannon = {p <- RPKM / sum(RPKM); -sum(p * log(p))}, .groups = "drop") %>%
-    complete(Sample = unique(df_raw$Sample), fill = list(richness = 0, shannon = 0)) %>%
+    complete(Sample = unique(df_raw$Sample), fill = list(richness = 0)) %>%   # Shannon stays NA when no gene passes
     mutate(thr = thr)
 }) %>%
   pivot_wider(names_from = thr, values_from = c(richness, shannon), names_glue = "{.value}_ge{thr}") %>%
