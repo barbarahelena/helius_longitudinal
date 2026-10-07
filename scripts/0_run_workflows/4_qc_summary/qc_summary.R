@@ -52,8 +52,8 @@ MAG_COMPL_MIN      <- 70     # completeness > 70%, alistipes_bins_annotation/fil
 MAG_CONT_MAX       <- 10     # contamination < 10%, idem
 GTDBTK_COMPL_MIN   <- 50     # nf-core/mag GTDB-Tk input filter (bins below are not classified)
 GTDBTK_CONT_MAX    <- 10
-PRESENCE_THRESHOLD <- 1      # re-mapping depth for MAG presence, 4_alistipes_anno/utils.R
-MIN_CLADE_N        <- 5      # MIN_CLADE_SIZE, 4_alistipes_anno/3_draw_tree.R
+PRESENCE_THRESHOLD <- 1      # re-mapping depth for MAG presence, 3_alistipes_anno/utils.R
+MIN_CLADE_N        <- 5      # MIN_CLADE_SIZE, 3_alistipes_anno/2_draw_tree.R
 
 tp_levels <- c("baseline", "follow-up")
 tp_from_id <- function(x) if_else(str_starts(x, "HELIBA"), "baseline", "follow-up")
@@ -291,7 +291,7 @@ gtdbtk <- map_dfr(1:3, ~ read_tsv(sprintf("data/shotgun/summaries/batch%d/gtdbtk
     transmute(Name = str_remove(user_genome, "\\.fa$"), classification)
 checkm2 <- checkm2 %>% left_join(gtdbtk, by = "Name")
 
-# Analysed Alistipes putredinis MAGs (post-filter batch tables used in 4_alistipes_anno)
+# Analysed Alistipes putredinis MAGs (post-filter batch tables used in 3_alistipes_anno)
 batch_files <- sprintf("data/shotgun/alistipes_annotation/bins_alistipes_batch%d.csv", 1:3)
 mag_batch <- map_dfr(batch_files, ~ read.csv(.x, check.names = FALSE))
 mags <- mag_batch %>%
@@ -311,7 +311,7 @@ depth_own <- mag_batch %>%
     dplyr::select(bin_name, subject_id, timepoint, depth) %>%
     pivot_wider(names_from = timepoint, values_from = depth, values_fill = 0)
 
-clades <- readRDS("results/3_species_change/4_alistipes_anno/bin_quality_clade.RDS") %>%
+clades <- readRDS("results/3_species_change/3_alistipes_anno/bin_quality_clade.RDS") %>%
     dplyr::select(bin_name, clade)
 mags <- mags %>%
     left_join(depth_own, by = "bin_name") %>%
@@ -461,7 +461,7 @@ write_blocks(wb, "MAG_summary", list(
     list(title = "Completeness and contamination (CheckM2), median (IQR)", df = mag_quality),
     notes(sprintf("Analysis filter applied to MAGs: completeness >%s%% and contamination <%s%% (filter_samplesheets_by_quality.py). High/medium tiers are reported for reference only.", MAG_COMPL_MIN, MAG_CONT_MAX),
           "Low tier: bins not meeting the medium criteria.",
-          "Not placed in phylogeny: analysed MAGs without a clade assignment in 3_draw_tree.R.")
+          "Not placed in phylogeny: analysed MAGs without a clade assignment in 2_draw_tree.R.")
 ))
 write_blocks(wb, "MAG_per_clade", list(
     list(title = "Alistipes putredinis MAGs per clade", df = mag_clade),

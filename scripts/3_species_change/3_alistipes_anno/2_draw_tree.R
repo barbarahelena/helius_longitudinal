@@ -6,7 +6,7 @@
 ##   BiocManager::install(c("ggtree", "treeio"))
 ##   install.packages("ggnewscale")
 
-source("scripts/3_species_change/4_alistipes_anno/utils.R")
+source("scripts/3_species_change/3_alistipes_anno/utils.R")
 
 library(ggtree)
 library(treeio)
@@ -26,7 +26,7 @@ batch_files <- c(
   "data/shotgun/alistipes_annotation/bins_alistipes_batch2.csv",
   "data/shotgun/alistipes_annotation/bins_alistipes_batch3.csv"
 )
-results_dir <- "results/3_species_change/4_alistipes_anno"
+results_dir <- "results/3_species_change/3_alistipes_anno"
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### Constants ####
@@ -419,7 +419,7 @@ tip_meta_clades <- tip_meta %>%
 # singleton/near-singleton groups. All bins are used regardless of dominant
 # timepoint: tip_meta_clades already has exactly one row per bin (gene content
 # is a property of the assembled genome, not a per-timepoint value — same
-# reasoning as 2_vfdb_comparison.R), so filtering to timepoint == "baseline"
+# reasoning as 1_vfdb_comparison.R), so filtering to timepoint == "baseline"
 # would not avoid any pseudoreplication; it would only drop bins whose
 # dominant sample happened to be follow-up, which can wipe out an entire
 # clade (Clade IV's 6 bins are all follow-up-dominant).

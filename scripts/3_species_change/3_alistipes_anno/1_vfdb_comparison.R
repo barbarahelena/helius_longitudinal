@@ -2,7 +2,7 @@
 ## Dutch vs South-Asian Surinamese, baseline and follow-up
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
-source("scripts/3_species_change/4_alistipes_anno/utils.R")
+source("scripts/3_species_change/3_alistipes_anno/utils.R")
 
 #### Paths ####
 vfdb_file   <- "data/shotgun/alistipes_annotation/all_vfdb_results.txt"
@@ -14,7 +14,7 @@ batch_files <- c(
   "data/shotgun/alistipes_annotation/bins_alistipes_batch2.csv",
   "data/shotgun/alistipes_annotation/bins_alistipes_batch3.csv"
 )
-results_dir <- "results/3_species_change/4_alistipes_anno"
+results_dir <- "results/3_species_change/3_alistipes_anno"
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### 1. Load bin translation table ####
@@ -27,7 +27,7 @@ cat("Bins in translation table:", nrow(trans_all), "\n")
 # (>70% completeness, <10% contamination; filter_samplesheets_by_quality.py),
 # same as 1_instrain_strain_retention.R and 2_instrain_between_person.R. Not
 # utils.R's stricter MIN_COMPLETENESS (80%) — that exists only to reproduce
-# external tree membership for 3_draw_tree.R and has no equivalent constraint
+# external tree membership for 2_draw_tree.R and has no equivalent constraint
 # here, so there is no reason to inherit it.
 VFDB_MIN_COMPLETENESS <- 70
 eligible <- eligible_locus_prefixes(trans_all, batch_files,
@@ -80,7 +80,7 @@ cat("Hits after filtering (pident >=", MIN_PIDENT, ", bitscore >=", MIN_BITSCORE
 
 #### 4. Per-bin VF category hit counts ####
 # The models in section 8 are fitted on the raw hit counts, with the bin's
-# predicted CDS (same denominator as the clade comparisons in 3_draw_tree.R) as
+# predicted CDS (same denominator as the clade comparisons in 2_draw_tree.R) as
 # an offset. Dividing by the bin's total VF hits instead would make the
 # categories compositional (they would sum to 1), so a rise in one category
 # would force a fall in the others and the categories could not be tested

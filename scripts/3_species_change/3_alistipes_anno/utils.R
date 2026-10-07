@@ -14,7 +14,7 @@ library(ggpubr)
 # "present" there. Depths in (0, 1x) are trace-level signal (single/few reads,
 # plausibly cross-mapping from a closely related co-occurring strain) that is
 # not reliably distinguishable from background — see
-# results/3_species_change/4_alistipes_anno/alistipes_depth_wide.csv, which
+# results/3_species_change/3_alistipes_anno/alistipes_depth_wide.csv, which
 # shows a clean bimodal split (<1x vs >8x) with no bins in between once one
 # timepoint is genuinely colonised.
 PRESENCE_THRESHOLD <- 1

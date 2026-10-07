@@ -47,7 +47,7 @@
   # Data
   df <- readRDS("data/clinicaldata/clinicaldata_wide.RDS")
   mb <- readRDS("data/shotgun/shotgun_abundance.RDS")
-  sp <- rio::import("results/3_species_change/3_species/lmer/lmm_results.csv")
+  sp <- rio::import("results/3_species_change/2_species/lmer/lmm_results.csv")
   sp <- sp |> filter(sigq != "")
   sp
   mb <- mb[,sp$mbname]
@@ -279,7 +279,7 @@
   ))
   pl_fig3_D <- heatmap_gg
 
-  CairoPDF("results/3_species_change/3_species/heatmap_shotgun_baseline_microbe.pdf",
+  CairoPDF("results/3_species_change/2_species/heatmap_shotgun_baseline_microbe.pdf",
       width = 6, height = 6)
   print(pl_fig3_D)
   dev.off()
@@ -387,7 +387,7 @@
   ht_dutch <- make_strat_heatmap("Dutch")
   ht_sas   <- make_strat_heatmap("South-Asian Surinamese")
 
-  CairoPDF("results/3_species_change/3_species/heatmap_stratified_ethnicity.pdf",
+  CairoPDF("results/3_species_change/2_species/heatmap_stratified_ethnicity.pdf",
       width = 10, height = 6)
   draw(
     ht_dutch + ht_sas,
@@ -432,5 +432,5 @@
       theme_Publication()
 
   (pl_corr <- ggarrange(p_bmi, p_trig, p_hba1c, ncol = 3))
-  ggsave(pl_corr, filename = "results/3_species_change/3_species/alistipes_clinical_scatter.pdf",
+  ggsave(pl_corr, filename = "results/3_species_change/2_species/alistipes_clinical_scatter.pdf",
         width = 12, height = 4.5)
