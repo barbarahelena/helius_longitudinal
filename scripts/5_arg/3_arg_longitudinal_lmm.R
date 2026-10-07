@@ -148,7 +148,7 @@ p_burden_time <- ggplot(arg_burden_clin, aes(x = timepoint, y = total_arg_rpm, f
   scale_fill_simpsons() +
   scale_y_log10() +
   annotate("text", x = 1.5, y = max(arg_burden_clin$total_arg_rpm, na.rm = TRUE),
-           label = paste0("Paired t-test p = ", formatC(res_time$coefficients[2, 5], format = "e", digits = 2)),
+           label = paste0("LMM p = ", formatC(res_time$coefficients[2, 5], format = "e", digits = 2)),
            size = 4) +
   theme_Publication() +
   labs(x = "", y = "Total ARG Burden (RPM, log scale)",
@@ -495,7 +495,8 @@ pl_A <- ggplot(arg_burden_clin,
   geom_boxplot(width = 0.22, fill = "white", outlier.shape = NA, colour = "gray30",
                alpha = 1) +
   annotate("text", x = 1.5, y = Inf, vjust = 1.8, hjust = 0.5,
-           label = "p = 5.4e-15", size = 3.2) +
+           label = paste0("p = ", formatC(res_time$coefficients[2, 5], format = "e", digits = 1)),
+           size = 3.2) +
   scale_fill_manual(values = tp_colors, guide = "none") +
   scale_alpha_manual(values = c("baseline" = 0.60, "follow-up" = 0.90),
                      guide = "none") +
