@@ -122,7 +122,7 @@ write.csv2(lmm_df,
 # Unadjusted LMM in dietary subset (n=232): GAG/DF p=0.276, Mucin/DF p=0.579 — already non-significant without any dietary adjustment.
 
 # --- Spearman correlations: baseline ratios vs baseline and follow-up outcomes -
-cont_outcomes <- c("BMI", "WHR", "SBP", "DBP", "HbA1c", "Trig", "TC", "HDL", "LDL", "Fatperc")
+cont_outcomes <- c("BMI", "WHR", "SBP", "DBP", "HbA1c", "Trig", "TC", "HDL", "LDL")
 
 df_baseline  <- dftot |> filter(timepoint == "baseline")
 df_followup  <- dftot |> filter(timepoint == "follow-up")
@@ -174,7 +174,7 @@ write.csv2(spearman_res,
 outcome_labels <- c(
   BMI = "BMI", WHR = "WHR", SBP = "SBP", DBP = "DBP",
   HbA1c = "HbA1c", Trig = "Triglycerides", TC = "Total Cholesterol",
-  HDL = "HDL", LDL = "LDL", Fatperc = "Body fat %"
+  HDL = "HDL", LDL = "LDL"
 )
 ratio_labels <- c(log10_Mucin_DF = "Mucin/DF", log10_GAG_DF = "GAG/DF")
 
