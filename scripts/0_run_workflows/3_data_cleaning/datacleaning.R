@@ -56,7 +56,7 @@ df_new <- dftot %>%
                   BMI_BA = H1_LO_BMI, BMI_FU=H2_LO_BMI, 
                   SBP_BA = H1_LO_GemBPSysZit, SBP_FU=H2_LO_GemBPSysZit, 
                   DBP_BA = H1_LO_GemBPDiaZit, DBP_FU=H2_LO_GemBPDiaZit, 
-                  HR_BA = H2_LO_GemBPHRZit, HR_FU=H2_LO_GemBPHRZit, 
+                  HR_BA = H1_LO_GemBPHRZit, HR_FU=H2_LO_GemBPHRZit, 
                   # Hypertension
                   HT_Self_BA = H1_HT_Self, HT_Self_FU = H2_HT_Self_H1combined,
                   HT_BP_BA = H1_HT_BP, HT_BP_FU = H2_HT_BP,
@@ -108,7 +108,7 @@ df_new <- dftot %>%
                   Microalb_BA = H1_Lab_UitslagMIAL, Microalb_FU = H2_Lab_UitslagMIAL,
                   UACR_BA = H1_Lab_uitslagMIKR, UACR_FU = H2_Lab_UitslagMIKR,
                   Kreat_BA = H1_Lab_UitslagKREA_HP, Kreat_FU = H2_Lab_UitslagKREA_HP,
-                  UKreat_BA = H1_Lab_UitslagKREA_UP, UKreat_FU = H1_Lab_UitslagKREA_UP,
+                  UKreat_BA = H1_Lab_UitslagKREA_UP, UKreat_FU = H2_Lab_UitslagKREA_UP,
                   #eGFR_CKDEPI_BA = H1_CKDEPI_eGFR, eGFR_MDRD_BA = H1_MDRD_eGFR, missing BA 
                   eGFR_CKDEPI_FU = H2_CKDEPI_eGFR, eGFR_MDRD_FU = H2_MDRD_eGFR,
                   # Diet at baseline
