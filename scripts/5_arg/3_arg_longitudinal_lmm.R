@@ -696,3 +696,77 @@ gene_sens_summary <- gene_sens %>%
             by = "test")
 print(gene_sens_summary)
 write.csv2(gene_sens_summary, "results/5_arg/longitudinal/sensitivity_gene_lmm_summary.csv", row.names = FALSE)
+
+
+# SUMMARY STATISTICS FOR THE RESULTS AND DISCUSSION TEXT ----
+# 1. Timepoint change within each ethnic group (LMM with random intercept per participant)
+change_by_group <- function(data, outcome) {
+  map_dfr(levels(data$EthnicityTot), function(e) {
+    d <- filter(data, EthnicityTot == e)
+    m <- lmer(as.formula(paste(outcome, "~ timepoint + FUtime + (1|ID)")), data = d)
+    co <- summary(m)$coefficients["timepointfollow-up", ]
+    ci <- confint(m, method = "Wald")["timepointfollow-up", ]
+    data.frame(outcome = outcome, ethnicity = e, n_participants = n_distinct(d$ID),
+               estimate = co[["Estimate"]], conf_low = ci[[1]], conf_high = ci[[2]],
+               pval = co[["Pr(>|t|)"]])
+  })
+}
+change_group_results <- bind_rows(change_by_group(arg_burden_clin, "log_rpm"),
+                                  change_by_group(arg_div_clin, "shannon"),
+                                  change_by_group(arg_div_clin, "richness")) %>%
+  mutate(fold_change = ifelse(outcome == "log_rpm", 10^estimate, NA))
+write.csv2(change_group_results, "results/5_arg/longitudinal/change_by_ethnicity.csv", row.names = FALSE)
+
+# 2. Size of the total-burden change (paired, log10 scale) and between-person stability
+burden_pairs <- arg_burden_clin %>%
+  dplyr::select(ID, timepoint, log_rpm) %>%
+  pivot_wider(names_from = timepoint, values_from = log_rpm) %>%
+  drop_na() %>%
+  mutate(change = `follow-up` - baseline)
+
+burden_icc_model <- lmer(log_rpm ~ timepoint + (1|ID), data = arg_burden_clin)
+burden_vc <- as.data.frame(VarCorr(burden_icc_model))
+burden_effect_size <- data.frame(
+  n_pairs = nrow(burden_pairs),
+  mean_change_log10 = mean(burden_pairs$change),
+  fold_change = 10^mean(burden_pairs$change),
+  sd_change = sd(burden_pairs$change),
+  cohens_dz = mean(burden_pairs$change) / sd(burden_pairs$change),
+  change_in_baseline_sd = mean(burden_pairs$change) / sd(burden_pairs$baseline),
+  pct_pairs_decreasing = 100 * mean(burden_pairs$change < 0),
+  pct_pairs_2fold_decrease = 100 * mean(burden_pairs$change < -log10(2)),
+  pct_pairs_2fold_increase = 100 * mean(burden_pairs$change > log10(2)),
+  icc = burden_vc$vcov[1] / sum(burden_vc$vcov))
+write.csv2(burden_effect_size, "results/5_arg/longitudinal/burden_change_effect_size.csv", row.names = FALSE)
+
+# 3. Contribution of each ARG class to the change in total burden (RPM, paired participants)
+class_rpm <- df_raw %>%
+  mutate(Class = str_to_title(Class)) %>%
+  group_by(Sample, Class) %>%
+  summarise(rpm = sum(Mapped_Reads) / first(Total_Reads) * 1e6, .groups = "drop") %>%
+  complete(Sample = unique(df_raw$Sample), Class, fill = list(rpm = 0)) %>%
+  rename(sampleID = Sample) %>%
+  inner_join(dplyr::select(arg_burden_clin, sampleID, ID, timepoint), by = "sampleID")
+
+class_change <- class_rpm %>%
+  dplyr::select(ID, Class, timepoint, rpm) %>%
+  pivot_wider(names_from = timepoint, values_from = rpm) %>%
+  drop_na() %>%
+  mutate(delta = `follow-up` - baseline) %>%
+  group_by(Class) %>%
+  summarise(baseline_mean_rpm = mean(baseline), followup_mean_rpm = mean(`follow-up`),
+            mean_change_rpm = mean(delta),
+            pct_change = 100 * mean(delta) / mean(baseline),
+            pval = t.test(delta)$p.value, .groups = "drop") %>%
+  mutate(share_of_total_change_pct = 100 * mean_change_rpm / sum(mean_change_rpm),
+         padj = p.adjust(pval, method = "fdr")) %>%
+  arrange(mean_change_rpm)
+write.csv2(class_change, "results/5_arg/longitudinal/class_contribution_to_burden_change.csv", row.names = FALSE)
+
+# 4. Mean diversity by ethnicity and timepoint
+diversity_means <- arg_div_clin %>%
+  group_by(EthnicityTot, timepoint) %>%
+  summarise(n = n(), mean_shannon = mean(shannon), mean_richness = mean(richness), .groups = "drop")
+write.csv2(diversity_means, "results/5_arg/longitudinal/diversity_means_by_group.csv", row.names = FALSE)
+
+print(change_group_results); print(burden_effect_size); print(head(class_change, 6))
