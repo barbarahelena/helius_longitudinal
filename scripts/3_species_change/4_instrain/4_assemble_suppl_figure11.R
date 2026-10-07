@@ -14,16 +14,16 @@
 library(ggpubr)
 library(tidyverse)
 
-out_dir <- "results/3_species_change/5_instrain"
+out_dir <- "results/3_species_change/4_instrain"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### 1. Source strain retention — capture panels A, B ####
-source("scripts/3_species_change/5_instrain/1_instrain_strain_retention.R")
+source("scripts/3_species_change/4_instrain/1_instrain_strain_retention.R")
 pl_A <- pl_popani
 pl_B <- pl_snps_hist
 
 #### 2. Source microdiversity — capture panels C, D, E ####
-source("scripts/3_species_change/5_instrain/3_instrain_microdiversity.R")
+source("scripts/3_species_change/4_instrain/3_instrain_microdiversity.R")
 pl_C <- pl_crosssectional
 pl_D <- pl_trajectory
 # Original title carries a "B. " prefix meant for pl_delta's own standalone

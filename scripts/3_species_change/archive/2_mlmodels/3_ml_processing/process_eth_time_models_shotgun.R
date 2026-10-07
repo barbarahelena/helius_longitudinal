@@ -8,7 +8,7 @@ library(magick)
 library(cowplot)
 
 # options(scipen=999)
-dir.create("results/3_species_change/2_mlmodels", showWarnings = FALSE, recursive = TRUE)
+dir.create("results/3_species_change/archive/2_mlmodels", showWarnings = FALSE, recursive = TRUE)
 
 ## ---- Helper theme ----
 theme_Publication <- function(base_size = 12, base_family = "sans") {
@@ -108,8 +108,8 @@ latest_output <- function(base_dir, pattern) {
 
 #### Ethnicity prediction — supplementary figures ####
 ## Baseline
-path_true <- latest_output("results/3_species_change/2_mlmodels/eth_base", "output_XGB")
-data_path <- "results/3_species_change/2_mlmodels/eth_base/input_data"
+path_true <- latest_output("results/3_species_change/archive/2_mlmodels/eth_base", "output_XGB")
+data_path <- "results/3_species_change/archive/2_mlmodels/eth_base/input_data"
 labels <- c("SAS", "Dutch")
 
 pl2 <- plot_feature_importance_shotgun(path_true, 30)
@@ -118,12 +118,12 @@ pl3 <- plot_features_top_shotgun(data_path, path_true, top_n=5, nrow = 1, labels
 plarr1 <- ggarrange(svg_grob, pl2, pl3,
                     nrow = 3, labels = c("A", "B", "C"),
                     heights = c(1.2,1.3,0.8))
-ggsave(plarr1, filename = "results/3_species_change/2_mlmodels/shotgun_ethnicity_baseline.pdf",
+ggsave(plarr1, filename = "results/3_species_change/archive/2_mlmodels/shotgun_ethnicity_baseline.pdf",
        width = 14, height = 25)
 
 ## Follow-up
-path_true <- latest_output("results/3_species_change/2_mlmodels/eth_fu", "output_XGB")
-data_path <- "results/3_species_change/2_mlmodels/eth_fu/input_data"
+path_true <- latest_output("results/3_species_change/archive/2_mlmodels/eth_fu", "output_XGB")
+data_path <- "results/3_species_change/archive/2_mlmodels/eth_fu/input_data"
 labels <- c("SAS", "Dutch")
 
 pl2 <- plot_feature_importance_shotgun(path_true, 30)
@@ -132,14 +132,14 @@ pl3 <- plot_features_top_shotgun(data_path, path_true, top_n=5, nrow = 1, labels
 plarr1 <- ggarrange(svg_grob, pl2, pl3,
                     nrow = 3, labels = c("A", "B", "C"),
                     heights = c(1.2,1.3,0.8))
-ggsave(plarr1, filename = "results/3_species_change/2_mlmodels/shotgun_ethnicity_followup.pdf",
+ggsave(plarr1, filename = "results/3_species_change/archive/2_mlmodels/shotgun_ethnicity_followup.pdf",
        width = 14, height = 18)
 
 
 #### Figure 3A — Ethnicity prediction panel (baseline + follow-up) ####
 
-path_eth_base <- latest_output("results/3_species_change/2_mlmodels/eth_base", "output_XGB")
-path_eth_fu   <- latest_output("results/3_species_change/2_mlmodels/eth_fu", "output_XGB")
+path_eth_base <- latest_output("results/3_species_change/archive/2_mlmodels/eth_base", "output_XGB")
+path_eth_fu   <- latest_output("results/3_species_change/archive/2_mlmodels/eth_fu", "output_XGB")
 
 roc_base <- ggdraw() +
     draw_image(image_read_pdf(file.path(path_eth_base, "Plot_AUC.pdf"), density = 200),
@@ -154,7 +154,7 @@ roc_fu <- ggdraw() +
 pl_fig3_A <- roc_base
 pl_fig3_B <- roc_fu
 ggsave(ggarrange(pl_fig3_A, pl_fig3_B, nrow = 2, labels = c("A", "B")),
-       filename = "results/3_species_change/2_mlmodels/fig3_eth_roc.pdf",
+       filename = "results/3_species_change/archive/2_mlmodels/fig3_eth_roc.pdf",
        width = 14, height = 25)
 
 #### Supplemental figure — ML AUROC panels ####
@@ -205,5 +205,5 @@ overlap_df <- bind_rows(
 
 print(overlap_df %>% dplyr::select(FeatName, timepoint, RelFeatImp, mean_imp))
 
-write.csv2(overlap_df, "results/3_species_change/2_mlmodels/ml_overlap_baseline_followup.csv",
+write.csv2(overlap_df, "results/3_species_change/archive/2_mlmodels/ml_overlap_baseline_followup.csv",
            row.names = FALSE)

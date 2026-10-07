@@ -66,7 +66,8 @@ df_wide <- df_raw %>%
 # Add sequencing depth
 sample_depth <- df_raw %>%
   group_by(Sample) %>%
-  summarise(sequencing_depth = mean(Total_Reads, na.rm = TRUE), .groups = "drop") %>%
+  summarise(sequencing_depth = mean(Total_Reads, na.rm = TRUE),
+            total_genes = mean(Total_Genes, na.rm = TRUE), .groups = "drop") %>%
   rename(sampleID = Sample)
 
 df_tot <- left_join(df_wide, clinical, by = "sampleID") %>%
@@ -75,7 +76,8 @@ df_tot <- left_join(df_wide, clinical, by = "sampleID") %>%
   mutate(timepoint = factor(timepoint, levels = c("baseline", "follow-up")),
          EthnicityTot = factor(EthnicityTot),
          ID = factor(ID),
-         log_depth = log10(sequencing_depth)) %>%
+         log_depth = log10(sequencing_depth),
+         log_totgenes = log10(total_genes)) %>%
   droplevels()
 
 saveRDS(df_tot, "data/arg_prepared_for_lmm.RDS")
@@ -92,11 +94,14 @@ total_arg_burden <- df_raw %>%
   rename(sampleID = Sample)
 
 arg_burden_clin <- left_join(total_arg_burden, clinical, by = "sampleID") %>%
+  left_join(dplyr::select(sample_depth, sampleID, total_genes), by = "sampleID") %>%
   filter(!is.na(EthnicityTot)) %>%
   mutate(timepoint = factor(timepoint, levels = c("baseline", "follow-up")),
          EthnicityTot = factor(EthnicityTot),
          ID = factor(ID),
-         log_rpm = log10(total_arg_rpm + 1)) %>%
+         log_rpm = log10(total_arg_rpm + 1),
+         log_depth = log10(sequencing_depth),
+         log_totgenes = log10(total_genes)) %>%
   droplevels()
 
 # Tests (no need for depth adjustment - RPM already normalizes for depth)
@@ -143,7 +148,7 @@ p_burden_time <- ggplot(arg_burden_clin, aes(x = timepoint, y = total_arg_rpm, f
   scale_fill_simpsons() +
   scale_y_log10() +
   annotate("text", x = 1.5, y = max(arg_burden_clin$total_arg_rpm, na.rm = TRUE),
-           label = paste0("Paired t-test p = ", formatC(res_time$coefficients[2, 5], format = "e", digits = 2)),
+           label = paste0("LMM p = ", formatC(res_time$coefficients[2, 5], format = "e", digits = 2)),
            size = 4) +
   theme_Publication() +
   labs(x = "", y = "Total ARG Burden (RPM, log scale)",
@@ -490,13 +495,14 @@ pl_A <- ggplot(arg_burden_clin,
   geom_boxplot(width = 0.22, fill = "white", outlier.shape = NA, colour = "gray30",
                alpha = 1) +
   annotate("text", x = 1.5, y = Inf, vjust = 1.8, hjust = 0.5,
-           label = "p = 5.4e-15", size = 3.2) +
+           label = paste0("p = ", formatC(res_time$coefficients[2, 5], format = "e", digits = 1)),
+           size = 3.2) +
   scale_fill_manual(values = tp_colors, guide = "none") +
   scale_alpha_manual(values = c("baseline" = 0.60, "follow-up" = 0.90),
                      guide = "none") +
   scale_x_discrete(labels = tp_labels) +
   theme_Publication(base_size = BASE_SIZE) +
-  labs(x = "", y = "Total ARG Burden (log\u2081\u2080 RPM)",
+  labs(x = "", y = "Total ARG burden (log\u2081\u2080 RPM)",
        title = "Total ARG burden over time")
 
 ## ── Panel B: ARG Burden by Ethnicity × Timepoint ─────────────────────────────
@@ -505,6 +511,9 @@ arg_burden_B <- arg_burden_clin %>%
                                   "baseline"  = "Baseline",
                                   "follow-up" = "Follow-up"),
                            levels = c("Baseline", "Follow-up")))
+
+fmt_int_p <- function(p) paste0("Ethnicity \u00d7 timepoint (LMM): p = ",
+                                if (p < 0.001) formatC(p, format = "e", digits = 1) else sprintf("%.3f", p))
 
 pl_B <- ggplot(arg_burden_B,
                aes(x = EthnicityTot, y = log_rpm, fill = EthnicityTot)) +
@@ -518,8 +527,9 @@ pl_B <- ggplot(arg_burden_B,
   scale_x_discrete(labels = function(x)
     gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
   theme_Publication(base_size = BASE_SIZE) +
-  labs(x = "", y = "Total ARG Burden (log\u2081\u2080 RPM)",
-       title = "ARG burden by ethnicity")
+  labs(x = "", y = "Total ARG burden (log\u2081\u2080 RPM)",
+       title = "ARG burden by ethnicity",
+       subtitle = fmt_int_p(res_int$coefficients[int_row, 5]))
 
 ## ── Panel B_rich / B_shan: ARG Diversity by Ethnicity × Timepoint ────────────
 arg_div_fig <- arg_div_clin %>%
@@ -548,7 +558,8 @@ pl_B_shan <- ggplot(arg_div_fig, aes(x = EthnicityTot, y = shannon, fill = Ethni
   scale_fill_manual(values = eth_colors, guide = "none") +
   scale_x_discrete(labels = function(x) gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
   theme_Publication(base_size = BASE_SIZE) +
-  labs(x = "", y = "Shannon Diversity (RPKM-based)", title = "ARG Shannon diversity by ethnicity")
+  labs(x = "", y = "Shannon diversity", title = "ARG Shannon diversity by ethnicity",
+       subtitle = fmt_int_p(res_shan$coefficients[div_int_row, 5]))
 
 ## ── Panels F–: Key gene box + violin (FDR < 0.05 interaction) ────────────────
 key_genes <- statres_interaction %>%
@@ -581,3 +592,181 @@ gene_panels <- lapply(key_genes, function(nm) {
          subtitle = p_str)
 })
 
+
+
+# SENSITIVITY: SEQUENCING DEPTH, ASSEMBLY YIELD AND DETECTION THRESHOLD ----
+# Total_Genes = predicted CDS summed over the participant's co-assembled bins (group-level, so
+# identical for baseline and follow-up of one participant). It captures assembly/binning yield but
+# also real gene content, so adjusted between-person models are reported next to unadjusted ones.
+# Within-person contrasts (timepoint, ethnicity x timepoint) share one ARG catalog per participant.
+extract_terms <- function(model, pattern, outcome, test, spec) {
+  co <- summary(model)$coefficients
+  rows <- grep(pattern, rownames(co))
+  data.frame(outcome = outcome, test = test, spec = spec, term = rownames(co)[rows],
+             estimate = co[rows, 1], se = co[rows, 2], pval = co[rows, ncol(co)],
+             row.names = NULL)
+}
+
+specs <- list(unadjusted = "",
+              depth = " + log_depth",
+              depth_assembly = " + log_depth + log_totgenes")
+
+# Richness and Shannon at minimum-read detection thresholds (reads summed per gene symbol)
+arg_gene_reads <- df_raw %>%
+  filter(Prevalence > 0) %>%
+  group_by(Sample, Gene_Symbol) %>%
+  summarise(reads = sum(Mapped_Reads, na.rm = TRUE), RPKM = sum(RPKM, na.rm = TRUE),
+            .groups = "drop")
+
+arg_thresholds <- map_dfr(c(1, 5, 10), function(thr) {
+  arg_gene_reads %>%
+    filter(reads >= thr) %>%
+    group_by(Sample) %>%
+    summarise(richness = n(),
+              shannon = {p <- RPKM / sum(RPKM); -sum(p * log(p))}, .groups = "drop") %>%
+    complete(Sample = unique(df_raw$Sample), fill = list(richness = 0)) %>%   # Shannon stays NA when no gene passes
+    mutate(thr = thr)
+}) %>%
+  pivot_wider(names_from = thr, values_from = c(richness, shannon), names_glue = "{.value}_ge{thr}") %>%
+  rename(sampleID = Sample)
+
+sens_data <- arg_burden_clin %>%
+  dplyr::select(sampleID, ID, EthnicityTot, timepoint, FUtime, log_rpm, log_depth, log_totgenes) %>%
+  left_join(arg_thresholds, by = "sampleID")
+
+outcomes <- c("log_rpm", paste0("richness_ge", c(1, 5, 10)), paste0("shannon_ge", c(1, 5, 10)))
+
+sens_results <- map_dfr(outcomes, function(y) {
+  map_dfr(names(specs), function(sp) {
+    f_rhs <- specs[[sp]]
+    m_eth <- lm(as.formula(paste(y, "~ EthnicityTot", f_rhs)),
+                data = filter(sens_data, timepoint == "baseline"))
+    m_time <- lmer(as.formula(paste(y, "~ timepoint + FUtime", f_rhs, "+ (1|ID)")), data = sens_data)
+    m_int <- lmer(as.formula(paste(y, "~ EthnicityTot * timepoint + FUtime", f_rhs, "+ (1|ID)")),
+                  data = sens_data)
+    bind_rows(extract_terms(m_eth, "^EthnicityTot", y, "ethnicity_baseline", sp),
+              extract_terms(m_time, "^timepoint", y, "timepoint", sp),
+              extract_terms(m_int, "EthnicityTot.*:.*timepoint", y, "ethnicity_x_timepoint", sp))
+  })
+})
+write.csv2(sens_results, "results/5_arg/longitudinal/sensitivity_depth_assembly.csv", row.names = FALSE)
+
+# Depth-matched pairs: follow-up vs baseline within participants whose depth differs < 0.1 log10
+pairs_wide <- sens_data %>%
+  dplyr::select(ID, timepoint, log_rpm, log_depth, richness_ge1, richness_ge10) %>%
+  pivot_wider(names_from = timepoint, values_from = c(log_rpm, log_depth, richness_ge1, richness_ge10),
+              names_glue = "{.value}_{timepoint}") %>%
+  drop_na() %>%
+  mutate(d_depth = `log_depth_follow-up` - log_depth_baseline,
+         d_burden = `log_rpm_follow-up` - log_rpm_baseline,
+         d_richness = `richness_ge1_follow-up` - richness_ge1_baseline,
+         d_richness_ge10 = `richness_ge10_follow-up` - richness_ge10_baseline)
+
+paired_sens <- map_dfr(c(Inf, 0.3, 0.1), function(cut) {
+  pp <- filter(pairs_wide, abs(d_depth) < cut)
+  map_dfr(c("d_burden", "d_richness", "d_richness_ge10"), function(v) {
+    tt <- t.test(pp[[v]])
+    data.frame(max_abs_depth_diff_log10 = cut, n_pairs = nrow(pp), outcome = v,
+               mean_change = unname(tt$estimate), ci_low = tt$conf.int[1], ci_high = tt$conf.int[2],
+               pval = tt$p.value)
+  })
+})
+write.csv2(paired_sens, "results/5_arg/longitudinal/sensitivity_depth_matched_pairs.csv", row.names = FALSE)
+
+# Gene-level LMMs with depth and assembly yield as covariates
+gene_sens <- map_dfr(prevalent_genes, function(g) {
+  d <- df_tot
+  d$mb <- log10(d[[g]] + 1)
+  m_time <- lmer(mb ~ timepoint + FUtime + log_depth + log_totgenes + (1|ID), data = d)
+  m_int <- lmer(mb ~ EthnicityTot * timepoint + FUtime + log_depth + log_totgenes + (1|ID), data = d)
+  bind_rows(extract_terms(m_time, "^timepoint", g, "timepoint", "depth_assembly"),
+            extract_terms(m_int, "EthnicityTot.*:.*timepoint", g, "ethnicity_x_timepoint", "depth_assembly"))
+}) %>%
+  group_by(test) %>%
+  mutate(padj = p.adjust(pval, method = "fdr")) %>%
+  ungroup() %>%
+  rename(gene = outcome)
+write.csv2(gene_sens, "results/5_arg/longitudinal/sensitivity_gene_lmm_depth_assembly.csv", row.names = FALSE)
+
+gene_sens_summary <- gene_sens %>%
+  group_by(test) %>%
+  summarise(n_genes = n(), n_sig_adjusted = sum(padj < 0.05), .groups = "drop") %>%
+  left_join(tibble(test = c("timepoint", "ethnicity_x_timepoint"),
+                   n_sig_primary = c(sum(statres$padj < 0.05), sum(statres_interaction$padj < 0.05))),
+            by = "test")
+print(gene_sens_summary)
+write.csv2(gene_sens_summary, "results/5_arg/longitudinal/sensitivity_gene_lmm_summary.csv", row.names = FALSE)
+
+
+# SUMMARY STATISTICS FOR THE RESULTS AND DISCUSSION TEXT ----
+# 1. Timepoint change within each ethnic group (LMM with random intercept per participant)
+change_by_group <- function(data, outcome) {
+  map_dfr(levels(data$EthnicityTot), function(e) {
+    d <- filter(data, EthnicityTot == e)
+    m <- lmer(as.formula(paste(outcome, "~ timepoint + FUtime + (1|ID)")), data = d)
+    co <- summary(m)$coefficients["timepointfollow-up", ]
+    ci <- confint(m, method = "Wald")["timepointfollow-up", ]
+    data.frame(outcome = outcome, ethnicity = e, n_participants = n_distinct(d$ID),
+               estimate = co[["Estimate"]], conf_low = ci[[1]], conf_high = ci[[2]],
+               pval = co[["Pr(>|t|)"]])
+  })
+}
+change_group_results <- bind_rows(change_by_group(arg_burden_clin, "log_rpm"),
+                                  change_by_group(arg_div_clin, "shannon"),
+                                  change_by_group(arg_div_clin, "richness")) %>%
+  mutate(fold_change = ifelse(outcome == "log_rpm", 10^estimate, NA))
+write.csv2(change_group_results, "results/5_arg/longitudinal/change_by_ethnicity.csv", row.names = FALSE)
+
+# 2. Size of the total-burden change (paired, log10 scale) and between-person stability
+burden_pairs <- arg_burden_clin %>%
+  dplyr::select(ID, timepoint, log_rpm) %>%
+  pivot_wider(names_from = timepoint, values_from = log_rpm) %>%
+  drop_na() %>%
+  mutate(change = `follow-up` - baseline)
+
+burden_icc_model <- lmer(log_rpm ~ timepoint + (1|ID), data = arg_burden_clin)
+burden_vc <- as.data.frame(VarCorr(burden_icc_model))
+burden_effect_size <- data.frame(
+  n_pairs = nrow(burden_pairs),
+  mean_change_log10 = mean(burden_pairs$change),
+  fold_change = 10^mean(burden_pairs$change),
+  sd_change = sd(burden_pairs$change),
+  cohens_dz = mean(burden_pairs$change) / sd(burden_pairs$change),
+  change_in_baseline_sd = mean(burden_pairs$change) / sd(burden_pairs$baseline),
+  pct_pairs_decreasing = 100 * mean(burden_pairs$change < 0),
+  pct_pairs_2fold_decrease = 100 * mean(burden_pairs$change < -log10(2)),
+  pct_pairs_2fold_increase = 100 * mean(burden_pairs$change > log10(2)),
+  icc = burden_vc$vcov[1] / sum(burden_vc$vcov))
+write.csv2(burden_effect_size, "results/5_arg/longitudinal/burden_change_effect_size.csv", row.names = FALSE)
+
+# 3. Contribution of each ARG class to the change in total burden (RPM, paired participants)
+class_rpm <- df_raw %>%
+  mutate(Class = str_to_title(Class)) %>%
+  group_by(Sample, Class) %>%
+  summarise(rpm = sum(Mapped_Reads) / first(Total_Reads) * 1e6, .groups = "drop") %>%
+  complete(Sample = unique(df_raw$Sample), Class, fill = list(rpm = 0)) %>%
+  rename(sampleID = Sample) %>%
+  inner_join(dplyr::select(arg_burden_clin, sampleID, ID, timepoint), by = "sampleID")
+
+class_change <- class_rpm %>%
+  dplyr::select(ID, Class, timepoint, rpm) %>%
+  pivot_wider(names_from = timepoint, values_from = rpm) %>%
+  drop_na() %>%
+  mutate(delta = `follow-up` - baseline) %>%
+  group_by(Class) %>%
+  summarise(baseline_mean_rpm = mean(baseline), followup_mean_rpm = mean(`follow-up`),
+            mean_change_rpm = mean(delta),
+            pct_change = 100 * mean(delta) / mean(baseline),
+            pval = t.test(delta)$p.value, .groups = "drop") %>%
+  mutate(share_of_total_change_pct = 100 * mean_change_rpm / sum(mean_change_rpm),
+         padj = p.adjust(pval, method = "fdr")) %>%
+  arrange(mean_change_rpm)
+write.csv2(class_change, "results/5_arg/longitudinal/class_contribution_to_burden_change.csv", row.names = FALSE)
+
+# 4. Mean diversity by ethnicity and timepoint
+diversity_means <- arg_div_clin %>%
+  group_by(EthnicityTot, timepoint) %>%
+  summarise(n = n(), mean_shannon = mean(shannon), mean_richness = mean(richness), .groups = "drop")
+write.csv2(diversity_means, "results/5_arg/longitudinal/diversity_means_by_group.csv", row.names = FALSE)
+
+print(change_group_results); print(burden_effect_size); print(head(class_change, 6))

@@ -9,7 +9,7 @@
 
 # Alistipes putredinis strain retention: BETWEEN-person background comparison.
 #
-# Why: 5_instrain_strain_retention.R (in the alistipes chapter) compares each
+# Why: 1_instrain_strain_retention.R (in the alistipes chapter) compares each
 # participant's own baseline vs follow-up A. putredinis population and finds
 # ~20% meet the conventional same-strain threshold (popANI >= 0.99999). That
 # number is only informative relative to a background: if two UNRELATED
@@ -29,7 +29,7 @@
 #
 # Once this job's output is collected, compare its popANI/genetic-distance
 # distribution (within-clade, between-person) against the within-person
-# distribution from 5_instrain_strain_retention.R — e.g. Wilcoxon rank-sum on
+# distribution from 1_instrain_strain_retention.R — e.g. Wilcoxon rank-sum on
 # (1 - popANI). If within-person distances are significantly smaller, that
 # supports real persistence/microevolution for the ~20% "same strain" cases,
 # and situates the rest on a genuine same-clade divergence scale rather than

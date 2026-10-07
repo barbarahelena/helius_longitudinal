@@ -2,7 +2,7 @@
 ## Two analyses, mirroring the project's existing alpha-diversity /
 ## strain-sharing covariate forest plots:
 ##   A. Cross-sectional: baseline nucl_diversity ~ covariate (lm, like
-##      6_strain_stability/strainsharing_covariates.R) on the full QC-passing
+##      5_strain_stability/strainsharing_covariates.R) on the full QC-passing
 ##      population (n ~117-120) — good power, but can't speak to change.
 ##   B. Longitudinal: nucl_diversity ~ covariate * timepoint + FUtime +
 ##      (1|subject_id) (lmer, like 2_cmb_microbiome/2_alphadiversity_cmb_16s.R),
@@ -11,7 +11,7 @@
 ##      "does this covariate predict the within-lineage diversity trajectory"
 ##      test, but is severely underpowered for binary covariates with few
 ##      exposed participants; treat as hypothesis-generating only.
-## Reads results/3_species_change/5_instrain/instrain_microdiversity.csv,
+## Reads results/3_species_change/4_instrain/instrain_microdiversity.csv,
 ## written by 3_instrain_microdiversity.R (run that first).
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
@@ -54,8 +54,8 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 }
 
 #### Paths ####
-microdiv_path <- "results/3_species_change/5_instrain/instrain_microdiversity.csv"
-out_dir <- "results/3_species_change/5_instrain/covariates"
+microdiv_path <- "results/3_species_change/4_instrain/instrain_microdiversity.csv"
+out_dir <- "results/3_species_change/4_instrain/covariates"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 if (!file.exists(microdiv_path))

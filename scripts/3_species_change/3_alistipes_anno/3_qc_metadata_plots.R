@@ -1,14 +1,14 @@
 ## QC and metadata plots — Alistipes putredinis bins
-## Reads pre-computed RDS files saved by 3_draw_tree.R
+## Reads pre-computed RDS files saved by 2_draw_tree.R
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
-source("scripts/3_species_change/4_alistipes_anno/utils.R")
+source("scripts/3_species_change/3_alistipes_anno/utils.R")
 
 library(ggsci)
 library(ggalluvial)   # install.packages("ggalluvial") if needed
 
 #### Paths ####
-results_dir <- "results/3_species_change/4_alistipes_anno"
+results_dir <- "results/3_species_change/3_alistipes_anno"
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 batch_files <- c(
@@ -18,7 +18,7 @@ batch_files <- c(
 )
 
 #### Constants ####
-# Hand-picked high-contrast palette — must match 3_draw_tree.R
+# Hand-picked high-contrast palette — must match 2_draw_tree.R
 clade_pal <- c("#4E79A7", "#F28E2B", "#59A14F", "#E15759", "#B07AA1",
                "#76B7B2", "#EDC948", "#FF9DA7", "#9C755F", "#BAB0AC")
 
@@ -31,7 +31,7 @@ all_clades   <- sort(unique(tip_meta_clades$clade))
 clade_colors <- setNames(clade_pal[seq_along(all_clades)], all_clades)
 
 # Restrict analyses to clades with at least MIN_CLADE_N bins total.
-# Must match MIN_CLADE_SIZE in 3_draw_tree.R, or clades can appear in the
+# Must match MIN_CLADE_SIZE in 2_draw_tree.R, or clades can appear in the
 # tree/functional figures there but silently drop out of the plots here.
 MIN_CLADE_N  <- 5
 clade_levels <- tip_meta_clades %>%
@@ -554,14 +554,14 @@ detect_subj <- detect_pat %>%
 #
 # The properly conditioned test — restricted to baseline-negative participants
 # only, using the full sequenced cohort (not just MAG carriers), from MetaPhlAn
-# relative abundance — lives in 8_acquisition_readlevel.R. It finds NO
+# relative abundance — lives in 3_acquisition_alistipes.R. It finds NO
 # significant ethnicity difference in acquisition rate among the at-risk
 # population (Dutch 31.8% vs SAS 39.8%, Fisher p = 0.63), despite this
 # unconditional comparison below looking highly significant. Use that script's
 # result for any claim about acquisition risk; treat this one as descriptive.
 fu_tab <- table(ethnicity = detect_subj$EthnicityTot,
                 fu_only   = detect_subj$fu_only)
-cat("\nFollow-up only detection by ethnicity (unconditional; see 8_acquisition_readlevel.R for the at-risk-conditioned test):\n")
+cat("\nFollow-up only detection by ethnicity (unconditional; see 3_acquisition_alistipes.R for the at-risk-conditioned test):\n")
 print(fu_tab)
 ft_fu <- fisher.test(fu_tab)
 cat(sprintf("Fisher exact test (fu_only × ethnicity, unconditional): OR = %.2f, p = %.4f\n",

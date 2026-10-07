@@ -14,7 +14,7 @@ library(ggpubr)
 # "present" there. Depths in (0, 1x) are trace-level signal (single/few reads,
 # plausibly cross-mapping from a closely related co-occurring strain) that is
 # not reliably distinguishable from background — see
-# results/3_species_change/4_alistipes_anno/alistipes_depth_wide.csv, which
+# results/3_species_change/3_alistipes_anno/alistipes_depth_wide.csv, which
 # shows a clean bimodal split (<1x vs >8x) with no bins in between once one
 # timepoint is genuinely colonised.
 PRESENCE_THRESHOLD <- 1
@@ -70,45 +70,31 @@ eligible_locus_prefixes <- function(trans, batch_files, min_completeness = MIN_C
 }
 
 #### Gene-content denominator ####
-# Proportions are expressed per predicted protein-coding gene, rather than per
-# gene that eggNOG could assign a KEGG module or COG category (only ~76% of
-# them, excluding a quarter of each genome for reasons unrelated to virulence
-# factors).
-#
-# Two sources, in order of preference:
-#  1. Bakta's own CDS count, if bakta_cds_counts.tsv is present. This is exactly
-#     the set of proteins DIAMOND searched against VFDB, so numerator and
-#     denominator come from the same gene prediction. Produced on Snellius by
-#     alistipes_bins_annotation/extract_bakta_cds_counts.sh.
-#  2. Otherwise CheckM2's Total_Coding_Sequences from the batch tables, which is
-#     CheckM2's internal prodigal call. Close to Bakta's but not the same caller.
-# Whichever is used is printed, so it is never ambiguous which denominator a run
-# was built on.
-BAKTA_CDS_FILE <- "data/shotgun/alistipes_annotation/bakta_cds_counts.tsv"
+# Proportions and count-model offsets are expressed per predicted protein-coding
+# gene, rather than per gene that eggNOG could assign a KEGG module or COG
+# category (only ~76% of them, excluding a quarter of each genome for reasons
+# unrelated to virulence factors). The count is the annotation's own CDS number
+# (data/shotgun/summaries/cds_summary.tsv, one row per bin, keyed on bin_name),
+# so numerator and denominator come from the same gene prediction. CheckM2's
+# Total_Coding_Sequences is a different caller and runs ~100 genes higher.
+CDS_FILE <- "data/shotgun/summaries/cds_summary.tsv"
 
-load_gene_counts <- function(trans, batch_files, file = BAKTA_CDS_FILE) {
-  if (file.exists(file)) {
-    cds <- read.delim(file, stringsAsFactors = FALSE)
-    if (!all(c("locus_prefix", "cds_count") %in% names(cds)))
-      stop(file, " must have columns 'locus_prefix' and 'cds_count'")
-    if (any(duplicated(cds$locus_prefix)))
-      stop("duplicate locus prefixes in ", file)
-    cat("Gene-content denominator: Bakta CDS counts from", file, "\n")
-    return(cds %>%
-             dplyr::select(locus_prefix, total_cds = cds_count) %>%
-             dplyr::filter(!is.na(total_cds), total_cds > 0))
-  }
-  cat("Gene-content denominator: CheckM2 (prodigal) Total_Coding_Sequences.\n",
-      "  For Bakta's own counts, run extract_bakta_cds_counts.sh on Snellius\n",
-      "  and copy the result to ", file, "\n", sep = "")
-  map_dfr(batch_files, function(f) {
-    read.csv(f, check.names = FALSE) %>%
-      dplyr::select(bin, Total_Coding_Sequences)
-  }) %>%
-    mutate(bin_name = sub("\\.fa$", "", bin)) %>%
-    inner_join(trans %>% dplyr::select(bin_name, locus_prefix), by = "bin_name") %>%
-    dplyr::select(locus_prefix, total_cds = Total_Coding_Sequences) %>%
-    dplyr::filter(!is.na(total_cds), total_cds > 0)
+load_gene_counts <- function(trans, file = CDS_FILE) {
+  cds <- read.delim(file, stringsAsFactors = FALSE)
+  if (!all(c("ID", "n_cds") %in% names(cds)))
+    stop(file, " must have columns 'ID' and 'n_cds'")
+  if (anyDuplicated(cds$ID))
+    stop("duplicate bin IDs in ", file)
+  out <- trans %>%
+    dplyr::select(bin_name, locus_prefix) %>%
+    inner_join(dplyr::rename(cds, bin_name = ID), by = "bin_name") %>%
+    dplyr::select(locus_prefix, total_cds = n_cds)
+  missing <- setdiff(trans$locus_prefix, out$locus_prefix)
+  if (length(missing))
+    stop(length(missing), " bins have no CDS count in ", file)
+  if (any(out$total_cds <= 0)) stop("non-positive CDS count in ", file)
+  cat("Gene-content denominator: annotation CDS counts from", file, "\n")
+  out
 }
 
 #### Theme ####

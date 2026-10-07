@@ -48,8 +48,8 @@ theme_Publication <- function(base_size=14, base_family="sans") {
 
 #### Paths ####
 profile_dir    <- "data/shotgun/instrain_ap/profile"
-retention_path <- "results/3_species_change/5_instrain/instrain_strain_retention.csv"
-out_dir        <- "results/3_species_change/5_instrain"
+retention_path <- "results/3_species_change/4_instrain/instrain_strain_retention.csv"
+out_dir        <- "results/3_species_change/4_instrain"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### Constants ####
@@ -88,7 +88,7 @@ cat("Passing coverage >=", MIN_COV, "x and breadth >=", MIN_BREADTH,
     "at both timepoints:", sum(wide$qc_pass), "of", nrow(wide), "\n")
 
 #### Join ethnicity/clade/covariates and the retention call ####
-tip_meta <- readRDS("results/3_species_change/4_alistipes_anno/tip_meta_clades.RDS") %>%
+tip_meta <- readRDS("results/3_species_change/3_alistipes_anno/tip_meta_clades.RDS") %>%
     mutate(subject_id = as.character(subject_id)) %>%
     dplyr::select(subject_id, clade, EthnicityTot, Age, BMI, FUtime)
 

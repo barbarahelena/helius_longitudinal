@@ -49,7 +49,7 @@ in_dir       <- "data/shotgun/instrain_ap/compare"
 # instrain_manifest.csv is produced by 1_make_instrain_manifest.R, which
 # writes into the shared strain_stability results folder, not here.
 manifest_dir <- "results/3_species_change/5_strain_stability"
-out_dir      <- "results/3_species_change/5_instrain"
+out_dir      <- "results/3_species_change/4_instrain"
 dir.create(out_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### Constants ####
@@ -76,7 +76,7 @@ if (!"percent_genome_compared" %in% names(cmp) && "percent_compared" %in% names(
 manifest <- read.csv(file.path(manifest_dir, "instrain_manifest.csv"), colClasses = c(subject_id = "character"))
 
 #### Join clade and ethnicity ####
-tip_meta <- readRDS("results/3_species_change/4_alistipes_anno/tip_meta_clades.RDS") %>%
+tip_meta <- readRDS("results/3_species_change/3_alistipes_anno/tip_meta_clades.RDS") %>%
     mutate(subject_id = as.character(subject_id)) %>%
     dplyr::select(subject_id, clade, EthnicityTot)
 
