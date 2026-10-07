@@ -502,7 +502,7 @@ pl_A <- ggplot(arg_burden_clin,
                      guide = "none") +
   scale_x_discrete(labels = tp_labels) +
   theme_Publication(base_size = BASE_SIZE) +
-  labs(x = "", y = "Total ARG Burden (log\u2081\u2080 RPM)",
+  labs(x = "", y = "Total ARG burden (log\u2081\u2080 RPM)",
        title = "Total ARG burden over time")
 
 ## ── Panel B: ARG Burden by Ethnicity × Timepoint ─────────────────────────────
@@ -527,7 +527,7 @@ pl_B <- ggplot(arg_burden_B,
   scale_x_discrete(labels = function(x)
     gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
   theme_Publication(base_size = BASE_SIZE) +
-  labs(x = "", y = "Total ARG Burden (log\u2081\u2080 RPM)",
+  labs(x = "", y = "Total ARG burden (log\u2081\u2080 RPM)",
        title = "ARG burden by ethnicity",
        subtitle = fmt_int_p(res_int$coefficients[int_row, 5]))
 
