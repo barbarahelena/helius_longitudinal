@@ -558,7 +558,7 @@ pl_B_shan <- ggplot(arg_div_fig, aes(x = EthnicityTot, y = shannon, fill = Ethni
   scale_fill_manual(values = eth_colors, guide = "none") +
   scale_x_discrete(labels = function(x) gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
   theme_Publication(base_size = BASE_SIZE) +
-  labs(x = "", y = "Shannon Diversity (RPKM-based)", title = "ARG Shannon diversity by ethnicity",
+  labs(x = "", y = "Shannon diversity", title = "ARG Shannon diversity by ethnicity",
        subtitle = fmt_int_p(res_shan$coefficients[div_int_row, 5]))
 
 ## ── Panels F–: Key gene box + violin (FDR < 0.05 interaction) ────────────────
