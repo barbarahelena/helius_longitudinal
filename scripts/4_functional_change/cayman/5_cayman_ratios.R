@@ -506,4 +506,84 @@ ggsave(
   fig_ratios, width = 10, height = 5, dpi = 300
 )
 
+# --- Ratio components: which substrate group drives the ratio differences? ----
+# Mucin/DF and GAG/DF can differ by ethnicity because the numerator (Mucin,
+# GAG) shifts, the denominator (DF) shifts, or both. Test each group's RPKM
+# on its own with the same models as the ratios.
+component_vars <- c(log10_DF_rpkm = "DF_rpkm", log10_GAG_rpkm = "GAG_rpkm",
+                    log10_Mucin_rpkm = "Mucin_rpkm")
+component_labels <- c(log10_DF_rpkm = "DF", log10_GAG_rpkm = "GAG",
+                      log10_Mucin_rpkm = "Mucin")
+
+dftot_comp <- dftot
+for (v in names(component_vars)) {
+  dftot_comp[[v]] <- log10(dftot_comp[[component_vars[[v]]]])
+}
+
+wilcox_comp <- dftot_comp |>
+  pivot_longer(all_of(names(component_vars)), names_to = "component", values_to = "value") |>
+  group_by(component, timepoint) |>
+  summarise(
+    p = wilcox.test(value ~ EthnicityTot)$p.value,
+    median_Dutch = median(value[EthnicityTot == ETH_DUTCH], na.rm = TRUE),
+    median_SAS   = median(value[EthnicityTot == ETH_SAS],   na.rm = TRUE),
+    .groups = "drop"
+  ) |>
+  group_by(timepoint) |>
+  mutate(padj = p.adjust(p, method = "fdr")) |>
+  ungroup()
+print(wilcox_comp)
+write.csv2(wilcox_comp,
+           "results/4_functional_change/cayman/ratios/wilcoxon_components_by_ethnicity.csv",
+           row.names = FALSE)
+
+lmm_comp <- list()
+for (comp_var in names(component_vars)) {
+  dftot_comp$y <- dftot_comp[[comp_var]]
+  tryCatch({
+    mod <- lmer(y ~ EthnicityTot * timepoint + (1 | ID), data = dftot_comp)
+    res <- summary(mod)$coefficients
+    main_row <- grep(paste0("^EthnicityTot", ETH_SAS, "$"), rownames(res))
+    int_row  <- grep(paste0(ETH_SAS, ":timepointfollow-up"), rownames(res))
+    lmm_comp[[comp_var]] <- tibble(
+      component         = comp_var,
+      estimate_main     = res[main_row, 1],
+      se_main           = res[main_row, 2],
+      pval_main         = res[main_row, 5],
+      estimate_interact = res[int_row,  1],
+      se_interact       = res[int_row,  2],
+      pval_interact     = res[int_row,  5]
+    )
+  }, error = function(e) message("LMM failed for ", comp_var, ": ", e$message))
+}
+lmm_comp_df <- bind_rows(lmm_comp) |>
+  mutate(
+    padj_main     = p.adjust(pval_main,     method = "fdr"),
+    padj_interact = p.adjust(pval_interact, method = "fdr")
+  )
+print(lmm_comp_df)
+write.csv2(lmm_comp_df,
+           "results/4_functional_change/cayman/ratios/lmm_components_ethnicity_timepoint.csv",
+           row.names = FALSE)
+
+comp_plots <- lapply(names(component_vars), function(v) {
+  make_ratio_vln(
+    dftot_comp, v,
+    paste0(component_labels[[v]], " (log10 RPKM)"),
+    paste0(component_labels[[v]], " abundance"),
+    lmm_comp_df$pval_interact[lmm_comp_df$component == v]
+  )
+})
+fig_components <- ggarrange(plotlist = comp_plots, nrow = 1, ncol = 3,
+                            labels = c("A", "B", "C"))
+
+ggsave(
+  "results/4_functional_change/cayman/ratios/cayman_components_ethnicity.pdf",
+  fig_components, width = 15, height = 5
+)
+ggsave(
+  "results/4_functional_change/cayman/ratios/cayman_components_ethnicity.png",
+  fig_components, width = 15, height = 5, dpi = 300
+)
+
 cat("Done. Figures saved to results/4_functional_change/cayman/ratios/\n")
