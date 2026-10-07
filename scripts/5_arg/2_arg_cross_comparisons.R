@@ -448,11 +448,12 @@ ggsave("results/5_arg/crosssectional/class_prevalence_heatmap_followup.pdf", p_c
 # BASELINE ABUNDANCE DIFFERENCES ----
 df_wide <- df_raw %>%
   filter(Gene_Symbol %in% prevalent_genes) %>%
-  dplyr::select(Sample, Gene_Symbol, RPKM) %>%
+  mutate(CPM = (Mapped_Reads / Total_Reads) * 1e6) %>%
+  dplyr::select(Sample, Gene_Symbol, CPM) %>%
   group_by(Sample, Gene_Symbol) %>%
-  summarise(RPKM = mean(RPKM, na.rm = TRUE), .groups = "drop") %>%
-  pivot_wider(names_from = Gene_Symbol, values_from = RPKM,
-              values_fill = list(RPKM = 0)) %>%
+  summarise(CPM = mean(CPM, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = Gene_Symbol, values_from = CPM,
+              values_fill = list(CPM = 0)) %>%
   mutate(sampleID = Sample) %>%
   dplyr::select(sampleID, everything(), -Sample)
 
@@ -518,7 +519,7 @@ p_baseline_volcano <- ggplot(baseline_sig, aes(x = estimate, y = -log10(pval), c
                                  "Significant" = "orange",
                                  "Not Significant" = "gray70")) +
   theme_Publication() +
-  labs(x = paste0("log10(RPKM) Difference (", levels(df_baseline$EthnicityTot)[2],
+  labs(x = paste0("log10(CPM) Difference (", levels(df_baseline$EthnicityTot)[2],
                   " - ", levels(df_baseline$EthnicityTot)[1], ")"),
        y = "-log10(p-value)",
        title = "Baseline ARG Abundance Differences Between Ethnicities", color = "")
@@ -581,7 +582,7 @@ p_followup_volcano <- ggplot(followup_sig, aes(x = estimate, y = -log10(pval), c
                                  "Significant" = "orange",
                                  "Not Significant" = "gray70")) +
   theme_Publication() +
-  labs(x = paste0("log10(RPKM) Difference (", levels(df_followup$EthnicityTot)[2],
+  labs(x = paste0("log10(CPM) Difference (", levels(df_followup$EthnicityTot)[2],
                   " - ", levels(df_followup$EthnicityTot)[1], ")"),
        y = "-log10(p-value)",
        title = "Follow-up ARG Abundance Differences Between Ethnicities", color = "")
@@ -727,19 +728,19 @@ top_abund <- statres_baseline %>%
 abund_means_bl <- df_baseline %>%
   dplyr::select(sampleID, EthnicityTot, all_of(top_abund$mbname)) %>%
   pivot_longer(cols = all_of(top_abund$mbname),
-               names_to = "gene", values_to = "RPKM") %>%
-  mutate(log_rpkm = log10(RPKM + 1)) %>%
+               names_to = "gene", values_to = "CPM") %>%
+  mutate(log_cpm = log10(CPM + 1)) %>%
   group_by(gene, EthnicityTot) %>%
-  summarise(mean_log = mean(log_rpkm, na.rm = TRUE), .groups = "drop") %>%
+  summarise(mean_log = mean(log_cpm, na.rm = TRUE), .groups = "drop") %>%
   mutate(timepoint = "Baseline")
 
 abund_means_fu <- df_followup %>%
   dplyr::select(sampleID, EthnicityTot, all_of(top_abund$mbname)) %>%
   pivot_longer(cols = all_of(top_abund$mbname),
-               names_to = "gene", values_to = "RPKM") %>%
-  mutate(log_rpkm = log10(RPKM + 1)) %>%
+               names_to = "gene", values_to = "CPM") %>%
+  mutate(log_cpm = log10(CPM + 1)) %>%
   group_by(gene, EthnicityTot) %>%
-  summarise(mean_log = mean(log_rpkm, na.rm = TRUE), .groups = "drop") %>%
+  summarise(mean_log = mean(log_cpm, na.rm = TRUE), .groups = "drop") %>%
   mutate(timepoint = "Follow-up")
 
 abund_means <- bind_rows(abund_means_bl, abund_means_fu) %>%
@@ -761,7 +762,7 @@ pl_E_abund <- ggplot(abund_means,
                        colour = "gray50",
                        size   = 3))) +
   theme_Publication(base_size = BASE_SIZE) +
-  labs(x = "Mean log\u2081\u2080(RPKM + 1)", y = "",
+  labs(x = "Mean log\u2081\u2080(CPM + 1)", y = "",
        title = "Top differential ARG genes (abundance)")
 
 ## ── ARG Class Dumbbell — Prevalence ──────────────────────────────────────────
@@ -857,7 +858,8 @@ sample_covar <- df_raw %>%
 gene_reads <- df_raw %>%
   filter(Gene_Symbol %in% prevalent_genes) %>%
   group_by(Sample, Gene_Symbol) %>%
-  summarise(reads = sum(Mapped_Reads, na.rm = TRUE), RPKM = mean(RPKM, na.rm = TRUE), .groups = "drop") %>%
+  summarise(reads = sum(Mapped_Reads, na.rm = TRUE),
+            CPM = mean(Mapped_Reads / Total_Reads * 1e6, na.rm = TRUE), .groups = "drop") %>%
   rename(sampleID = Sample)
 
 sens_tp <- list(baseline = "baseline", followup = "follow-up")
@@ -872,25 +874,25 @@ for(tp_name in names(sens_tp)){
 
   full_grid <- expand_grid(sampleID = tp_samples$sampleID, Gene_Symbol = prevalent_genes) %>%
     left_join(gene_reads, by = c("sampleID", "Gene_Symbol")) %>%
-    replace_na(list(reads = 0, RPKM = 0)) %>%
+    replace_na(list(reads = 0, CPM = 0)) %>%
     left_join(tp_samples, by = "sampleID")
 
   for(gene in prevalent_genes){
     gd <- full_grid %>% filter(Gene_Symbol == gene) %>%
-      mutate(log_rpkm = log10(RPKM + 1))
+      mutate(log_cpm = log10(CPM + 1))
 
-    for(outcome in c("presence_ge1", "presence_ge10", "log_rpkm")){
+    for(outcome in c("presence_ge1", "presence_ge10", "log_cpm")){
       y <- switch(outcome,
                   presence_ge1 = as.numeric(gd$reads >= 1),
                   presence_ge10 = as.numeric(gd$reads >= 10),
-                  log_rpkm = gd$log_rpkm)
-      if(outcome != "log_rpkm" && (sum(y) == 0 || sum(y) == length(y))) next
+                  log_cpm = gd$log_cpm)
+      if(outcome != "log_cpm" && (sum(y) == 0 || sum(y) == length(y))) next
       gd$y <- y
 
       for(sp in c("unadjusted", "depth_assembly")){
         rhs <- if(sp == "unadjusted") "EthnicityTot" else "EthnicityTot + log_depth + log_totgenes"
         fit <- tryCatch(suppressWarnings(
-          if(outcome == "log_rpkm") lm(as.formula(paste("y ~", rhs)), data = gd)
+          if(outcome == "log_cpm") lm(as.formula(paste("y ~", rhs)), data = gd)
           else glm(as.formula(paste("y ~", rhs)), data = gd, family = binomial())),
           error = function(e) NULL)
         if(is.null(fit)) next
