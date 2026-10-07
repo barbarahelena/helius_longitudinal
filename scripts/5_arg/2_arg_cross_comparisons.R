@@ -717,7 +717,7 @@ pl_E <- ggplot(top_diff_combined,
                      breaks = seq(0, 100, 25)) +
   theme_Publication(base_size = BASE_SIZE) +
   labs(x = "Prevalence (% of samples)", y = "",
-       title = "Top differential ARG genes")
+       title = "Top differential ARG genes (prevalence)")
 
 ## ── Panel E_abund: Dumbbell — abundance at baseline & follow-up, Dutch vs SAS ─
 top_abund <- statres_baseline %>%
