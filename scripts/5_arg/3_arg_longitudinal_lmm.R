@@ -512,6 +512,9 @@ arg_burden_B <- arg_burden_clin %>%
                                   "follow-up" = "Follow-up"),
                            levels = c("Baseline", "Follow-up")))
 
+fmt_int_p <- function(p) paste0("Ethnicity \u00d7 timepoint (LMM): p = ",
+                                if (p < 0.001) formatC(p, format = "e", digits = 1) else sprintf("%.3f", p))
+
 pl_B <- ggplot(arg_burden_B,
                aes(x = EthnicityTot, y = log_rpm, fill = EthnicityTot)) +
   geom_violin(alpha = 0.75, colour = NA) +
@@ -525,7 +528,8 @@ pl_B <- ggplot(arg_burden_B,
     gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
   theme_Publication(base_size = BASE_SIZE) +
   labs(x = "", y = "Total ARG Burden (log\u2081\u2080 RPM)",
-       title = "ARG burden by ethnicity")
+       title = "ARG burden by ethnicity",
+       subtitle = fmt_int_p(res_int$coefficients[int_row, 5]))
 
 ## ── Panel B_rich / B_shan: ARG Diversity by Ethnicity × Timepoint ────────────
 arg_div_fig <- arg_div_clin %>%
@@ -554,7 +558,8 @@ pl_B_shan <- ggplot(arg_div_fig, aes(x = EthnicityTot, y = shannon, fill = Ethni
   scale_fill_manual(values = eth_colors, guide = "none") +
   scale_x_discrete(labels = function(x) gsub("South-Asian Surinamese", "South-Asian\nSurinamese", x)) +
   theme_Publication(base_size = BASE_SIZE) +
-  labs(x = "", y = "Shannon Diversity (RPKM-based)", title = "ARG Shannon diversity by ethnicity")
+  labs(x = "", y = "Shannon Diversity (RPKM-based)", title = "ARG Shannon diversity by ethnicity",
+       subtitle = fmt_int_p(res_shan$coefficients[div_int_row, 5]))
 
 ## ── Panels F–: Key gene box + violin (FDR < 0.05 interaction) ────────────────
 key_genes <- statres_interaction %>%
