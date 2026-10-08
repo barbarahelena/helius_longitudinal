@@ -2,7 +2,7 @@
 ## Dutch vs South-Asian Surinamese, baseline and follow-up
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
-source("scripts/3_species_change/4_alistipes_anno/utils.R")
+source("scripts/3_species_change/3_alistipes_anno/utils.R")
 
 #### Paths ####
 vfdb_file   <- "data/shotgun/alistipes_annotation/all_vfdb_results.txt"
@@ -14,7 +14,7 @@ batch_files <- c(
   "data/shotgun/alistipes_annotation/bins_alistipes_batch2.csv",
   "data/shotgun/alistipes_annotation/bins_alistipes_batch3.csv"
 )
-results_dir <- "results/3_species_change/4_alistipes_anno"
+results_dir <- "results/3_species_change/3_alistipes_anno"
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### 1. Load bin translation table ####
@@ -27,7 +27,7 @@ cat("Bins in translation table:", nrow(trans_all), "\n")
 # (>70% completeness, <10% contamination; filter_samplesheets_by_quality.py),
 # same as 1_instrain_strain_retention.R and 2_instrain_between_person.R. Not
 # utils.R's stricter MIN_COMPLETENESS (80%) — that exists only to reproduce
-# external tree membership for 3_draw_tree.R and has no equivalent constraint
+# external tree membership for 2_draw_tree.R and has no equivalent constraint
 # here, so there is no reason to inherit it.
 VFDB_MIN_COMPLETENESS <- 70
 eligible <- eligible_locus_prefixes(trans_all, batch_files,
@@ -78,19 +78,20 @@ vfdb_hits <- read.table(
 cat("Hits after filtering (pident >=", MIN_PIDENT, ", bitscore >=", MIN_BITSCORE, "):",
     nrow(vfdb_hits), "\n")
 
-#### 4. Per-bin VF category proportions ####
-# Same denominator as the clade comparisons in 3_draw_tree.R: CDS predicted by
-# Bakta per bin. Dividing by the bin's total VF hits instead would make the
+#### 4. Per-bin VF category hit counts ####
+# The models in section 8 are fitted on the raw hit counts, with the bin's
+# predicted CDS (same denominator as the clade comparisons in 2_draw_tree.R) as
+# an offset. Dividing by the bin's total VF hits instead would make the
 # categories compositional (they would sum to 1), so a rise in one category
 # would force a fall in the others and the categories could not be tested
-# independently.
-total_per_bin <- load_gene_counts(trans, batch_files)
+# independently. hits_per_1000 is the same quantity rescaled, used for the
+# descriptive statistics and plots.
+total_per_bin <- load_gene_counts(trans)
 
 vf_long <- vfdb_hits %>%
   filter(!is.na(vf_category)) %>%
   count(locus_prefix, vf_category, name = "n_hits") %>%
-  inner_join(total_per_bin, by = "locus_prefix") %>%
-  mutate(proportion = n_hits / total_cds)
+  inner_join(total_per_bin, by = "locus_prefix")
 
 cat("Unique VF categories:", n_distinct(vf_long$vf_category), "\n")
 
@@ -109,7 +110,9 @@ cat("\nBins with VF hits, per ethnicity:\n")
 print(count(bins_present, EthnicityTot))
 
 #### 6. Build analysis dataset ####
-# Complete grid: every bin × every VF category; missing proportion = 0.
+# Complete grid: every bin × every VF category; a category with no hit in a bin
+# has a count of 0. total_cds is taken from the bin, not from the hits table, so
+# bins without any hit in a category keep their offset.
 # Completeness and contamination travel with each bin so the model can adjust
 # for them — both bias gene-content measures and both differ by ethnicity.
 vf_df <- expand.grid(
@@ -117,11 +120,14 @@ vf_df <- expand.grid(
   vf_category  = unique(vf_long$vf_category),
   stringsAsFactors = FALSE
 ) %>%
-  left_join(vf_long %>% dplyr::select(locus_prefix, vf_category, proportion),
+  left_join(vf_long %>% dplyr::select(locus_prefix, vf_category, n_hits),
             by = c("locus_prefix", "vf_category")) %>%
-  mutate(proportion = replace_na(proportion, 0)) %>%
+  mutate(n_hits = replace_na(n_hits, 0)) %>%
+  left_join(total_per_bin, by = "locus_prefix") %>%
+  mutate(hits_per_1000 = n_hits / total_cds * 1000) %>%
   left_join(bins_present, by = "locus_prefix") %>%
   add_bin_quality(trans, batch_files)
+stopifnot(!anyNA(vf_df$total_cds))
 
 cat("\nMAG quality by ethnicity (adjusted for, not filtered on):\n")
 print(vf_df %>%
@@ -137,7 +143,7 @@ MIN_PREV <- 0.10
 
 prevalent_vf <- vf_df %>%
   group_by(vf_category) %>%
-  summarise(prev = mean(proportion > 0), .groups = "drop") %>%
+  summarise(prev = mean(n_hits > 0), .groups = "drop") %>%
   filter(prev >= MIN_PREV) %>%
   pull(vf_category)
 
@@ -147,8 +153,57 @@ cat("\nVF categories passing prevalence filter (>=", MIN_PREV * 100, "% of bins)
 vf_df_filt <- vf_df %>% filter(vf_category %in% prevalent_vf)
 
 #### 8. Statistics ####
-cat("\nRunning VF category statistics (bin-level, adjusted for MAG quality)...\n")
-vf_results <- run_bin_stats(vf_df_filt, "vf_category") %>%
+# Quasi-Poisson regression of the hit count on ethnicity, with log(total_cds) as
+# an offset so the coefficient is a rate ratio per predicted gene, adjusted for
+# completeness and contamination. Quasi-Poisson rather than Poisson because
+# counts across bins are overdispersed; it is in base R, so no extra package.
+# Columns follow run_bin_stats() in utils.R (the unadjusted Wilcoxon is on
+# hits_per_1000 and descriptive); adj_estimate is a log rate ratio, SAS vs Dutch.
+run_count_stats <- function(df, feature_col) {
+  stopifnot(!any(duplicated(df[c("locus_prefix", feature_col)])))
+
+  results <- map_dfr(unique(df[[feature_col]]), function(feat) {
+    sub_df <- df %>% filter(.data[[feature_col]] == feat)
+    dutch <- sub_df$hits_per_1000[sub_df$EthnicityTot == "Dutch"]
+    sas   <- sub_df$hits_per_1000[sub_df$EthnicityTot == "South-Asian Surinamese"]
+
+    wx <- tryCatch(wilcox.test(dutch, sas, exact = FALSE),
+                   error = function(e) list(statistic = NA_real_, p.value = NA_real_))
+
+    fit <- tryCatch({
+      mod <- glm(n_hits ~ EthnicityTot + Completeness + Contamination +
+                   offset(log(total_cds)),
+                 family = quasipoisson(link = "log"), data = sub_df)
+      ct  <- summary(mod)$coefficients
+      row <- grep("^EthnicityTot", rownames(ct))
+      if (length(row) != 1) stop("expected one ethnicity term")
+      list(estimate = ct[row, "Estimate"],
+           se       = ct[row, "Std. Error"],
+           pval     = ct[row, "Pr(>|t|)"])
+    }, error = function(e) list(estimate = NA_real_, se = NA_real_, pval = NA_real_))
+
+    tibble(
+      feature      = feat,
+      n_dutch      = length(dutch),
+      n_sas        = length(sas),
+      median_dutch = median(dutch),
+      median_sas   = median(sas),
+      wilcox_stat  = unname(wx$statistic),
+      wilcox_p     = wx$p.value,
+      adj_estimate = fit$estimate,
+      adj_se       = fit$se,
+      adj_rr       = exp(fit$estimate),
+      adj_p        = fit$pval
+    )
+  })
+
+  results %>%
+    mutate(wilcox_fdr = p.adjust(wilcox_p, method = "BH"),
+           adj_fdr    = p.adjust(adj_p,    method = "BH"))
+}
+
+cat("\nRunning VF category statistics (bin-level counts, adjusted for MAG quality)...\n")
+vf_results <- run_count_stats(vf_df_filt, "vf_category") %>%
   rename(vf_category = feature)
 print(vf_results %>%
         dplyr::select(vf_category, n_dutch, n_sas, wilcox_p, wilcox_fdr, adj_p, adj_fdr) %>%
@@ -179,7 +234,7 @@ cat("\nTesting", n_distinct(vf_df_filt$vf_category), "VF categories (N Dutch:",
 cat("Significant VF categories (adjusted FDR < 0.05):", nrow(sig_vf), "\n")
 print(sig_vf %>% dplyr::select(vf_category, n_dutch, n_sas,
                                median_dutch, median_sas,
-                               adj_estimate, adj_p, adj_fdr,
+                               adj_rr, adj_p, adj_fdr,
                                wilcox_p, wilcox_fdr))
 cat("Categories significant before adjustment but not after:",
     sum(vf_results$wilcox_fdr < 0.05 & vf_results$adj_fdr >= 0.05, na.rm = TRUE), "\n")
@@ -201,7 +256,7 @@ if (nrow(sig_vf) == 0) {
 
 pl_fig3_F <- ggplot(
     plot_vf_box,
-    aes(x = EthnicityTot, y = proportion, fill = EthnicityTot)
+    aes(x = EthnicityTot, y = hits_per_1000, fill = EthnicityTot)
   ) +
   geom_boxplot(outlier.size = 0.8, width = 0.5) +
   stat_compare_means(comparisons = list(c("Dutch", "South-Asian Surinamese")),
@@ -210,9 +265,9 @@ pl_fig3_F <- ggplot(
   facet_wrap(~ vf_category, scales = "free_y") +
   scale_y_continuous(expand = expansion(add = c(0, 0.010))) +
   labs(title    = "VFDB: Alistipes putredinis",
-       subtitle = "Significant after adjustment for MAG completeness and contamination",
-       x = "", y = "Proportion of predicted genes",
-       caption  = "Bracket shows the unadjusted Wilcoxon p; significance is from the adjusted model") +
+       subtitle = "Significant after adjustment for MAG completeness and contamination (quasi-Poisson, CDS offset)",
+       x = "", y = "VF hits per 1000 predicted genes",
+       caption  = "Bracket shows the unadjusted Wilcoxon p; significance is from the count model with a CDS offset") +
   theme_Publication() +
   theme(strip.text = element_text(size = rel(0.8)))
 
@@ -224,10 +279,10 @@ ggsave(file.path(results_dir, "vfdb_sig_categories.pdf"),
 
 ## VFDB heatmap (top 20 by unadjusted Wilcoxon W)
 vf_baseline_means <- vf_df_filt %>%
-  distinct(locus_prefix, vf_category, EthnicityTot, proportion) %>%
+  distinct(locus_prefix, vf_category, EthnicityTot, hits_per_1000) %>%
   group_by(vf_category, EthnicityTot) %>%
-  summarise(mean_prop = mean(proportion, na.rm = TRUE), .groups = "drop") %>%
-  pivot_wider(names_from = EthnicityTot, values_from = mean_prop, values_fill = 0) %>%
+  summarise(mean_rate = mean(hits_per_1000, na.rm = TRUE), .groups = "drop") %>%
+  pivot_wider(names_from = EthnicityTot, values_from = mean_rate, values_fill = 0) %>%
   mutate(diff_Dutch_SAS = Dutch - `South-Asian Surinamese`)
 
 # Stars mark the quality-adjusted FDR, so the heatmap and the boxplots above
@@ -261,7 +316,7 @@ p_vf_heat_ba <- ggplot(vf_ba_heat,
   scale_fill_gradient2(low = jco_cols[["South-Asian Surinamese"]], mid = "white",
                        high = jco_cols[["Dutch"]], midpoint = 0,
                        limits = c(-lim_ba_vf, lim_ba_vf),
-                       name = "Mean proportion\nDutch − SAS") +
+                       name = "Mean hits per 1000 genes\nDutch − SAS") +
   scale_x_continuous(breaks = NULL) +
   labs(title    = "Top 20 VF categories — ethnicity difference",
        subtitle = "blue = higher in Dutch, yellow = higher in SAS",

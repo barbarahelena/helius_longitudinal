@@ -6,7 +6,7 @@
 ##   BiocManager::install(c("ggtree", "treeio"))
 ##   install.packages("ggnewscale")
 
-source("scripts/3_species_change/4_alistipes_anno/utils.R")
+source("scripts/3_species_change/3_alistipes_anno/utils.R")
 
 library(ggtree)
 library(treeio)
@@ -26,7 +26,7 @@ batch_files <- c(
   "data/shotgun/alistipes_annotation/bins_alistipes_batch2.csv",
   "data/shotgun/alistipes_annotation/bins_alistipes_batch3.csv"
 )
-results_dir <- "results/3_species_change/4_alistipes_anno"
+results_dir <- "results/3_species_change/3_alistipes_anno"
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### Constants ####
@@ -128,11 +128,11 @@ anno <- read.table(
 ) %>%
   mutate(locus_prefix = sub("_.*", "", query))
 
-# Denominator for all gene-content proportions: CDS predicted by Bakta per bin.
+# Denominator for all gene-content proportions: the annotation's CDS count per bin (cds_summary.tsv).
 # Previously this was the count of genes eggNOG could assign a KEGG module or
 # COG category, which is only ~76% of predicted genes and excludes a quarter of
 # each genome for reasons unrelated to virulence factors.
-total_per_bin <- load_gene_counts(trans, batch_files)
+total_per_bin <- load_gene_counts(trans)
 cat("Bins with gene counts:", nrow(total_per_bin),
     "| median CDS:", median(total_per_bin$total_cds), "\n")
 
@@ -419,7 +419,7 @@ tip_meta_clades <- tip_meta %>%
 # singleton/near-singleton groups. All bins are used regardless of dominant
 # timepoint: tip_meta_clades already has exactly one row per bin (gene content
 # is a property of the assembled genome, not a per-timepoint value — same
-# reasoning as 2_vfdb_comparison.R), so filtering to timepoint == "baseline"
+# reasoning as 1_vfdb_comparison.R), so filtering to timepoint == "baseline"
 # would not avoid any pseudoreplication; it would only drop bins whose
 # dominant sample happened to be follow-up, which can wipe out an entire
 # clade (Clade IV's 6 bins are all follow-up-dominant).
@@ -869,9 +869,15 @@ print(sig_pairs)
 # then assemble with ggarrange
 feat_plots <- purrr::map(unique(func_long_filt$feature), function(feat) {
   df    <- func_long_filt %>% filter(feature == feat)
-  pairs <- sig_pairs %>%
+
+  # Brackets are labelled with the BH-adjusted q from sig_pairs, not with
+  # stat_compare_means(), which would recompute raw p-values that do not match
+  # the q-values reported in the text.
+  q_brackets <- sig_pairs %>%
     filter(feature == feat) %>%
-    { purrr::map2(.$group1, .$group2, c) }
+    mutate(label      = sprintf("q = %.1e", p_adj),
+           y.position = max(df$proportion) +
+             seq_len(n()) * 0.1 * diff(range(df$proportion)))
 
   p <- ggplot(df, aes(x = clade, y = proportion, fill = clade)) +
     geom_boxplot(outlier.size = 0.6, width = 0.6, alpha = 0.7) +
@@ -880,9 +886,10 @@ feat_plots <- purrr::map(unique(func_long_filt$feature), function(feat) {
     theme_Publication() +
     theme(axis.text.x = element_text(angle = 45, hjust = 1))
 
-  if (length(pairs) > 0)
-    p <- p + stat_compare_means(comparisons = pairs, method = "wilcox.test",
-                                label = "{p.format}", tip.length = 0)
+  if (nrow(q_brackets) > 0)
+    p <- p + stat_pvalue_manual(q_brackets, label = "label",
+                                y.position = "y.position",
+                                tip.length = 0, size = 3)
   p
 })
 

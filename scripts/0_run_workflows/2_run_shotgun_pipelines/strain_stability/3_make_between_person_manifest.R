@@ -1,6 +1,6 @@
 ## Manifest for the inStrain between-person popANI comparison
 ## Positive control for the within-person strain-retention result (see
-## 5_instrain_strain_retention.R in scripts/3_species_change/4_alistipes_anno/):
+## 1_instrain_strain_retention.R in scripts/3_species_change/4_instrain/):
 ## if within-person (baseline vs follow-up) popANI is not distinguishable from
 ## between-person popANI among unrelated members of the same clade, "20% same
 ## strain" would not indicate real persistence — it would just be the
@@ -34,7 +34,7 @@ ANCHOR_CONTAMINATION_MAX <- 5  # prefer a clean anchor; falls back if none <5%
 SEED <- 20260929
 
 batch_files <- sprintf("data/shotgun/alistipes_annotation/bins_alistipes_batch%d.csv", 1:3)
-tree_results_dir <- "results/3_species_change/4_alistipes_anno"
+tree_results_dir <- "results/3_species_change/3_alistipes_anno"
 
 #### Load clade assignment, quality, and batch per bin ####
 tip_meta <- readRDS(file.path(tree_results_dir, "tip_meta_clades.RDS")) %>%

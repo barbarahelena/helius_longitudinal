@@ -135,14 +135,14 @@ for(i in 1:nrow(maxsig)){
         plist[[i]] <- pl2
 }
 
-dir.create("results/3_species_change/3_species/lmer", recursive = TRUE, showWarnings = FALSE)
+dir.create("results/3_species_change/2_species/lmer", recursive = TRUE, showWarnings = FALSE)
 
 (plots <- ggarrange(plotlist = plist, common.legend = TRUE, legend = "bottom",
           labels = LETTERS[1:11],
           nrow = 4, ncol = 3))
-ggsave(plots, filename = "results/3_species_change/3_species/lmer/lmer_plots.pdf", 
+ggsave(plots, filename = "results/3_species_change/2_species/lmer/lmer_plots.pdf", 
             width = 12, height = 16)
-write.csv2(statres, "results/3_species_change/3_species/lmer/lmm_results.csv")
+write.csv2(statres, "results/3_species_change/2_species/lmer/lmm_results.csv")
 
 #### Figure 3B — Forest plot: species with significant ethnicity × timepoint interaction ####
 
@@ -170,7 +170,7 @@ dir_colors <- c("Greater positive change in Dutch" = pal_jco()(2)[1], "Greater p
     theme_Publication() +
     theme(legend.position = "none", plot.title = element_text(size = rel(1.2))))
 
-ggsave(pl_fig3_C, filename = "results/3_species_change/3_species/lmer/lmm_species_forest.pdf",
+ggsave(pl_fig3_C, filename = "results/3_species_change/2_species/lmer/lmm_species_forest.pdf",
        width = 10, height = 11)
 
 #### Baseline differential abundance between ethnicities ####
@@ -206,7 +206,7 @@ statres_base <- as.data.frame(statres_base) %>%
         )
     )
 
-write.csv2(statres_base, "results/3_species_change/3_species/lmer/lm_baseline_ethnicity_results.csv")
+write.csv2(statres_base, "results/3_species_change/2_species/lmer/lm_baseline_ethnicity_results.csv")
 
 base_sig <- statres_base %>%
     filter(sigq != "") %>%
@@ -229,7 +229,7 @@ dir_colors_base <- c("Higher in Dutch" = pal_jco()(2)[1], "Higher in SAS" = pal_
     theme_Publication() +
     theme(legend.position = "bottom"))
 
-ggsave(pl_baseline_eth, filename = "results/3_species_change/3_species/lmer/lm_baseline_ethnicity_forest.pdf",
+ggsave(pl_baseline_eth, filename = "results/3_species_change/2_species/lmer/lm_baseline_ethnicity_forest.pdf",
        width = 11, height = 18)
 
 #### Follow-up differential abundance between ethnicities ####
@@ -265,7 +265,7 @@ statres_fu <- as.data.frame(statres_fu) %>%
         )
     )
 
-write.csv2(statres_fu, "results/3_species_change/3_species/lmer/lm_followup_ethnicity_results.csv")
+write.csv2(statres_fu, "results/3_species_change/2_species/lmer/lm_followup_ethnicity_results.csv")
 
 fu_sig <- statres_fu %>%
     filter(sigq != "") %>%
@@ -287,7 +287,7 @@ nrow(fu_sig)
     theme_Publication() +
     theme(legend.position = "bottom"))
 
-ggsave(pl_fu_eth, filename = "results/3_species_change/3_species/lmer/lm_followup_ethnicity_forest.pdf",
+ggsave(pl_fu_eth, filename = "results/3_species_change/2_species/lmer/lm_followup_ethnicity_forest.pdf",
        width = 11, height = 18)
 
 #### Heatmap: cross-sectional ethnic differences for LMM-significant species ####
@@ -348,7 +348,7 @@ pl_heatmap_species <- ggplot(heatmap_data,
 pl_forest_heatmap <- pl_fig3_C |> aplot::insert_right(pl_heatmap_species, width = 0.25)
 
 combined_height <- max(4, nrow(lmm_sig) * 0.3 + 2)
-cairo_pdf("results/3_species_change/3_species/lmer/forest_heatmap_species.pdf",
+cairo_pdf("results/3_species_change/2_species/lmer/forest_heatmap_species.pdf",
           width = 9, height = combined_height)
 print(pl_forest_heatmap)
 dev.off()
@@ -378,7 +378,7 @@ overlap_df <- bind_rows(
     )
 nrow(overlap_df)
 
-write.csv2(overlap_df, "results/3_species_change/3_species/lmer/lm_overlap_baseline_followup.csv")
+write.csv2(overlap_df, "results/3_species_change/2_species/lmer/lm_overlap_baseline_followup.csv")
 
 #### LMM interaction species × baseline/follow-up cross-sectional models ####
 

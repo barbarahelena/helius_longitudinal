@@ -7,7 +7,7 @@ version = "0.1.0"
 
 [tasks]
 # Data cleaning (runs before all chapters)
-datacleaning        = "Rscript scripts/0_run_workflows/3_datacleaning/datacleaning.R"
+datacleaning        = "Rscript scripts/0_run_workflows/3_data_cleaning/datacleaning.R"
 qc-summary          = "Rscript scripts/0_run_workflows/4_qc_summary/qc_summary.R"
 
 # Chapter 1 — Longitudinal change
@@ -15,7 +15,7 @@ lc-table1           = "Rscript scripts/1_longitudinal_change/1_table1.R"
 lc-ordination-calc  = "Rscript scripts/1_longitudinal_change/2a_ordination_calc.R"
 lc-ordination       = { cmd = "Rscript scripts/1_longitudinal_change/2c_ordination.R", depends-on = ["lc-ordination-calc"] }
 lc-alphadiv         = "Rscript scripts/1_longitudinal_change/3_alphadiversity.R"
-lc-assemble         = { cmd = "Rscript scripts/1_longitudinal_change/4_assemble_figure.R", depends-on = ["lc-table1", "lc-ordination", "lc-alphadiv"] }
+lc-assemble         = { cmd = "Rscript scripts/1_longitudinal_change/5_assemble_figure.R", depends-on = ["lc-table1", "lc-ordination", "lc-alphadiv"] }
 lc-all              = { depends-on = ["lc-table1", "lc-ordination", "lc-alphadiv", "lc-assemble"] }
 
 # Chapter 2 — CMB microbiome
@@ -24,56 +24,43 @@ cmb-alphadiv        = "Rscript scripts/2_cmb_microbiome/2_alphadiversity_cmb_16s
 cmb-assemble        = { cmd = "Rscript scripts/2_cmb_microbiome/3_assemble_figure.R", depends-on = ["cmb-betadiv", "cmb-alphadiv"] }
 cmb-all             = { depends-on = ["cmb-betadiv", "cmb-alphadiv", "cmb-assemble"] }
 
-# Chapter 3 — Comparison 16S / ordination
-sc-ordination      = "Rscript scripts/3_species_change/1_comparison_16s/ordination_sg.R"
-sc-alphadiv        = "Rscript scripts/3_species_change/1_comparison_16s/alphadiversity_sg.R"
+# Chapter 3 — Comparison 16S + Species-level LMMs + clinical associations + Alistipes + strain stability
+sc-ordination      = "Rscript scripts/3_species_change/1_comparison_16s/1_ordination_sg.R"
+sc-alphadiv        = "Rscript scripts/3_species_change/1_comparison_16s/2_alphadiversity_sg.R"
 sc-comparison      = { depends-on = ["sc-ordination", "sc-alphadiv"] }
+sc-lmm-sg          = "Rscript scripts/3_species_change/2_species/1_lmm_sg.R"
+sc-clinassoc-sg    = "Rscript scripts/3_species_change/2_species/2_heatmap.R"
+sc-acquisition     = "Rscript scripts/3_species_change/2_species/3_acquisition_alistipes.R"
+sc-species         = { depends-on = ["sc-lmm-sg", "sc-clinassoc-sg", "sc-acquisition"] }
+# Alistipes: draw-tree writes tip_meta_clades.RDS, which the QC plots and inStrain scripts read
+sc-alistipes-vfdb  = "Rscript scripts/3_species_change/3_alistipes_anno/1_vfdb_comparison.R"
+sc-alistipes-tree  = "Rscript scripts/3_species_change/3_alistipes_anno/2_draw_tree.R"
+sc-alistipes-qc    = { cmd = "Rscript scripts/3_species_change/3_alistipes_anno/3_qc_metadata_plots.R", depends-on = ["sc-alistipes-tree"] }
+sc-alistipes       = { depends-on = ["sc-alistipes-vfdb", "sc-alistipes-tree", "sc-alistipes-qc"] }
 
-# 2 — ML ethnicity models
-ml-prep            = "Rscript scripts/3_species_change/2_mlmodels/1_ml_prep/ml_prep_shotgun_timeeth.R"
-ml-run             = { cmd = "bash scripts/3_species_change/2_mlmodels/2_ml_model/time_eth_shotgun.sh"}
-ml-process         = "Rscript scripts/3_species_change/2_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R"
-ml-ethnicity       = { depends-on = ["ml-prep", "ml-run", "ml-process"] }
+# inStrain strain retention: needs the inStrain outputs from Snellius, so not part of sc-all
+sc-instrain-retention  = { cmd = "Rscript scripts/3_species_change/4_instrain/1_instrain_strain_retention.R", depends-on = ["sc-alistipes-tree"] }
+sc-instrain-between    = { cmd = "Rscript scripts/3_species_change/4_instrain/2_instrain_between_person.R", depends-on = ["sc-instrain-retention"] }
+sc-instrain-microdiv   = { cmd = "Rscript scripts/3_species_change/4_instrain/3_instrain_microdiversity.R", depends-on = ["sc-instrain-retention"] }
+sc-instrain            = { depends-on = ["sc-instrain-retention", "sc-instrain-between", "sc-instrain-microdiv"] }
 
-# 3 — Species-level LMMs + clinical associations
-sc-lmm-sg          = "Rscript scripts/3_species_change/3_species/1_lmm_sg.R"
-sc-lmm-16s         = "Rscript scripts/3_species_change/3_species/lmm_16s.R"
-sc-clinassoc-sg    = "Rscript scripts/3_species_change/3_species/2_heatmap.R"
-sc-clinassoc-16s   = "Rscript scripts/3_species_change/3_species/clinassociations_16s.R"
-sc-species         = { depends-on = ["sc-lmm-sg", "sc-lmm-16s", "sc-clinassoc-sg", "sc-clinassoc-16s"] }
-
-# 4 — Alistipes annotation
-sc-alistipes-eggnog  = "Rscript scripts/3_species_change/4_alistipes_anno/2_eggnog_comparison.R"
-sc-alistipes-vfdb    = "Rscript scripts/3_species_change/4_alistipes_anno/3_vfdb_comparison.R"
-sc-alistipes         = { depends-on = ["sc-alistipes-eggnog", "sc-alistipes-vfdb"] }
-
-# 4b — Odoribacter annotation (archived)
-sc-odorib-eggnog   = "Rscript scripts/3_species_change/archive/4_odoribacter_anno/eggnog_comparison.R"
-sc-odorib-vfdb     = "Rscript scripts/3_species_change/archive/4_odoribacter_anno/vfdb_comparison.R"
-sc-odoribacter     = { depends-on = ["sc-odorib-eggnog", "sc-odorib-vfdb"] }
-
-# 5 — Strain stability
+# Strain sharing
+sc-strainsharing-cov = "Rscript scripts/3_species_change/5_strain_stability/strainsharing_covariates.R"
 sc-strainsharing   = "Rscript scripts/3_species_change/5_strain_stability/strainsharing_plot.R"
 
-# Figure assembly
 sc-assemble        = "Rscript scripts/3_species_change/assemble_figure.R"
+sc-all             = { depends-on = ["sc-comparison", "sc-species", "sc-alistipes", "sc-strainsharing", "sc-strainsharing-cov", "sc-assemble"] }
 
-# Run full chapter 3
-sc-all             = { depends-on = ["sc-comparison", "sc-species", "sc-strainsharing", "sc-alistipes", "sc-odoribacter", "ml-ethnicity", "sc-assemble"] }
-
-# Chapter 4 — Functional change (HUMAnN)
+# Chapter 4 — Functional change
 fc-humann-cross     = "Rscript scripts/4_functional_change/humann/1_cross_sectional_humann.R"
 fc-humann-lmm       = { cmd = "Rscript scripts/4_functional_change/humann/2_lmm_humann.R", depends-on = ["fc-humann-cross"] }
 fc-humann           = { depends-on = ["fc-humann-cross", "fc-humann-lmm"] }
-
-# Chapter 4 — Functional change (Cayman)
 fc-cayman-qc        = "Rscript scripts/4_functional_change/cayman/1_cayman_qc.R"
 fc-cayman-cross     = { cmd = "Rscript scripts/4_functional_change/cayman/2_cayman_cross_comparisons.R", depends-on = ["fc-cayman-qc"] }
 fc-cayman-lmm       = { cmd = "Rscript scripts/4_functional_change/cayman/3_cayman_longitudinal_lmm.R", depends-on = ["fc-cayman-cross"] }
 fc-cayman-ordin     = { cmd = "Rscript scripts/4_functional_change/cayman/4_cayman_ordination.R", depends-on = ["fc-cayman-qc"] }
 fc-cayman-ratios    = { cmd = "Rscript scripts/4_functional_change/cayman/5_cayman_ratios.R", depends-on = ["fc-cayman-qc"] }
 fc-cayman           = { depends-on = ["fc-cayman-qc", "fc-cayman-cross", "fc-cayman-lmm", "fc-cayman-ordin", "fc-cayman-ratios"] }
-
 fc-assemble         = { cmd = "Rscript scripts/4_functional_change/assemble_figure.R", depends-on = ["fc-humann-lmm", "fc-cayman-lmm", "fc-cayman-ordin", "fc-cayman-ratios"] }
 fc-all              = { depends-on = ["fc-humann", "fc-cayman", "fc-assemble"] }
 

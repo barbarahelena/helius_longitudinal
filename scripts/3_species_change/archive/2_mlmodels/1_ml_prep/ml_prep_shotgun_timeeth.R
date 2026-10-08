@@ -5,7 +5,7 @@ library(phyloseq)
 library(readr)
 library(stringr)
 rm(list=ls())
-dir.create("results/3_species_change/2_mlmodels", showWarnings = FALSE, recursive = TRUE)
+dir.create("results/3_species_change/archive/2_mlmodels", showWarnings = FALSE, recursive = TRUE)
 
 # make data for machine learning XGB classification models
 
@@ -97,7 +97,7 @@ clindf$sampleID; mbdf$ID
 
 tabba <- screen_wilcox(clindf, "EthnicityTot", mbdf)
 head(tabba)
-write.csv2(tabba, file = "results/3_species_change/2_mlmodels/wilcoxon_ethbase_shotgun.csv")
+write.csv2(tabba, file = "results/3_species_change/archive/2_mlmodels/wilcoxon_ethbase_shotgun.csv")
 
 mbdf <- mbdf[,2:ncol(mbdf)]
 path <- 'results/3_species_change/5_mlmodels/eth_base'
@@ -124,7 +124,7 @@ clindf$sampleID; mbdf$ID
 
 tabfu <- screen_wilcox(clindf, "EthnicityTot", mbdf)
 head(tabfu)
-write.csv2(tabfu, file = "results/3_species_change/2_mlmodels/wilcoxon_ethfu_shotgun.csv")
+write.csv2(tabfu, file = "results/3_species_change/archive/2_mlmodels/wilcoxon_ethfu_shotgun.csv")
 
 mbdf <- mbdf[,2:ncol(mbdf)]
 path <- 'results/3_species_change/5_mlmodels/eth_fu'

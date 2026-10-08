@@ -201,7 +201,8 @@ taxsas$n <- apply(dfsamesas2[,6:ncol(dfsamesas2)], 2, function(x) sum(!is.na(x))
 taxsas$EthnicityTot <- "South-Asian Surinamese"
 taxtot <- rbind(taxdutch, taxsas)
 
-# Select top 10 most significant SGBs from per-SGB logistic regression (strainsharing_persgb.R)
+# Select top 10 most significant SGBs from the per-SGB logistic regression
+# (precomputed persgb_ethnicity.csv; its script is archived, so it is not regenerated here)
 persgb_results <- read.csv2("results/3_species_change/5_strain_stability/covariates/persgb_ethnicity.csv",
                              stringsAsFactors = FALSE)
 top10_sgbs <- persgb_results %>%

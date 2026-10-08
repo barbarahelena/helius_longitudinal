@@ -2,12 +2,12 @@
 ## Barbara Verhaar, b.j.verhaar@amsterdamumc.nl
 
 suppressMessages(library(tidyverse))
-source("scripts/3_species_change/4_alistipes_anno/utils.R")
+source("scripts/3_species_change/3_alistipes_anno/utils.R")
 
 #### Paths ####
 abundance_file <- "data/shotgun/shotgun_abundance.RDS"
 clin_file      <- "data/clinicaldata/clinicaldata_long.RDS"
-results_dir    <- "results/3_species_change/4_alistipes_anno"
+results_dir    <- "results/3_species_change/3_alistipes_anno"
 dir.create(results_dir, showWarnings = FALSE, recursive = TRUE)
 
 #### 1. Load MetaPhlAn relative abundance for A. putredinis ####

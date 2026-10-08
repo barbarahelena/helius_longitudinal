@@ -18,10 +18,10 @@ library(ggpubr)
 library(ggplotify)
 
 ## Source subscripts (run analyses and define panel objects) ----
-# source("scripts/3_species_change/2_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R")  # produces suppl_figure_ml_auroc.pdf
-source("scripts/3_species_change/3_species/1_lmm_sg.R")                                          # defines pl_fig3_C                                        # defines pl_fig3_D (heatmap)
-source("scripts/3_species_change/4_alistipes_anno/2_draw_tree.R")                                 # defines p1 (tree), p_eth (barplot), feat_plots (boxplots)
-source("scripts/3_species_change/6_strain_stability/strainsharing_plot.R")                        # defines pl_fig3_G, pl_fig3_H, pl_fig3_I, pl_fig3_J, pl_fig3_K
+# source("scripts/3_species_change/archive/2_mlmodels/3_ml_processing/process_eth_time_models_shotgun.R")  # produces suppl_figure_ml_auroc.pdf
+source("scripts/3_species_change/2_species/1_lmm_sg.R")                                          # defines pl_fig3_C                                        # defines pl_fig3_D (heatmap)
+source("scripts/3_species_change/3_alistipes_anno/2_draw_tree.R")                               # defines p1 (tree), p_eth (barplot), feat_plots (boxplots)
+source("scripts/3_species_change/5_strain_stability/strainsharing_plot.R")                        # defines pl_fig3_G, pl_fig3_H, pl_fig3_I, pl_fig3_J, pl_fig3_K
 
 ## Assemble Figure 3 ----
 # Stack ethnicity bar + abundance boxplot into one column

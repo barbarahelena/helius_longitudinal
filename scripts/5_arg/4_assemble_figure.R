@@ -4,9 +4,9 @@
 ##   A — Total ARG burden over time: paired violin, global decline (script 3)
 ##   B — ARG burden by ethnicity × timepoint: no difference at baseline or follow-up (script 3)
 ##   C — ARG class prevalence dumbbell: aminoglycoside/tetracycline asymmetry, stability (script 2)
-##   D — Gene prevalence dumbbell: specific genes with ethnic differences at baseline (script 2)
-##   E — Gene abundance dumbbell: trajectories, vancomycin convergence (script 2)
-##   F — ARG Shannon diversity by ethnicity: NL higher at baseline, convergence over time (script 3)
+##   D — ARG Shannon diversity by ethnicity: NL higher at baseline, convergence over time (script 3)
+##   E — Gene prevalence dumbbell: specific genes with ethnic differences at baseline (script 2)
+##   F — Gene abundance dumbbell: trajectories, vancomycin convergence (script 2)
 
 library(tidyverse)
 library(ggpubr)
@@ -34,7 +34,7 @@ row2 <- ggarrange(
   pl_class_prev, pl_B_shan,
   ncol          = 2,
   widths        = c(1, 1),
-  labels        = c("C", "F"),
+  labels        = c("C", "D"),
   font.label    = list(size = 14, face = "bold"),
   common.legend = FALSE
 )
@@ -44,7 +44,7 @@ row3 <- ggarrange(
   pl_E, pl_E_abund,
   ncol          = 2,
   widths        = c(1, 1),
-  labels        = c("D", "E"),
+  labels        = c("E", "F"),
   font.label    = list(size = 14, face = "bold"),
   common.legend = TRUE,
   legend        = "bottom"

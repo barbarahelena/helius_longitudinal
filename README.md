@@ -23,10 +23,10 @@ scripts/
 ├── 3_species_change/               # Species-level longitudinal analysis
 │   ├── 1_comparison_16s/           #   16S diversity comparisons
 │   ├── 2_species/                  #   LMM species trajectories
-│   ├── 3_strain_stability/         #   Strain sharing analysis
-│   ├── 4_alistipes_anno/           #   Alistipes functional gene annotation
-│   ├── 4_odoribacter_anno/         #   Odoribacter functional gene annotation
-│   └── 5_mlmodels/                 #   XGBoost ethnicity prediction models
+│   ├── 3_alistipes_anno/           #   Alistipes functional gene annotation
+│   ├── 4_instrain/                 #   inStrain strain retention and microdiversity
+│   ├── 5_strain_stability/         #   Strain sharing analysis
+│   └── archive/                    #   Superseded analyses (incl. 2_mlmodels, Odoribacter annotation)
 ├── 4_functional_change/            # Functional genomics (CAZymes, BGCs)
 └── 5_arg/                          # Antimicrobial resistance genes
 
