@@ -568,7 +568,7 @@ wilcox_by_timepoint <- function(df, vars) {
 }
 
 lmm_by_variable <- function(df, vars, covariates = NULL) {
-  map(vars, \(v) tryCatch(
+  purrr::map(vars, \(v) tryCatch(
     fit_ethnicity_lmm(df, v, covariates),
     error = function(e) { message("LMM failed for ", v, ": ", e$message); NULL }
   )) |>
@@ -633,9 +633,9 @@ stats <- rio::import("data/shotgun/cayman_results/oct2026_results/sample_statist
 
 # Per-sample read pairs entering and leaving host (human) removal, from MultiQC
 # Bowtie2 summaries (nf-core/mag host removal step, as in qc_summary.R)
-host_reads <- map_dfr(1:3, function(b) {
+host_reads <- purrr::map_dfr(1:3, function(b) {
   y <- yaml::read_yaml(sprintf("data/shotgun/multiqc_data_%d/multiqc_bowtie2_bowtie2-1.yaml", b))
-  map_dfr(str_subset(names(y), "^HELI"), \(nm) tibble(
+  purrr::map_dfr(str_subset(names(y), "^HELI"), \(nm) tibble(
     sampleID        = str_remove(nm, "_run[0-9]+$"),
     trimmed_pairs   = y[[nm]][["paired_total"]],
     post_host_pairs = y[[nm]][["paired_aligned_none"]]
