@@ -34,6 +34,13 @@ df_raw <- rio::import("data/shotgun/cayman_results/oct2026_results/families_rpkm
 head(df_raw)[1:5,1:5]
 rownames(df_raw) <- df_raw$family
 df_raw$family <- NULL
+
+# Prevalence filter (>5% of samples), same as script 3 so cross-sectional and
+# longitudinal analyses test the same set of families
+family_prevalence <- rowSums(df_raw > 0) / ncol(df_raw) * 100
+df_raw <- df_raw[family_prevalence > 5, ]
+cat("Families after prevalence filter (>5% of samples):", nrow(df_raw), "\n")
+
 df <- as.data.frame(t(as.matrix(df_raw)))
 names(df_raw)
 dim(df)

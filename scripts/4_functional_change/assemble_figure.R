@@ -3,10 +3,11 @@
 ## Panels (as rendered in figure4.pdf):
 ##   A  HUMAnN forest + cross-sectional heatmap (FDR < 0.05)
 ##   B  CAZyme Canberra PCoA — baseline by ethnicity
-##   (–) CAZyme Canberra PCoA — follow-up by ethnicity (unlabelled, next to B)
+##   (–) CAZyme Canberra PCoA — follow-up by ethnicity (unlabelled, below B)
 ##   C  CAZyme forest + cross-sectional heatmap (FDR < 0.05)
-##   D  Mucin-to-DF ratio
-##   E  GAG-to-DF ratio
+##   D  GAG-to-DF ratio
+##   E  Mucin-to-DF ratio
+##   F  CAZyme family richness
 ##
 ## Supplementary violins (suppl_figure_violins.pdf):
 ##   A  HUMAnN violin: Gluconeogenesis III
@@ -71,6 +72,10 @@ source("scripts/4_functional_change/cayman/5_cayman_ratios.R")
 p_mucin_vln <- p_mucin + theme(plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
 p_gag_vln   <- p_gag   + theme(plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
 
+# Family richness violin, built in 5_cayman_ratios.R alongside the technical checks
+p_rich_vln  <- qc_plots[[match("richness", qc_vars)]] +
+  theme(plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
+
 ## ── 5. Convert aplot composites → ggplot panels ───────────────────────────────
 
 pl_A <- aplot_to_gg(pl_humann_combined)
@@ -132,16 +137,19 @@ pl_cazyme_top <- lapply(target_fam, make_cazyme_vln)
 
 ## ── 8. Assemble rows ──────────────────────────────────────────────────────────
 
-# Row 1 — HUMAnN forest+heatmap (A) + two CAZyme PCoAs (B)
+# Row 1 — HUMAnN forest+heatmap (A) + two CAZyme PCoAs stacked (B)
+pcoa_col <- ggarrange(pl_can_bl, pl_can_fu, nrow = 2, labels = c("B", ""))
+
 top_row <- ggarrange(
-  pl_A, pl_can_bl, pl_can_fu,
-  ncol   = 3,
-  labels = c("A", "B", ""),
-  widths = c(2, 1, 1)
+  pl_A, pcoa_col,
+  ncol   = 2,
+  labels = c("A", ""),
+  widths = c(1.8, 1)
 )
 
-# Row 2 — CAZyme forest+heatmap (C) + Mucin/DF and GAG/DF ratio violins (D, E)
-ratio_col <- ggarrange(p_mucin_vln, p_gag_vln, nrow = 2, heights = c(1, 1), labels = c("D", "E"))
+# Row 2 — CAZyme forest+heatmap (C) + GAG/DF, Mucin/DF ratio and richness violins (D, E, F)
+ratio_col <- ggarrange(p_gag_vln, p_mucin_vln, p_rich_vln, nrow = 3, heights = c(1, 1, 1),
+                       labels = c("D", "E", "F"))
 
 bottom_row <- ggarrange(
   pl_E, ratio_col,
@@ -156,7 +164,7 @@ fig4 <- ggarrange(
   top_row,
   bottom_row,
   nrow    = 2,
-  heights = c(1.2, 1.5)
+  heights = c(1.5, 1.8)
 )
 
 ## ── 10. Save ──────────────────────────────────────────────────────────────────
@@ -165,8 +173,8 @@ dir.create("results/4_functional_change", showWarnings = FALSE, recursive = TRUE
 ggsave(
   fig4,
   filename = "results/4_functional_change/figure4.pdf",
-  width    = 20,
-  height   = 18,
+  width    = 14,
+  height   = 17,
   device   = cairo_pdf
 )
 

@@ -506,4 +506,213 @@ ggsave(
   fig_ratios, width = 10, height = 5, dpi = 300
 )
 
+# --- Ratio components: which substrate group drives the ratio differences? ----
+# Mucin/DF and GAG/DF can differ by ethnicity because the numerator (Mucin,
+# GAG) shifts, the denominator (DF) shifts, or both. Test each group on its
+# own with the same models as the ratios. The six substrate classes are
+# compositional, so besides raw log10 RPKM (not compositionally valid; a uniform
+# offset in total CAZyme abundance moves every class) each class is also
+# expressed relative to total CAZyme RPKM and as a CLR across the six-class
+# vector. The ratios themselves are scale-invariant, so they are unaffected.
+substrate_classes <- c("DF", "GAG", "Mucin", "Glycogen", "PG", "Other")
+plot_classes      <- c("DF", "GAG", "Mucin")
+
+rpkm_mat <- as.matrix(dftot[paste0(substrate_classes, "_rpkm")])
+stopifnot(all(rpkm_mat > 0))   # CLR needs no zeros; no pseudocount used
+colnames(rpkm_mat) <- substrate_classes
+log_mat <- log(rpkm_mat)
+
+comp_scales <- list(
+  log10rpkm = list(label = "log10 RPKM",
+                   mat   = log10(rpkm_mat)),
+  log10rel  = list(label = "log10 relative to total CAZyme RPKM",
+                   mat   = log10(rpkm_mat / rowSums(rpkm_mat))),
+  clr       = list(label = "CLR",
+                   mat   = log_mat - rowMeans(log_mat))
+)
+
+dftot_comp <- dftot
+for (sc in names(comp_scales)) {
+  m <- comp_scales[[sc]]$mat
+  colnames(m) <- paste0(sc, "_", substrate_classes)
+  dftot_comp <- bind_cols(dftot_comp, as_tibble(m))
+}
+
+# Ethnicity x timepoint LMM for one variable (SAS vs Dutch; sensitivity
+# covariates optional)
+fit_ethnicity_lmm <- function(df, var, covariates = NULL) {
+  f   <- reformulate(c("EthnicityTot * timepoint", covariates, "(1 | ID)"), response = var)
+  mod <- lmer(f, data = df)
+  res <- summary(mod)$coefficients
+  main_row <- grep(paste0("^EthnicityTot", ETH_SAS, "$"), rownames(res))
+  int_row  <- grep(paste0(ETH_SAS, ":timepointfollow-up"), rownames(res))
+  tibble(
+    variable          = var,
+    estimate_main     = res[main_row, 1],
+    se_main           = res[main_row, 2],
+    pval_main         = res[main_row, 5],
+    estimate_interact = res[int_row,  1],
+    se_interact       = res[int_row,  2],
+    pval_interact     = res[int_row,  5]
+  )
+}
+
+# Wilcoxon (Dutch vs SAS) per timepoint, FDR within timepoint
+wilcox_by_timepoint <- function(df, vars) {
+  df |>
+    pivot_longer(all_of(vars), names_to = "variable", values_to = "value") |>
+    group_by(variable, timepoint) |>
+    summarise(
+      p            = wilcox.test(value ~ EthnicityTot)$p.value,
+      median_Dutch = median(value[EthnicityTot == ETH_DUTCH], na.rm = TRUE),
+      median_SAS   = median(value[EthnicityTot == ETH_SAS],   na.rm = TRUE),
+      .groups = "drop"
+    ) |>
+    group_by(timepoint) |>
+    mutate(padj = p.adjust(p, method = "fdr")) |>
+    ungroup()
+}
+
+lmm_by_variable <- function(df, vars, covariates = NULL) {
+  map(vars, \(v) tryCatch(
+    fit_ethnicity_lmm(df, v, covariates),
+    error = function(e) { message("LMM failed for ", v, ": ", e$message); NULL }
+  )) |>
+    bind_rows() |>
+    mutate(
+      padj_main     = p.adjust(pval_main,     method = "fdr"),
+      padj_interact = p.adjust(pval_interact, method = "fdr")
+    )
+}
+
+comp_results <- list()
+for (sc in names(comp_scales)) {
+  vars   <- paste0(sc, "_", substrate_classes)
+  wil    <- wilcox_by_timepoint(dftot_comp, vars)
+  lmm_sc <- lmm_by_variable(dftot_comp, vars)
+  cat("\n==== Components,", comp_scales[[sc]]$label, "====\n")
+  print(wil)
+  print(lmm_sc)
+  write.csv2(wil,
+             paste0("results/4_functional_change/cayman/ratios/wilcoxon_components_", sc, "_by_ethnicity.csv"),
+             row.names = FALSE)
+  write.csv2(lmm_sc,
+             paste0("results/4_functional_change/cayman/ratios/lmm_components_", sc, "_ethnicity_timepoint.csv"),
+             row.names = FALSE)
+  comp_results[[sc]] <- lmm_sc
+
+  comp_plots <- lapply(plot_classes, function(cl) {
+    v <- paste0(sc, "_", cl)
+    make_ratio_vln(
+      dftot_comp, v,
+      paste0(cl, " (", comp_scales[[sc]]$label, ")"),
+      paste0(cl, " abundance"),
+      lmm_sc$pval_interact[lmm_sc$variable == v]
+    )
+  })
+  fig_components <- ggarrange(plotlist = comp_plots, nrow = 1, ncol = 3,
+                              labels = c("A", "B", "C"))
+  ggsave(paste0("results/4_functional_change/cayman/ratios/cayman_components_", sc, "_ethnicity.pdf"),
+         fig_components, width = 15, height = 5)
+  ggsave(paste0("results/4_functional_change/cayman/ratios/cayman_components_", sc, "_ethnicity.png"),
+         fig_components, width = 15, height = 5, dpi = 300)
+}
+
+# Side-by-side: SAS-vs-Dutch main effect per class on each scale
+comp_summary <- bind_rows(comp_results, .id = "scale") |>
+  mutate(class = str_remove(variable, "^[a-z0-9]+_")) |>
+  dplyr::select(scale, class, estimate_main, se_main, pval_main, padj_main)
+print(comp_summary)
+write.csv2(comp_summary,
+           "results/4_functional_change/cayman/ratios/components_main_effect_all_scales.csv",
+           row.names = FALSE)
+
+# --- Secondary checks: CAZyme family richness and technical covariates --------
+# Richness is families detected (n_families, sample_statistics.tsv). Technical
+# variables are checked for ethnic differences to rule out the uniform offset
+# in DF/GAG/Mucin being a depth, host-read or alignment artefact.
+stats <- rio::import("data/shotgun/cayman_results/oct2026_results/sample_statistics.tsv") |>
+  as_tibble() |>
+  dplyr::rename(sampleID = sample) |>
+  dplyr::select(sampleID, aligned_reads, filtered_reads, cazy_reads, pct_cazy_reads,
+                richness = n_families)
+
+# Per-sample read pairs entering and leaving host (human) removal, from MultiQC
+# Bowtie2 summaries (nf-core/mag host removal step, as in qc_summary.R)
+host_reads <- map_dfr(1:3, function(b) {
+  y <- yaml::read_yaml(sprintf("data/shotgun/multiqc_data_%d/multiqc_bowtie2_bowtie2-1.yaml", b))
+  map_dfr(str_subset(names(y), "^HELI"), \(nm) tibble(
+    sampleID        = str_remove(nm, "_run[0-9]+$"),
+    trimmed_pairs   = y[[nm]][["paired_total"]],
+    post_host_pairs = y[[nm]][["paired_aligned_none"]]
+  ))
+}) |>
+  mutate(human_frac = 1 - post_host_pairs / trimmed_pairs)
+stopifnot(!anyDuplicated(host_reads$sampleID))
+
+dftot_qc <- dftot_comp |>
+  left_join(stats,      by = "sampleID") |>
+  left_join(host_reads, by = "sampleID") |>
+  mutate(
+    log10_trimmed_pairs   = log10(trimmed_pairs),
+    log10_post_host_pairs = log10(post_host_pairs),
+    log10_human_frac      = log10(human_frac),
+    log10_aligned_reads   = log10(aligned_reads),
+    log10_cazy_reads      = log10(cazy_reads),
+    aligned_per_pair      = aligned_reads / post_host_pairs,
+    filtered_per_aligned  = filtered_reads / aligned_reads
+  )
+stopifnot(!anyNA(dftot_qc$richness), !anyNA(dftot_qc$post_host_pairs))
+
+qc_labels <- c(
+  richness              = "CAZyme family richness",
+  log10_trimmed_pairs   = "Trimmed read pairs (log10)",
+  log10_post_host_pairs = "Read pairs after host removal (log10)",
+  log10_human_frac      = "Human read fraction (log10)",
+  log10_aligned_reads   = "Aligned reads (log10)",
+  pct_cazy_reads        = "CAZyme reads (% of filtered reads)",
+  aligned_per_pair      = "Aligned reads per post-host pair",
+  filtered_per_aligned  = "Filtered / aligned reads"
+)
+qc_vars <- names(qc_labels)
+
+wilcox_qc <- wilcox_by_timepoint(dftot_qc, qc_vars)
+lmm_qc    <- lmm_by_variable(dftot_qc, qc_vars)
+print(wilcox_qc)
+print(lmm_qc)
+write.csv2(wilcox_qc,
+           "results/4_functional_change/cayman/ratios/wilcoxon_richness_qc_by_ethnicity.csv",
+           row.names = FALSE)
+write.csv2(lmm_qc,
+           "results/4_functional_change/cayman/ratios/lmm_richness_qc_ethnicity_timepoint.csv",
+           row.names = FALSE)
+
+# Richness scales with sequencing effort, so repeat with CAZyme read depth
+# as a covariate
+lmm_richness_adj <- lmm_by_variable(dftot_qc, "richness", covariates = "log10_cazy_reads")
+print(lmm_richness_adj)
+write.csv2(lmm_richness_adj,
+           "results/4_functional_change/cayman/ratios/lmm_richness_adj_cazy_depth.csv",
+           row.names = FALSE)
+
+# Do the DF/GAG/Mucin ethnicity effects survive adjusting for depth and host reads?
+adj_covariates <- c("log10_post_host_pairs", "log10_human_frac", "pct_cazy_reads")
+lmm_comp_adj <- lmm_by_variable(dftot_qc,
+                                paste0("clr_", plot_classes),
+                                covariates = adj_covariates)
+print(lmm_comp_adj)
+write.csv2(lmm_comp_adj,
+           "results/4_functional_change/cayman/ratios/lmm_components_clr_adj_technical.csv",
+           row.names = FALSE)
+
+qc_plots <- lapply(qc_vars, function(v) {
+  make_ratio_vln(dftot_qc, v, qc_labels[[v]], qc_labels[[v]],
+                 lmm_qc$pval_interact[lmm_qc$variable == v])
+})
+fig_qc <- ggarrange(plotlist = qc_plots, nrow = 2, ncol = 4, labels = LETTERS[seq_along(qc_vars)])
+ggsave("results/4_functional_change/cayman/ratios/cayman_richness_qc_ethnicity.pdf",
+       fig_qc, width = 20, height = 10)
+ggsave("results/4_functional_change/cayman/ratios/cayman_richness_qc_ethnicity.png",
+       fig_qc, width = 20, height = 10, dpi = 300)
+
 cat("Done. Figures saved to results/4_functional_change/cayman/ratios/\n")
