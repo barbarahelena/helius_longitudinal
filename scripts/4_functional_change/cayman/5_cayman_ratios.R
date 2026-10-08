@@ -447,35 +447,29 @@ plab <- function(p) {
                 formatC(p, format = "f", digits = 3)))
 }
 
-# --- Helper: ratio violin with per-facet paired Wilcoxon annotation -----------
+# --- Helper: ratio violin with per-timepoint ethnicity comparison -------------
+# Facets are timepoints; within each, Dutch vs South-Asian Surinamese are
+# compared with an unpaired Wilcoxon test (all samples at that timepoint).
 make_ratio_vln <- function(df, ratio_var, y_label, title_label, interact_pval, show_pval = TRUE) {
-  df_plot <- df %>%
-    group_by(EthnicityTot, ID) %>%
-    filter(n() == 2) %>%
-    ungroup() %>%
-    arrange(EthnicityTot, ID, timepoint)
-
-  pval_annot <- df_plot %>%
-    group_by(EthnicityTot) %>%
+  pval_annot <- df %>%
+    group_by(timepoint) %>%
     group_modify(~ {
-      bl <- .x[[ratio_var]][.x$timepoint == "baseline"]
-      fu <- .x[[ratio_var]][.x$timepoint == "follow-up"]
-      p  <- tryCatch(wilcox.test(bl, fu, paired = TRUE)$p.value, error = function(e) NA_real_)
+      p <- tryCatch(wilcox.test(.x[[ratio_var]] ~ .x$EthnicityTot)$p.value, error = function(e) NA_real_)
       data.frame(p = p, y_pos = max(.x[[ratio_var]], na.rm = TRUE) + diff(range(.x[[ratio_var]], na.rm = TRUE)) * 0.08)
     }) %>%
     ungroup() %>%
     mutate(label = paste0("p=", plab(p)))
 
-  ggplot(df_plot, aes(x = timepoint, y = .data[[ratio_var]], fill = EthnicityTot)) +
+  ggplot(df, aes(x = EthnicityTot, y = .data[[ratio_var]], fill = EthnicityTot)) +
     geom_violin(colour = NA, aes(alpha = timepoint)) +
     geom_boxplot(fill = "white", width = 0.15, outlier.shape = NA) +
     { if (show_pval) geom_text(data = pval_annot,
                                aes(x = 1.5, y = y_pos, label = label),
                                inherit.aes = FALSE, size = 3) } +
-    facet_wrap(~EthnicityTot) +
+    facet_wrap(~timepoint) +
     scale_fill_manual(values = eth_colors, guide = "none") +
     scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
-    # Extra headroom above the data so the baseline-to-follow-up p-value label isn't clipped
+    # Extra headroom above the data so the Dutch-vs-SAS p-value label isn't clipped
     scale_y_continuous(expand = expansion(mult = c(0.05, if (show_pval) 0.22 else 0.05))) +
     theme_Publication() +
     labs(x = "", y = y_label, title = title_label,

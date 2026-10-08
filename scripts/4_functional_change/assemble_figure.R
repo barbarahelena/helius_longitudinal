@@ -67,7 +67,7 @@ pl_can_fu <- if (exists("ethcan_fu")) ethcan_fu else ggplot() + theme_void()
 
 source("scripts/4_functional_change/cayman/5_cayman_ratios.R")
 # dftot (ratios), wilcox_res now in environment; p_mucin, p_gag built with
-# show_pval = TRUE by default (baseline-to-follow-up p-value shown per facet)
+# show_pval = TRUE by default (Dutch-vs-SAS Wilcoxon p-value shown per timepoint facet)
 
 p_mucin_vln <- p_mucin + theme(plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
 p_gag_vln   <- p_gag   + theme(plot.subtitle = element_text(size = 10, hjust = 0.5, face = "italic"))
