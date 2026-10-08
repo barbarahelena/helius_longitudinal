@@ -17,17 +17,20 @@ scripts/
 ├── 0_run_workflows/                # Pipeline execution scripts
 │   ├── 1_run_16s_pipeline/         #   16S amplicon pipeline
 │   ├── 2_run_shotgun_pipelines/    #   Shotgun metagenomics pipelines
-│   └── 3_data_cleaning/            #   Master data cleaning and preprocessing
+│   ├── 3_data_cleaning/            #   Master data cleaning, dietary data (incl. Willett PCA without sodium)
+│   └── 4_qc_summary/               #   Sequencing/sample QC summary
 ├── 1_longitudinal_change/          # Baseline vs follow-up microbiome changes
 ├── 2_cmb_microbiome/               # Comorbidity–microbiome associations
 ├── 3_species_change/               # Species-level longitudinal analysis
 │   ├── 1_comparison_16s/           #   16S diversity comparisons
 │   ├── 2_species/                  #   LMM species trajectories
-│   ├── 3_alistipes_anno/           #   Alistipes functional gene annotation
+│   ├── 3_alistipes_anno/           #   Alistipes functional gene annotation (VFDB, tree, QC)
 │   ├── 4_instrain/                 #   inStrain strain retention and microdiversity
-│   ├── 5_strain_stability/         #   Strain sharing analysis
+│   ├── 5_strain_stability/         #   Strain sharing analysis (Spearman for covariate panels)
 │   └── archive/                    #   Superseded analyses (incl. 2_mlmodels, Odoribacter annotation)
-├── 4_functional_change/            # Functional genomics (CAZymes, BGCs)
+├── 4_functional_change/            # Functional genomics
+│   ├── cayman/                     #   CAZyme (Cayman) QC, cross-sectional, LMM, ordination, ratios
+│   └── humann/                     #   HUMAnN pathway cross-sectional tests and LMMs
 └── 5_arg/                          # Antimicrobial resistance genes
 
 data/
@@ -61,10 +64,10 @@ Associations between microbiome composition and cardiometabolic comorbidities, i
 Linear mixed models (`lmer`) for species trajectories over time, stratified by ethnicity. Includes strain sharing analyses, functional annotation of key taxa (*Alistipes*, *Odoribacter*), and XGBoost machine learning models predicting ethnicity from microbiome features.
 
 ### 4. Functional Change
-Longitudinal LMMs for CAZyme families (carbohydrate-active enzymes) and biosynthetic gene clusters (gutSMASH), with cross-sectional comparisons and beta diversity analyses.
+Longitudinal LMMs for CAZyme families (carbohydrate-active enzymes, Cayman) and HUMAnN metabolic pathways, with cross-sectional comparisons and beta diversity analyses. The Cayman ratio script (`5_cayman_ratios.R`) compares dietary fibre (DF), glycosaminoglycan (GAG) and mucin degradation potential, including their ratios, components and richness. Ratio and richness violin plots compare ethnicities within each timepoint, matching the ARG figure style.
 
 ### 5. Antimicrobial Resistance Genes
-Descriptive QC, cross-sectional comparisons, and longitudinal LMMs for ARG classes and subclasses.
+Descriptive QC, cross-sectional comparisons (CPM for gene-level abundance), and longitudinal LMMs for ARG classes and subclasses, plus depth and assembly sensitivity analyses.
 
 ## Environment Setup
 
@@ -96,6 +99,7 @@ Key Python packages: `xgboost`, `scikit-learn`, `pandas`
 - **Alpha diversity**: Wilcoxon signed-rank test (paired baseline vs follow-up); Kruskal-Wallis across ethnicities
 - **Beta diversity**: PERMANOVA (vegan); Bray-Curtis dissimilarity
 - **Species trajectories**: Linear mixed models with ethnicity × timepoint interaction — `lmer(abundance ~ ethnicity * timepoint + (1|ID))`
+- **Cross-sectional functional tests**: prevalence filter for CAZymes; linear models for HUMAnN pathways
 - **Post-hoc tests**: `emmeans` with Tukey correction
 - **Machine learning**: XGBoost with Wilcoxon pre-screening of features; cross-validation and permutation testing
 
