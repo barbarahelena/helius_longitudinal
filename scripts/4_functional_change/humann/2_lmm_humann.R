@@ -54,7 +54,7 @@ df_rel_mat   <- df_mat / rowSums(df_mat, na.rm = TRUE)
 df_rel       <- as.data.frame(df_rel_mat)
 df_rel$sampleID <- df$sampleID
 
-# Filter: relative abundance >= 0.005 in >= 10% of samples
+# Filter: relative abundance >= 0.0025 in >= 25% of samples
 prev_threshold  <- 0.25
 abund_threshold <- 0.0025
 keep_pw      <- colMeans(df_rel[, pathway_cols] >= abund_threshold, na.rm = TRUE) >= prev_threshold
@@ -235,7 +235,7 @@ ggsave("results/4_functional_change/humann/longitudinal/forest_humann.pdf",
 # ---------------------------------------------------------------------------
 # Overlap: cross-sectional significant vs LMM interaction significant
 # ---------------------------------------------------------------------------
-cs_results <- read.csv2("results/4_functional_change/humann/crosssectional_wilcox_results.csv",
+cs_results <- read.csv2("results/4_functional_change/humann/crosssectional_lm_results.csv",
                         stringsAsFactors = FALSE) |>
     mutate(across(starts_with("padj_"), as.numeric))
 
@@ -337,7 +337,7 @@ if (nrow(humann_fdr) >= 2) {
         dplyr::select(pathway, sig_baseline, sig_followup) |>
         mutate(across(c(sig_baseline, sig_followup), as.logical)) |>
         left_join(
-            read.csv2("results/4_functional_change/humann/crosssectional_wilcox_results.csv",
+            read.csv2("results/4_functional_change/humann/crosssectional_lm_results.csv",
                       stringsAsFactors = FALSE) |>
                 dplyr::select(pathway, padj_baseline, padj_follow.up),
             by = "pathway"

@@ -59,7 +59,7 @@ df_rel_mat <- df_mat / row_sums
 df_rel <- as.data.frame(df_rel_mat)
 df_rel$sampleID <- df$sampleID
 
-# Filter: keep pathways with relative abundance >= 0.005 in >= 10% of samples
+# Filter: keep pathways with relative abundance >= 0.0025 in >= 25% of samples
 prev_threshold  <- 0.25
 abund_threshold <- 0.0025
 keep_pw <- colMeans(df_rel[, pathway_cols] >= abund_threshold, na.rm = TRUE) >= prev_threshold
@@ -75,30 +75,30 @@ df_clin  <- df_clin |> filter(!is.na(EthnicityTot))
 table(df_clin$EthnicityTot)
 
 # ---------------------------------------------------------------------------
-# Test all filtered pathways by Wilcoxon, then keep significant ones for plots
+# Test all filtered pathways by linear regression of log10(abundance % + pseudocount)
+# on ethnicity at each timepoint (SAS vs Dutch), then keep significant ones for plots
 # ---------------------------------------------------------------------------
-wilcox_res <- df_clin |>
+lm_res <- df_clin |>
     dplyr::select(sampleID, EthnicityTot, timepoint, all_of(pathway_cols)) |>
     pivot_longer(cols = all_of(pathway_cols), names_to = "pathway", values_to = "abundance") |>
     group_by(timepoint, pathway) |>
     summarise(
-        pvalue = {
-            g <- split(abundance, EthnicityTot)
-            wilcox.test(g[[1]], g[[2]])$p.value
-        },
+        pvalue = summary(lm(y ~ eth, data = data.frame(
+            y   = log10(abundance * 100 + pseudocount),
+            eth = EthnicityTot)))$coefficients[2, 4],
         .groups = "drop"
     ) |>
     group_by(timepoint) |>
     mutate(padj = p.adjust(pvalue, method = "BH")) |>
     ungroup()
 
-sig_pathways <- wilcox_res |>
+sig_pathways <- lm_res |>
     filter(padj < 0.05) |>
     distinct(pathway) |>
     pull(pathway)
 
-sig_baseline <- wilcox_res |> filter(timepoint == "baseline",  padj < 0.05) |> pull(pathway)
-sig_followup <- wilcox_res |> filter(timepoint == "follow-up", padj < 0.05) |> pull(pathway)
+sig_baseline <- lm_res |> filter(timepoint == "baseline",  padj < 0.05) |> pull(pathway)
+sig_followup <- lm_res |> filter(timepoint == "follow-up", padj < 0.05) |> pull(pathway)
 cat("\nOf", length(pathway_cols), "filtered pathways,", length(sig_pathways),
     "show a significant ethnicity difference at baseline or follow-up (padj < 0.05)\n")
 cat("  Baseline: ", length(sig_baseline), "significant\n")
@@ -106,7 +106,7 @@ cat("  Follow-up:", length(sig_followup), "significant\n")
 cat("  Overlap:  ", length(intersect(sig_baseline, sig_followup)), "significant at both\n")
 
 # Save cross-sectional results table
-wilcox_wide <- wilcox_res |>
+lm_wide <- lm_res |>
     dplyr::select(pathway, timepoint, padj) |>
     pivot_wider(names_from = timepoint, values_from = padj,
                 names_prefix = "padj_") |>
@@ -115,8 +115,8 @@ wilcox_wide <- wilcox_res |>
         sig_followup = `padj_follow-up` < 0.05
     )
 dir.create("results/4_functional_change/humann", showWarnings = FALSE, recursive = TRUE)
-write.csv2(wilcox_wide,
-           "results/4_functional_change/humann/crosssectional_wilcox_results.csv",
+write.csv2(lm_wide,
+           "results/4_functional_change/humann/crosssectional_lm_results.csv",
            row.names = FALSE)
 
 plot_pathways <- sig_pathways
