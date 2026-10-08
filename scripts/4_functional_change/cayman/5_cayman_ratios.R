@@ -469,7 +469,7 @@ make_ratio_vln <- function(df, ratio_var, y_label, title_label, interact_pval, s
     facet_wrap(~timepoint) +
     scale_x_discrete(labels = \(x) str_replace(x, "South-Asian Surinamese", "South-Asian\nSurinamese")) +
     scale_fill_manual(values = eth_colors, guide = "none") +
-    scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+    scale_alpha_manual(values = c("baseline" = 0.60, "follow-up" = 0.90), guide = "none") +
     # Extra headroom above the data so the Dutch-vs-SAS p-value label isn't clipped
     scale_y_continuous(expand = expansion(mult = c(0.05, if (show_pval) 0.22 else 0.05))) +
     theme_Publication() +

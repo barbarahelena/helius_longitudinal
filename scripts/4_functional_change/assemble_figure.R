@@ -102,7 +102,7 @@ make_humann_vln <- function(partial_name) {
     geom_boxplot(fill = "white", width = 0.2, outlier.shape = NA) +
     facet_wrap(~EthnicityTot) +
     scale_fill_jco(guide = "none") +
-    scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+    scale_alpha_manual(values = c("baseline" = 0.60, "follow-up" = 0.90), guide = "none") +
     theme_Publication() +
     labs(x        = "",
          y        = "log10(abundance % + pseudocount)",
