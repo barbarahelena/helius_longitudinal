@@ -559,15 +559,27 @@ pca_adj <- run_diet_pca(
     helius_wide_diet %>% dplyr::select(ID, all_of(macro_adj_cols)) %>% filter(complete.cases(.)),
     strip_suffix = "_baseline_adj", eth_df = helius_wide_diet)
 df <- df %>% left_join(pca_adj$pcs %>% dplyr::select(ID, DietPC1_adj = PC1, DietPC2_adj = PC2), by = "ID")
+
+## Separate PCA without sodium: sodium has ~125 more missing values than the other
+## diet variables, so including it shrinks the complete-case set (674 vs 799).
+macro_adj_cols_nona <- setdiff(macro_adj_cols, "Sodium_g_baseline_adj")
+resultsfolder_adj_nona <- file.path(resultsfolder, "willett_adj_noNa")
+pca_adj_nona <- run_diet_pca(
+    helius_wide_diet %>% dplyr::select(ID, all_of(macro_adj_cols_nona)) %>% filter(complete.cases(.)),
+    strip_suffix = "_baseline_adj", eth_df = helius_wide_diet)
+df <- df %>% left_join(pca_adj_nona$pcs %>% dplyr::select(ID, DietPC1_adj_noNa = PC1, DietPC2_adj_noNa = PC2), by = "ID")
+
 saveRDS(df, "data/clinicaldata_long_pcdiet.RDS")
 pca_diet_plots(pca_adj$pcs, pca_adj$loadings, pca_adj$expvar,
                "PCA diet (Willett-adjusted)", resultsfolder_adj, "PCA_diet_adj")
+pca_diet_plots(pca_adj_nona$pcs, pca_adj_nona$loadings, pca_adj_nona$expvar,
+               "PCA diet (Willett-adjusted, no sodium)", resultsfolder_adj_nona, "PCA_diet_adj_noNa")
 
 #### Shotgun subset - Willett-adjusted PCA ####
 resultsfolder_sg_willett <- file.path(resultsfolder_sg, "willett_adj")
 pca_adj_sg <- run_diet_pca(
-    helius_wide_diet %>% dplyr::select(ID, all_of(macro_adj_cols)) %>%
+    helius_wide_diet %>% dplyr::select(ID, all_of(macro_adj_cols_nona)) %>%
         filter(ID %in% shotids$ID) %>% filter(complete.cases(.)),
     strip_suffix = "_baseline_adj", eth_df = helius_wide_diet)
 pca_diet_plots(pca_adj_sg$pcs, pca_adj_sg$loadings, pca_adj_sg$expvar,
-               "PCA diet (Willett-adjusted, shotgun subset)", resultsfolder_sg_willett, "PCA_diet_adj_sg")
+               "PCA diet (Willett-adjusted, no sodium, shotgun subset)", resultsfolder_sg_willett, "PCA_diet_adj_noNa_sg")

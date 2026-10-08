@@ -127,9 +127,9 @@ ggsave("results/3_species_change/5_strain_stability/ethnicities.pdf", width = 4.
 ## p-value formatter for stat_cor: shows p < 0.0001 instead of full scientific notation
 stat_cor_fmt <- function(...) {
     stat_cor(aes(label = after_stat(paste0(
-        "R = ", round(r, 2),
+        "rho = ", round(r, 2),
         ", p", ifelse(p < 0.0001, " < 0.0001", paste0(" = ", round(p, 4)))
-    ))), output.type = "text", ...)
+    ))), method = "spearman", output.type = "text", ...)
 }
 
 ## pl_fig3_H: follow-up time vs strain stability
