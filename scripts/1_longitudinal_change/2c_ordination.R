@@ -537,7 +537,7 @@ ggsave("results/1_longitudinal_change/ordination/distance_ethnicities_adjusted.p
 # Join with diet PCs (only available in clinicaldata_long_pcdiet.RDS)
 pcdiet <- readRDS("data/clinicaldata_long_pcdiet.RDS") %>%
     filter(timepoint == "baseline") %>%
-    dplyr::select(ID, DietPC1_adj, DietPC2_adj)
+    dplyr::select(ID, DietPC1_adj_noNa, DietPC2_adj_noNa)
 
 heliusdist_adj2 <- heliusdist %>%
     left_join(pcdiet, by = "ID") %>%
@@ -545,17 +545,17 @@ heliusdist_adj2 <- heliusdist %>%
     filter(
         !is.na(Age) & !is.na(Sex) & !is.na(BMI) &
         !is.na(Metformin) & !is.na(PPI) & !is.na(AntiHT) & !is.na(Statins) &
-        !is.na(AlcCons) & !is.na(DietPC1_adj) & !is.na(DietPC2_adj)
+        !is.na(AlcCons) & !is.na(DietPC1_adj_noNa) & !is.na(DietPC2_adj_noNa)
     )
 
 # Linear regression: distance ~ all confounders + ethnicity
-lm_full <- lm(distance ~ Age + Sex + BMI + DietPC1_adj + DietPC2_adj +
+lm_full <- lm(distance ~ Age + Sex + BMI + DietPC1_adj_noNa + DietPC2_adj_noNa +
                   Metformin + PPI + FUtime + EthnicityTot,
               data = heliusdist_adj2)
 print(summary(lm_full))
 
 # Confounder-only model: residuals + grand mean = adjusted dissimilarity
-lm_confounders <- lm(distance ~ Age + Sex + BMI + DietPC1_adj + DietPC2_adj +
+lm_confounders <- lm(distance ~ Age + Sex + BMI + DietPC1_adj_noNa + DietPC2_adj_noNa +
                          Metformin + PPI + FUtime,
                      data = heliusdist_adj2)
 
