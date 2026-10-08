@@ -578,8 +578,8 @@ pca_diet_plots(pca_adj_nona$pcs, pca_adj_nona$loadings, pca_adj_nona$expvar,
 #### Shotgun subset - Willett-adjusted PCA ####
 resultsfolder_sg_willett <- file.path(resultsfolder_sg, "willett_adj")
 pca_adj_sg <- run_diet_pca(
-    helius_wide_diet %>% dplyr::select(ID, all_of(macro_adj_cols)) %>%
+    helius_wide_diet %>% dplyr::select(ID, all_of(macro_adj_cols_nona)) %>%
         filter(ID %in% shotids$ID) %>% filter(complete.cases(.)),
     strip_suffix = "_baseline_adj", eth_df = helius_wide_diet)
 pca_diet_plots(pca_adj_sg$pcs, pca_adj_sg$loadings, pca_adj_sg$expvar,
-               "PCA diet (Willett-adjusted, shotgun subset)", resultsfolder_sg_willett, "PCA_diet_adj_sg")
+               "PCA diet (Willett-adjusted, no sodium, shotgun subset)", resultsfolder_sg_willett, "PCA_diet_adj_noNa_sg")
