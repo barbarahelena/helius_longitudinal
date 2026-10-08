@@ -180,7 +180,7 @@ make_boxviolin <- function(df, family_name, pval, y_label, show_pval = TRUE) {
                                inherit.aes = FALSE, size = 3) } +
     facet_wrap(~EthnicityTot) +
     scale_fill_jco(guide = "none") +
-    scale_alpha_manual(values = c(0.6, 1.0), guide = "none") +
+    scale_alpha_manual(values = c("baseline" = 0.60, "follow-up" = 0.90), guide = "none") +
     theme_Publication() +
     labs(x = "", y = y_label,
          subtitle = paste0("Ethnicity \u00d7 Timepoint p=", pval_label))
