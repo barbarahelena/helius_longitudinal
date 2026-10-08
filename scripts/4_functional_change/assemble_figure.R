@@ -5,8 +5,8 @@
 ##   B  CAZyme Canberra PCoA — baseline by ethnicity
 ##   (–) CAZyme Canberra PCoA — follow-up by ethnicity (unlabelled, next to B)
 ##   C  CAZyme forest + cross-sectional heatmap (FDR < 0.05)
-##   D  Mucin-to-DF ratio
-##   E  GAG-to-DF ratio
+##   D  GAG-to-DF ratio
+##   E  Mucin-to-DF ratio
 ##
 ## Supplementary violins (suppl_figure_violins.pdf):
 ##   A  HUMAnN violin: Gluconeogenesis III
@@ -141,7 +141,7 @@ top_row <- ggarrange(
 )
 
 # Row 2 — CAZyme forest+heatmap (C) + Mucin/DF and GAG/DF ratio violins (D, E)
-ratio_col <- ggarrange(p_mucin_vln, p_gag_vln, nrow = 2, heights = c(1, 1), labels = c("D", "E"))
+ratio_col <- ggarrange(p_gag_vln, p_mucin_vln, nrow = 2, heights = c(1, 1), labels = c("D", "E"))
 
 bottom_row <- ggarrange(
   pl_E, ratio_col,
