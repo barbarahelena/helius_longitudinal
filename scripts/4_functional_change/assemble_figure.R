@@ -65,6 +65,9 @@ pl_can_fu <- if (exists("ethcan_fu")) ethcan_fu else ggplot() + theme_void()
 
 ## ── 4. Source CAZyme ratios — reuse its Mucin/GAG violin panels ───────────────
 
+# Drop objects from earlier runs so a failure inside the ratios script errors
+# below instead of silently reusing a stale qc_plots (e.g. an old richness panel)
+if (exists("qc_plots")) rm(qc_plots)
 source("scripts/4_functional_change/cayman/5_cayman_ratios.R")
 # dftot (ratios), wilcox_res now in environment; p_mucin, p_gag built with
 # show_pval = TRUE by default (Dutch-vs-SAS Wilcoxon p-value shown per timepoint facet)

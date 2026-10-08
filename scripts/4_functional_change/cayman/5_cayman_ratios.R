@@ -461,15 +461,14 @@ make_ratio_vln <- function(df, ratio_var, y_label, title_label, interact_pval, s
     mutate(label = paste0("p=", plab(p)))
 
   ggplot(df, aes(x = EthnicityTot, y = .data[[ratio_var]], fill = EthnicityTot)) +
-    geom_violin(colour = NA, aes(alpha = timepoint)) +
-    geom_boxplot(fill = "white", width = 0.15, outlier.shape = NA) +
+    geom_violin(alpha = 0.75, colour = NA) +
+    geom_boxplot(width = 0.22, fill = "white", outlier.shape = NA, colour = "gray30") +
     { if (show_pval) geom_text(data = pval_annot,
                                aes(x = 1.5, y = y_pos, label = label),
                                inherit.aes = FALSE, size = 3) } +
     facet_wrap(~timepoint) +
     scale_x_discrete(labels = \(x) str_replace(x, "South-Asian Surinamese", "South-Asian\nSurinamese")) +
     scale_fill_manual(values = eth_colors, guide = "none") +
-    scale_alpha_manual(values = c("baseline" = 0.60, "follow-up" = 0.90), guide = "none") +
     # Extra headroom above the data so the Dutch-vs-SAS p-value label isn't clipped
     scale_y_continuous(expand = expansion(mult = c(0.05, if (show_pval) 0.22 else 0.05))) +
     theme_Publication() +
@@ -569,7 +568,7 @@ wilcox_by_timepoint <- function(df, vars) {
 }
 
 lmm_by_variable <- function(df, vars, covariates = NULL) {
-  map(vars, \(v) tryCatch(
+  purrr::map(vars, \(v) tryCatch(
     fit_ethnicity_lmm(df, v, covariates),
     error = function(e) { message("LMM failed for ", v, ": ", e$message); NULL }
   )) |>
@@ -634,9 +633,9 @@ stats <- rio::import("data/shotgun/cayman_results/oct2026_results/sample_statist
 
 # Per-sample read pairs entering and leaving host (human) removal, from MultiQC
 # Bowtie2 summaries (nf-core/mag host removal step, as in qc_summary.R)
-host_reads <- map_dfr(1:3, function(b) {
+host_reads <- purrr::map_dfr(1:3, function(b) {
   y <- yaml::read_yaml(sprintf("data/shotgun/multiqc_data_%d/multiqc_bowtie2_bowtie2-1.yaml", b))
-  map_dfr(str_subset(names(y), "^HELI"), \(nm) tibble(
+  purrr::map_dfr(str_subset(names(y), "^HELI"), \(nm) tibble(
     sampleID        = str_remove(nm, "_run[0-9]+$"),
     trimmed_pairs   = y[[nm]][["paired_total"]],
     post_host_pairs = y[[nm]][["paired_aligned_none"]]
